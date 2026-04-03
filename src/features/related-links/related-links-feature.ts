@@ -54,6 +54,7 @@ export class RelatedLinksFeature extends Component {
 	private readonly pendingDeletedFiles = new Map<string, PendingDeletedFile>();
 	private readonly pendingRenamedFiles = new Map<string, PendingRenamedFile>();
 	private readonly pendingOwnWrites = new Map<string, string>();
+	private readonly renamedSourcePaths = new Map<string, string>();
 	private readonly sourceContributionsByPath = new Map<string, SourceContribution>();
 	private readonly sourceDisplayTextByPath = new Map<string, string>();
 	private flushTimer: number | null = null;
@@ -107,6 +108,7 @@ export class RelatedLinksFeature extends Component {
 
 		if (!this.isEnabled()) {
 			this.pendingOwnWrites.clear();
+			this.renamedSourcePaths.clear();
 			this.sourceContributionsByPath.clear();
 			this.sourceDisplayTextByPath.clear();
 			this.hasInitialized = false;
@@ -475,6 +477,7 @@ export class RelatedLinksFeature extends Component {
 
 		for (const deletedFile of work.deletedFiles) {
 			const previousContribution = this.removeTrackedSource(deletedFile.file.path);
+			this.removeTrackedRenameMappings(deletedFile.file.path);
 			this.addContributionTargets(affectedTargetPaths, previousContribution);
 			for (const sourcePath of this.collectTrackedSourcePathsForTargetPath(deletedFile.file.path)) {
 				sourcePathsToRefresh.add(sourcePath);
@@ -489,6 +492,7 @@ export class RelatedLinksFeature extends Component {
 			const previousContribution = this.sourceContributionsByPath.get(renamedFile.oldPath) ?? null;
 			this.sourceContributionsByPath.delete(renamedFile.oldPath);
 			this.sourceDisplayTextByPath.delete(renamedFile.oldPath);
+			this.trackRenamedSourcePath(renamedFile.oldPath, renamedFile.file.path);
 			this.addContributionTargets(affectedTargetPaths, previousContribution);
 
 			sourcePathsToRefresh.add(renamedFile.file.path);
@@ -649,6 +653,7 @@ export class RelatedLinksFeature extends Component {
 		let nextContent = '';
 		let lastIndex = 0;
 		let hasRemovedLinks = false;
+		let hasUpdatedLinks = false;
 		let match: RegExpExecArray | null;
 
 		while ((match = markdownLinkPattern.exec(content)) !== null) {
@@ -675,17 +680,27 @@ export class RelatedLinksFeature extends Component {
 				continue;
 			}
 
-			const sourcePath = this.resolveMarkdownSourcePath(rawDestination, targetFile);
+			const actualDisplayText = unescapeMarkdownLinkText(rawDisplayText);
+			const actualDestination = extractMarkdownLinkpath(rawDestination);
+			const {sourcePath, matchReason} = this.resolveManagedSourcePath(
+				rawDestination,
+				actualDisplayText,
+				targetFile,
+				desiredLinks,
+			);
 			const sourceFile = sourcePath ? this.plugin.app.vault.getAbstractFileByPath(sourcePath) : null;
 			const canonicalDestination = sourceFile instanceof TFile ? buildRelativeMarkdownDestination(sourceFile, targetFile) : null;
-			const actualDestination = extractMarkdownLinkpath(rawDestination);
 			const expectedDisplayText = sourcePath ? sourceDisplayTextByPath.get(sourcePath) : undefined;
-			const actualDisplayText = unescapeMarkdownLinkText(rawDisplayText);
 			const hasCanonicalDestination = Boolean(canonicalDestination && actualDestination === canonicalDestination);
 			const isManagedMatch = Boolean(
 				sourcePath
 				&& expectedDisplayText !== undefined
-				&& (actualDisplayText === expectedDisplayText || hasCanonicalDestination),
+				&& (
+					actualDisplayText === expectedDisplayText
+					|| hasCanonicalDestination
+					|| matchReason === 'renamed-source'
+					|| matchReason === 'stale-display'
+				),
 			);
 			this.plugin.debugLog('Evaluated markdown link candidate.', {
 				targetPath: targetFile.path,
@@ -697,6 +712,7 @@ export class RelatedLinksFeature extends Component {
 				actualDisplayText,
 				expectedDisplayText,
 				hasCanonicalDestination,
+				matchReason,
 				isManagedMatch,
 			});
 
@@ -723,6 +739,7 @@ export class RelatedLinksFeature extends Component {
 					: fullMatch;
 				if (normalizedMatch !== fullMatch) {
 					nextContent += normalizedMatch;
+					hasUpdatedLinks = true;
 					this.plugin.debugLog('Updated managed link because display text or destination changed.', {
 						targetPath: targetFile.path,
 						sourcePath,
@@ -751,8 +768,52 @@ export class RelatedLinksFeature extends Component {
 		nextContent += content.slice(lastIndex);
 
 		return {
-			content: hasRemovedLinks ? this.normalizeContentAfterRemoval(nextContent) : content,
+			content: hasRemovedLinks
+				? this.normalizeContentAfterRemoval(nextContent)
+				: hasUpdatedLinks
+					? nextContent
+					: content,
 			presentManagedSourcePaths,
+		};
+	}
+
+	private resolveManagedSourcePath(
+		rawDestination: string,
+		actualDisplayText: string,
+		targetFile: TFile,
+		desiredLinks: Map<string, DesiredTargetLink>,
+	): {matchReason: 'renamed-source' | 'resolved-source' | 'stale-display' | null; sourcePath: string | null} {
+		const resolvedSourcePath = this.resolveMarkdownSourcePath(rawDestination, targetFile);
+		if (resolvedSourcePath) {
+			return {
+				matchReason: 'resolved-source',
+				sourcePath: resolvedSourcePath,
+			};
+		}
+
+		const renamedSourcePath = this.resolveRenamedSourcePath(rawDestination, targetFile);
+		if (renamedSourcePath) {
+			return {
+				matchReason: 'renamed-source',
+				sourcePath: renamedSourcePath,
+			};
+		}
+
+		const staleManagedLink = this.resolveBrokenManagedSourceByDisplayText(
+			extractMarkdownLinkpath(rawDestination),
+			actualDisplayText,
+			desiredLinks,
+		);
+		if (staleManagedLink) {
+			return {
+				matchReason: 'stale-display',
+				sourcePath: staleManagedLink.sourcePath,
+			};
+		}
+
+		return {
+			matchReason: null,
+			sourcePath: null,
 		};
 	}
 
@@ -788,6 +849,29 @@ export class RelatedLinksFeature extends Component {
 			resolvedPath: resolvedFile?.path ?? null,
 		});
 		return resolvedFile?.path ?? null;
+	}
+
+	private resolveRenamedSourcePath(rawDestination: string, targetFile: TFile): string | null {
+		const linkpath = extractMarkdownLinkpath(rawDestination);
+		if (!linkpath || this.isLikelyExternalDestination(linkpath)) {
+			return null;
+		}
+
+		for (const candidatePath of this.buildMarkdownDestinationCandidates(linkpath, targetFile)) {
+			const renamedPath = this.renamedSourcePaths.get(candidatePath);
+			if (renamedPath) {
+				this.plugin.debugLog('Resolved markdown destination from tracked rename.', {
+					targetPath: targetFile.path,
+					rawDestination,
+					linkpath,
+					candidatePath,
+					resolvedPath: renamedPath,
+				});
+				return renamedPath;
+			}
+		}
+
+		return null;
 	}
 
 	private buildMarkdownDestinationCandidates(linkpath: string, targetFile: TFile): string[] {
@@ -866,6 +950,40 @@ export class RelatedLinksFeature extends Component {
 		};
 	}
 
+	private resolveBrokenManagedSourceByDisplayText(
+		actualDestination: string | null,
+		actualDisplayText: string,
+		desiredLinks: Map<string, DesiredTargetLink>,
+	): DesiredTargetLink | null {
+		const normalizedDisplayText = actualDisplayText.trim();
+		if (!actualDestination || !normalizedDisplayText || this.isLikelyExternalDestination(actualDestination)) {
+			return null;
+		}
+
+		let matchedLink: DesiredTargetLink | null = null;
+		for (const desiredLink of desiredLinks.values()) {
+			if (desiredLink.displayText !== normalizedDisplayText) {
+				continue;
+			}
+
+			if (matchedLink) {
+				return null;
+			}
+
+			matchedLink = desiredLink;
+		}
+
+		if (matchedLink) {
+			this.plugin.debugLog('Resolved broken markdown link from a unique desired display text match.', {
+				actualDestination,
+				actualDisplayText: normalizedDisplayText,
+				sourcePath: matchedLink.sourcePath,
+			});
+		}
+
+		return matchedLink;
+	}
+
 	private normalizeContentAfterRemoval(content: string): string {
 		const normalized = content
 			.replace(/[ \t]+\n/g, '\n')
@@ -904,6 +1022,33 @@ export class RelatedLinksFeature extends Component {
 			nextLength: nextContent.length,
 		});
 		await this.plugin.app.vault.modify(file, nextContent);
+	}
+
+	private trackRenamedSourcePath(oldPath: string, nextPath: string) {
+		for (const [trackedOldPath, trackedNextPath] of [...this.renamedSourcePaths.entries()]) {
+			if (trackedOldPath === nextPath) {
+				this.renamedSourcePaths.delete(trackedOldPath);
+				continue;
+			}
+
+			if (trackedNextPath === oldPath) {
+				this.renamedSourcePaths.set(trackedOldPath, nextPath);
+			}
+		}
+
+		this.renamedSourcePaths.set(oldPath, nextPath);
+	}
+
+	private removeTrackedRenameMappings(path: string) {
+		for (const [oldPath, nextPath] of [...this.renamedSourcePaths.entries()]) {
+			if (oldPath === path || nextPath === path) {
+				this.renamedSourcePaths.delete(oldPath);
+			}
+		}
+	}
+
+	private isLikelyExternalDestination(destination: string): boolean {
+		return /^[a-z][a-z0-9+.-]*:/i.test(destination);
 	}
 
 	private enqueue(task: () => Promise<void>): Promise<void> {
