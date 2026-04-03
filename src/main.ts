@@ -51,10 +51,10 @@ export default class OBPMPlugin extends Plugin {
 		}
 
 		if (details === undefined) {
-			console.log(`[OBPM] ${message}`);
+			console.debug(`[OBPM] ${message}`);
 			return;
 		}
 
-		console.log(`[OBPM] ${message}`, details);
+		console.debug(`[OBPM] ${message}`, details);
 	}
 }

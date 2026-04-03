@@ -34,7 +34,9 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Related frontmatter links'});
+		new Setting(containerEl)
+			.setName('Related frontmatter links')
+			.setHeading();
 
 		new Setting(containerEl)
 			.setName('Enable related frontmatter links')
@@ -50,7 +52,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			.setName('Relation property')
 			.setDesc('Frontmatter property that points to the related notes, for example related.')
 			.addText((text) => text
-				.setPlaceholder('obpm_related')
+				.setPlaceholder('Enter relation property')
 				.setValue(this.plugin.settings.relatedLinks.relationProperty)
 				.onChange(async (value) => {
 					this.plugin.settings.relatedLinks.relationProperty = value.trim();
@@ -61,7 +63,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			.setName('Display property')
 			.setDesc('Frontmatter property used as the link label. Falls back to the file name when empty.')
 			.addText((text) => text
-				.setPlaceholder('obpm_title')
+				.setPlaceholder('Enter display property')
 				.setValue(this.plugin.settings.relatedLinks.displayProperty)
 				.onChange(async (value) => {
 					this.plugin.settings.relatedLinks.displayProperty = value.trim();

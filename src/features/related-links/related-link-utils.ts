@@ -12,7 +12,7 @@ export function getDisplayText(file: TFile, frontmatter: FrontMatterCache | unde
 		return fallback;
 	}
 
-	const rawValue = frontmatter?.[displayProperty];
+	const rawValue = getFrontmatterValue(frontmatter, displayProperty);
 	const values = flattenFrontmatterValues(rawValue);
 	const firstValue = values[0]?.trim();
 
@@ -24,7 +24,7 @@ export function getTargetLinkpaths(frontmatter: FrontMatterCache | undefined, re
 		return [];
 	}
 
-	const rawValue = frontmatter?.[relationProperty];
+	const rawValue = getFrontmatterValue(frontmatter, relationProperty);
 	const values = flattenFrontmatterValues(rawValue);
 	const uniqueTargets = new Set<string>();
 
@@ -83,6 +83,14 @@ export function extractLinkpath(value: string): string | null {
 	}
 
 	return normalized || null;
+}
+
+function getFrontmatterValue(frontmatter: FrontMatterCache | undefined, property: string): unknown {
+	if (!frontmatter || !(property in frontmatter)) {
+		return undefined;
+	}
+
+	return frontmatter[property as keyof FrontMatterCache];
 }
 
 export function extractMarkdownLinkpath(value: string): string | null {
