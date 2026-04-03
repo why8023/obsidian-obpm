@@ -15,8 +15,8 @@ export interface OBPMPluginSettings {
 export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 	relatedLinks: {
 		enabled: false,
-		relationProperty: 'related',
-		displayProperty: 'title',
+		relationProperty: 'obpm_related',
+		displayProperty: 'obpm_title',
 		verboseLogging: false,
 	},
 };
@@ -50,7 +50,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			.setName('Relation property')
 			.setDesc('Frontmatter property that points to the related notes, for example related.')
 			.addText((text) => text
-				.setPlaceholder('related')
+				.setPlaceholder('obpm_related')
 				.setValue(this.plugin.settings.relatedLinks.relationProperty)
 				.onChange(async (value) => {
 					this.plugin.settings.relatedLinks.relationProperty = value.trim();
@@ -61,7 +61,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			.setName('Display property')
 			.setDesc('Frontmatter property used as the link label. Falls back to the file name when empty.')
 			.addText((text) => text
-				.setPlaceholder('title')
+				.setPlaceholder('obpm_title')
 				.setValue(this.plugin.settings.relatedLinks.displayProperty)
 				.onChange(async (value) => {
 					this.plugin.settings.relatedLinks.displayProperty = value.trim();
