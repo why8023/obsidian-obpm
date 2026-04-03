@@ -4,9 +4,9 @@ export const DEFAULT_FILE_NAME_MAX_LENGTH = 50;
 export const MIN_FILE_NAME_MAX_LENGTH = 10;
 export const MAX_FILE_NAME_MAX_LENGTH = 240;
 
-const INVALID_FILE_NAME_CHARACTER_PATTERN = /[<>:"/\\|?*\u0000-\u001F\u007F]/g;
 const TRAILING_FILE_NAME_CHARACTER_PATTERN = /[. ]+$/g;
 const RESERVED_FILE_NAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+const INVALID_FILE_NAME_CHARACTERS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*']);
 
 export interface FileNameSanitizationOptions {
 	invalidCharacterReplacement: string;
@@ -33,7 +33,7 @@ export function sanitizeFileBasename(value: string, options: FileNameSanitizatio
 	const invalidCharacterReplacement = normalizeInvalidCharacterReplacement(options.invalidCharacterReplacement, '');
 	const maxLength = normalizeFileNameMaxLength(options.maxLength);
 
-	let normalizedValue = value.replace(INVALID_FILE_NAME_CHARACTER_PATTERN, invalidCharacterReplacement).trim();
+	let normalizedValue = replaceInvalidFileNameCharacters(value, invalidCharacterReplacement).trim();
 	normalizedValue = trimTrailingUnsafeCharacters(normalizedValue);
 
 	if (!normalizedValue) {
@@ -58,7 +58,7 @@ export function normalizeInvalidCharacterReplacement(value: unknown, fallback = 
 		return fallback;
 	}
 
-	return value.replace(INVALID_FILE_NAME_CHARACTER_PATTERN, '');
+	return removeInvalidFileNameCharacters(value);
 }
 
 export function normalizeFileNameMaxLength(value: unknown, fallback = DEFAULT_FILE_NAME_MAX_LENGTH): number {
@@ -93,6 +93,27 @@ function flattenFrontmatterValues(value: unknown): string[] {
 
 function trimTrailingUnsafeCharacters(value: string): string {
 	return value.replace(TRAILING_FILE_NAME_CHARACTER_PATTERN, '');
+}
+
+function replaceInvalidFileNameCharacters(value: string, replacement: string): string {
+	return [...value]
+		.map((character) => isInvalidFileNameCharacter(character) ? replacement : character)
+		.join('');
+}
+
+function removeInvalidFileNameCharacters(value: string): string {
+	return [...value]
+		.filter((character) => !isInvalidFileNameCharacter(character))
+		.join('');
+}
+
+function isInvalidFileNameCharacter(character: string): boolean {
+	return INVALID_FILE_NAME_CHARACTERS.has(character) || isFileNameControlCharacter(character);
+}
+
+function isFileNameControlCharacter(character: string): boolean {
+	const codePoint = character.codePointAt(0);
+	return codePoint !== undefined && (codePoint < 0x20 || codePoint === 0x7F);
 }
 
 function ensureNotReservedFileName(value: string, invalidCharacterReplacement: string, maxLength: number): string {
