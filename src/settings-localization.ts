@@ -1,6 +1,25 @@
 import {getLanguage} from 'obsidian';
 
 export interface SettingsLocalization {
+	basesTopTabsAutoRefreshDesc: string;
+	basesTopTabsAutoRefreshName: string;
+	basesTopTabsDebugModeDesc: string;
+	basesTopTabsDebugModeName: string;
+	basesTopTabsEnableDesc: string;
+	basesTopTabsEnableName: string;
+	basesTopTabsHeading: string;
+	basesTopTabsHideWhenSingleViewDesc: string;
+	basesTopTabsHideWhenSingleViewName: string;
+	basesTopTabsPlacementAboveToolbarLabel: string;
+	basesTopTabsPlacementDesc: string;
+	basesTopTabsPlacementInsideToolbarLabel: string;
+	basesTopTabsPlacementName: string;
+	basesTopTabsScrollableDesc: string;
+	basesTopTabsScrollableName: string;
+	basesTopTabsShowIconsDesc: string;
+	basesTopTabsShowIconsName: string;
+	basesTopTabsShowViewCountDesc: string;
+	basesTopTabsShowViewCountName: string;
 	relatedLinksHeading: string;
 	enableRelatedLinksName: string;
 	enableRelatedLinksDesc: string;
@@ -28,6 +47,25 @@ export interface SettingsLocalization {
 }
 
 const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
+	basesTopTabsAutoRefreshDesc: 'Automatically refresh the tabs when the current .base file changes on disk.',
+	basesTopTabsAutoRefreshName: 'Auto refresh',
+	basesTopTabsDebugModeDesc: 'Write detailed Bases top tabs diagnostics to the developer console.',
+	basesTopTabsDebugModeName: 'Debug mode',
+	basesTopTabsEnableDesc: 'Show Base views as always-visible tabs on top of native .base pages.',
+	basesTopTabsEnableName: 'Enable Bases top tabs',
+	basesTopTabsHeading: 'Bases top tabs',
+	basesTopTabsHideWhenSingleViewDesc: 'Hide the tab bar when the current Base only has one view.',
+	basesTopTabsHideWhenSingleViewName: 'Hide when there is only one view',
+	basesTopTabsPlacementAboveToolbarLabel: 'Above the toolbar',
+	basesTopTabsPlacementDesc: 'Choose whether the tabs appear on their own row or inside the native Bases toolbar.',
+	basesTopTabsPlacementInsideToolbarLabel: 'Inside the toolbar',
+	basesTopTabsPlacementName: 'Placement',
+	basesTopTabsScrollableDesc: 'Allow horizontal scrolling instead of wrapping when there are many tabs.',
+	basesTopTabsScrollableName: 'Allow horizontal scrolling',
+	basesTopTabsShowIconsDesc: 'Display a view icon next to each tab label when one is available.',
+	basesTopTabsShowIconsName: 'Show icons',
+	basesTopTabsShowViewCountDesc: 'Show the number of views in the current Base next to the tabs.',
+	basesTopTabsShowViewCountName: 'Show view count',
 	relatedLinksHeading: 'Related frontmatter links',
 	enableRelatedLinksName: 'Enable related frontmatter links',
 	enableRelatedLinksDesc: 'Automatically add this note into the notes referenced by a frontmatter property.',
@@ -55,6 +93,25 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 };
 
 const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
+	basesTopTabsAutoRefreshDesc: '当当前 .base 文件内容变化时，自动刷新顶部 Tabs。',
+	basesTopTabsAutoRefreshName: '自动刷新',
+	basesTopTabsDebugModeDesc: '将 Bases 顶部 Tabs 的详细调试信息输出到开发者控制台。',
+	basesTopTabsDebugModeName: '调试模式',
+	basesTopTabsEnableDesc: '在原生 .base 页面顶部常驻显示视图 Tabs。',
+	basesTopTabsEnableName: '启用 Bases 顶部 Tabs',
+	basesTopTabsHeading: 'Bases 顶部 Tabs',
+	basesTopTabsHideWhenSingleViewDesc: '当当前 Base 只有一个视图时隐藏 Tabs。',
+	basesTopTabsHideWhenSingleViewName: '单视图时隐藏',
+	basesTopTabsPlacementAboveToolbarLabel: '工具栏上方',
+	basesTopTabsPlacementDesc: '选择 Tabs 是单独占一行，还是嵌入到原生 Bases 工具栏里。',
+	basesTopTabsPlacementInsideToolbarLabel: '工具栏内',
+	basesTopTabsPlacementName: '位置',
+	basesTopTabsScrollableDesc: '当 Tabs 过多时允许横向滚动，而不是自动换行。',
+	basesTopTabsScrollableName: '允许横向滚动',
+	basesTopTabsShowIconsDesc: '当视图存在图标时，在 Tab 名称旁显示图标。',
+	basesTopTabsShowIconsName: '显示图标',
+	basesTopTabsShowViewCountDesc: '在 Tabs 旁显示当前 Base 的视图数量。',
+	basesTopTabsShowViewCountName: '显示视图数量',
 	relatedLinksHeading: '关联属性链接',
 	enableRelatedLinksName: '启用关联属性链接',
 	enableRelatedLinksDesc: '当某个属性引用了其他笔记时，自动把当前笔记回填到那些被引用笔记里。',

@@ -9,11 +9,24 @@ import {
 } from './features/file-name-sync/file-name-sync-utils';
 import {getSettingsLocalization} from './settings-localization';
 
+export type BasesTopTabsPlacement = 'above-toolbar' | 'inside-toolbar';
+
 export interface RelatedLinksSettings {
 	enabled: boolean;
 	relationProperty: string;
 	displayProperty: string;
 	verboseLogging: boolean;
+}
+
+export interface BasesTopTabsSettings {
+	autoRefresh: boolean;
+	debugMode: boolean;
+	enabled: boolean;
+	hideWhenSingleView: boolean;
+	placement: BasesTopTabsPlacement;
+	scrollable: boolean;
+	showIcons: boolean;
+	showViewCount: boolean;
 }
 
 export interface FileNameSyncSettings {
@@ -24,11 +37,22 @@ export interface FileNameSyncSettings {
 }
 
 export interface OBPMPluginSettings {
+	basesTopTabs: BasesTopTabsSettings;
 	relatedLinks: RelatedLinksSettings;
 	fileNameSync: FileNameSyncSettings;
 }
 
 export const DEFAULT_SETTINGS: OBPMPluginSettings = {
+	basesTopTabs: {
+		autoRefresh: true,
+		debugMode: false,
+		enabled: false,
+		hideWhenSingleView: true,
+		placement: 'above-toolbar',
+		scrollable: true,
+		showIcons: true,
+		showViewCount: false,
+	},
 	relatedLinks: {
 		enabled: false,
 		relationProperty: 'obpm_related',
@@ -45,6 +69,22 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 
 export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | null | undefined): OBPMPluginSettings {
 	return {
+		basesTopTabs: {
+			autoRefresh: normalizeBoolean(settings?.basesTopTabs?.autoRefresh, DEFAULT_SETTINGS.basesTopTabs.autoRefresh),
+			debugMode: normalizeBoolean(settings?.basesTopTabs?.debugMode, DEFAULT_SETTINGS.basesTopTabs.debugMode),
+			enabled: normalizeBoolean(settings?.basesTopTabs?.enabled, DEFAULT_SETTINGS.basesTopTabs.enabled),
+			hideWhenSingleView: normalizeBoolean(
+				settings?.basesTopTabs?.hideWhenSingleView,
+				DEFAULT_SETTINGS.basesTopTabs.hideWhenSingleView,
+			),
+			placement: normalizeBasesTopTabsPlacement(
+				settings?.basesTopTabs?.placement,
+				DEFAULT_SETTINGS.basesTopTabs.placement,
+			),
+			scrollable: normalizeBoolean(settings?.basesTopTabs?.scrollable, DEFAULT_SETTINGS.basesTopTabs.scrollable),
+			showIcons: normalizeBoolean(settings?.basesTopTabs?.showIcons, DEFAULT_SETTINGS.basesTopTabs.showIcons),
+			showViewCount: normalizeBoolean(settings?.basesTopTabs?.showViewCount, DEFAULT_SETTINGS.basesTopTabs.showViewCount),
+		},
 		relatedLinks: {
 			enabled: normalizeBoolean(settings?.relatedLinks?.enabled, DEFAULT_SETTINGS.relatedLinks.enabled),
 			relationProperty: normalizeText(settings?.relatedLinks?.relationProperty, DEFAULT_SETTINGS.relatedLinks.relationProperty),
@@ -74,6 +114,10 @@ function normalizeText(value: unknown, fallback: string): string {
 	return typeof value === 'string' ? value.trim() : fallback;
 }
 
+function normalizeBasesTopTabsPlacement(value: unknown, fallback: BasesTopTabsPlacement): BasesTopTabsPlacement {
+	return value === 'inside-toolbar' || value === 'above-toolbar' ? value : fallback;
+}
+
 export class OBPMPluginSettingTab extends PluginSettingTab {
 	plugin: OBPMPlugin;
 
@@ -87,6 +131,95 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		const strings = getSettingsLocalization();
 
 		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsEnableName)
+			.setDesc(strings.basesTopTabsEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.enabled = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsShowIconsName)
+			.setDesc(strings.basesTopTabsShowIconsDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.showIcons)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.showIcons = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsHideWhenSingleViewName)
+			.setDesc(strings.basesTopTabsHideWhenSingleViewDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.hideWhenSingleView)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.hideWhenSingleView = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsPlacementName)
+			.setDesc(strings.basesTopTabsPlacementDesc)
+			.addDropdown((dropdown) => dropdown
+				.addOption('above-toolbar', strings.basesTopTabsPlacementAboveToolbarLabel)
+				.addOption('inside-toolbar', strings.basesTopTabsPlacementInsideToolbarLabel)
+				.setValue(this.plugin.settings.basesTopTabs.placement)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.placement = normalizeBasesTopTabsPlacement(
+						value,
+						DEFAULT_SETTINGS.basesTopTabs.placement,
+					);
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsScrollableName)
+			.setDesc(strings.basesTopTabsScrollableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.scrollable)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.scrollable = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsShowViewCountName)
+			.setDesc(strings.basesTopTabsShowViewCountDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.showViewCount)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.showViewCount = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsAutoRefreshName)
+			.setDesc(strings.basesTopTabsAutoRefreshDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.autoRefresh)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.autoRefresh = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsDebugModeName)
+			.setDesc(strings.basesTopTabsDebugModeDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.debugMode)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.debugMode = value;
+					await this.plugin.saveSettings();
+				}));
 
 		new Setting(containerEl)
 			.setName(strings.relatedLinksHeading)
