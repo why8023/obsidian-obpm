@@ -7,6 +7,7 @@ import {
 	normalizeFileNameMaxLength,
 	normalizeInvalidCharacterReplacement,
 } from './features/file-name-sync/file-name-sync-utils';
+import {getSettingsLocalization} from './settings-localization';
 
 export interface RelatedLinksSettings {
 	enabled: boolean;
@@ -83,16 +84,17 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const {containerEl} = this;
+		const strings = getSettingsLocalization();
 
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Related frontmatter links')
+			.setName(strings.relatedLinksHeading)
 			.setHeading();
 
 		new Setting(containerEl)
-			.setName('Enable related frontmatter links')
-			.setDesc('Automatically add this note into the notes referenced by a frontmatter property.')
+			.setName(strings.enableRelatedLinksName)
+			.setDesc(strings.enableRelatedLinksDesc)
 			.addToggle((toggle) => toggle
 				.setValue(this.plugin.settings.relatedLinks.enabled)
 				.onChange(async (value) => {
@@ -101,10 +103,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Relation property')
-			.setDesc('Frontmatter property that points to the related notes, for example related.')
+			.setName(strings.relationPropertyName)
+			.setDesc(strings.relationPropertyDesc)
 			.addText((text) => text
-				.setPlaceholder('Enter relation property')
+				.setPlaceholder(strings.relationPropertyPlaceholder)
 				.setValue(this.plugin.settings.relatedLinks.relationProperty)
 				.onChange(async (value) => {
 					this.plugin.settings.relatedLinks.relationProperty = value.trim();
@@ -112,10 +114,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Display property')
-			.setDesc('Frontmatter property used as the link label. Falls back to the file name when empty.')
+			.setName(strings.displayPropertyName)
+			.setDesc(strings.displayPropertyDesc)
 			.addText((text) => text
-				.setPlaceholder('Enter display property')
+				.setPlaceholder(strings.displayPropertyPlaceholder)
 				.setValue(this.plugin.settings.relatedLinks.displayProperty)
 				.onChange(async (value) => {
 					this.plugin.settings.relatedLinks.displayProperty = value.trim();
@@ -123,8 +125,8 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Verbose logging')
-			.setDesc('Write detailed related-links synchronization logs to the developer console.')
+			.setName(strings.verboseLoggingName)
+			.setDesc(strings.verboseLoggingDesc)
 			.addToggle((toggle) => toggle
 				.setValue(this.plugin.settings.relatedLinks.verboseLogging)
 				.onChange(async (value) => {
@@ -133,12 +135,12 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('File names from property')
+			.setName(strings.fileNameSyncHeading)
 			.setHeading();
 
 		new Setting(containerEl)
-			.setName('Enable file name sync')
-			.setDesc('Rename markdown files to match a frontmatter property when that property is present.')
+			.setName(strings.enableFileNameSyncName)
+			.setDesc(strings.enableFileNameSyncDesc)
 			.addToggle((toggle) => toggle
 				.setValue(this.plugin.settings.fileNameSync.enabled)
 				.onChange(async (value) => {
@@ -147,10 +149,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('File name property')
-			.setDesc('Frontmatter property used to build the file name. Files without this property are left unchanged.')
+			.setName(strings.fileNamePropertyName)
+			.setDesc(strings.fileNamePropertyDesc)
 			.addText((text) => text
-				.setPlaceholder('Enter file name property')
+				.setPlaceholder(strings.fileNamePropertyPlaceholder)
 				.setValue(this.plugin.settings.fileNameSync.propertyName)
 				.onChange(async (value) => {
 					this.plugin.settings.fileNameSync.propertyName = value.trim();
@@ -158,10 +160,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Invalid character replacement')
-			.setDesc('Replacement text for characters that are not allowed in file names. Leave empty to remove them.')
+			.setName(strings.invalidCharacterReplacementName)
+			.setDesc(strings.invalidCharacterReplacementDesc)
 			.addText((text) => text
-				.setPlaceholder('Enter replacement text')
+				.setPlaceholder(strings.invalidCharacterReplacementPlaceholder)
 				.setValue(this.plugin.settings.fileNameSync.invalidCharacterReplacement)
 				.onChange(async (value) => {
 					const normalizedValue = normalizeInvalidCharacterReplacement(value, DEFAULT_SETTINGS.fileNameSync.invalidCharacterReplacement);
@@ -170,13 +172,17 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 					if (text.inputEl.value !== normalizedValue) {
 						text.setValue(normalizedValue);
-						new Notice('Replacement text cannot include characters that are invalid in file names.');
+						new Notice(strings.invalidCharacterReplacementNotice);
 					}
 				}));
 
 		new Setting(containerEl)
-			.setName('Maximum file name length')
-			.setDesc(`Limit the markdown file basename to ${MIN_FILE_NAME_MAX_LENGTH}-${MAX_FILE_NAME_MAX_LENGTH} characters. Default: ${DEFAULT_FILE_NAME_MAX_LENGTH}.`)
+			.setName(strings.maxFileNameLengthName)
+			.setDesc(strings.maxFileNameLengthDesc(
+				MIN_FILE_NAME_MAX_LENGTH,
+				MAX_FILE_NAME_MAX_LENGTH,
+				DEFAULT_FILE_NAME_MAX_LENGTH,
+			))
 			.addText((text) => {
 				text.inputEl.type = 'number';
 				text.inputEl.min = String(MIN_FILE_NAME_MAX_LENGTH);
@@ -194,7 +200,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 					if (text.inputEl.value !== normalizedValue.toString()) {
 						text.setValue(normalizedValue.toString());
-						new Notice(`Maximum file name length must be between ${MIN_FILE_NAME_MAX_LENGTH} and ${MAX_FILE_NAME_MAX_LENGTH}.`);
+						new Notice(strings.maxFileNameLengthNotice(
+							MIN_FILE_NAME_MAX_LENGTH,
+							MAX_FILE_NAME_MAX_LENGTH,
+						));
 					}
 				};
 
