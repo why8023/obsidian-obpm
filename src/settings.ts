@@ -1,18 +1,30 @@
-import {App, PluginSettingTab, Setting} from "obsidian";
-import MyPlugin from "./main";
+import {App, PluginSettingTab, Setting} from 'obsidian';
+import OBPMPlugin from './main';
 
-export interface MyPluginSettings {
-	mySetting: string;
+export interface RelatedLinksSettings {
+	enabled: boolean;
+	relationProperty: string;
+	displayProperty: string;
+	verboseLogging: boolean;
 }
 
-export const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+export interface OBPMPluginSettings {
+	relatedLinks: RelatedLinksSettings;
 }
 
-export class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+export const DEFAULT_SETTINGS: OBPMPluginSettings = {
+	relatedLinks: {
+		enabled: false,
+		relationProperty: 'related',
+		displayProperty: 'title',
+		verboseLogging: false,
+	},
+};
 
-	constructor(app: App, plugin: MyPlugin) {
+export class OBPMPluginSettingTab extends PluginSettingTab {
+	plugin: OBPMPlugin;
+
+	constructor(app: App, plugin: OBPMPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -22,14 +34,47 @@ export class SampleSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
+		containerEl.createEl('h2', {text: 'Related frontmatter links'});
+
 		new Setting(containerEl)
-			.setName('Settings #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+			.setName('Enable related frontmatter links')
+			.setDesc('Automatically add this note into the notes referenced by a frontmatter property.')
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.relatedLinks.enabled)
 				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.relatedLinks.enabled = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Relation property')
+			.setDesc('Frontmatter property that points to the related notes, for example related.')
+			.addText((text) => text
+				.setPlaceholder('related')
+				.setValue(this.plugin.settings.relatedLinks.relationProperty)
+				.onChange(async (value) => {
+					this.plugin.settings.relatedLinks.relationProperty = value.trim();
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Display property')
+			.setDesc('Frontmatter property used as the link label. Falls back to the file name when empty.')
+			.addText((text) => text
+				.setPlaceholder('title')
+				.setValue(this.plugin.settings.relatedLinks.displayProperty)
+				.onChange(async (value) => {
+					this.plugin.settings.relatedLinks.displayProperty = value.trim();
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Verbose logging')
+			.setDesc('Write detailed related-links synchronization logs to the developer console.')
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.relatedLinks.verboseLogging)
+				.onChange(async (value) => {
+					this.plugin.settings.relatedLinks.verboseLogging = value;
 					await this.plugin.saveSettings();
 				}));
 	}
