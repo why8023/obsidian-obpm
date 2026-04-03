@@ -48,12 +48,20 @@ interface ProcessedTargetContent {
 	presentManagedSourcePaths: Set<string>;
 }
 
+interface VaultConfigReader {
+	getConfig?: (key: string) => unknown;
+}
+
+const DEFAULT_FLUSH_DELAY_MS = 300;
+
 export class RelatedLinksFeature extends Component {
 	private readonly pendingChangedFiles = new Map<string, PendingFileChange>();
 	private readonly pendingCreatedFiles = new Map<string, TFile>();
 	private readonly pendingDeletedFiles = new Map<string, PendingDeletedFile>();
+	private readonly pendingFollowUpTargetPaths = new Set<string>();
 	private readonly pendingRenamedFiles = new Map<string, PendingRenamedFile>();
 	private readonly pendingOwnWrites = new Map<string, string>();
+	private readonly pendingObsidianRenameTargetPaths = new Set<string>();
 	private readonly renamedSourcePaths = new Map<string, string>();
 	private readonly sourceContributionsByPath = new Map<string, SourceContribution>();
 	private readonly sourceDisplayTextByPath = new Map<string, string>();
@@ -102,12 +110,15 @@ export class RelatedLinksFeature extends Component {
 		this.pendingChangedFiles.clear();
 		this.pendingCreatedFiles.clear();
 		this.pendingDeletedFiles.clear();
+		this.pendingFollowUpTargetPaths.clear();
 		this.pendingRenamedFiles.clear();
 		this.fullSyncQueued = false;
 		this.plugin.debugLog('Refresh requested.');
 
 		if (!this.isEnabled()) {
 			this.pendingOwnWrites.clear();
+			this.pendingFollowUpTargetPaths.clear();
+			this.pendingObsidianRenameTargetPaths.clear();
 			this.renamedSourcePaths.clear();
 			this.sourceContributionsByPath.clear();
 			this.sourceDisplayTextByPath.clear();
@@ -143,6 +154,15 @@ export class RelatedLinksFeature extends Component {
 
 	private queueChangedFile(file: TFile, data: string, cache: CachedMetadata) {
 		if (!this.isEnabled() || !this.isMarkdownFile(file)) {
+			return;
+		}
+
+		if (this.pendingObsidianRenameTargetPaths.delete(file.path)) {
+			this.pendingFollowUpTargetPaths.add(file.path);
+			this.plugin.debugLog('Queued follow-up target sync after Obsidian-managed link update.', {
+				filePath: file.path,
+			});
+			this.scheduleFlush();
 			return;
 		}
 
@@ -184,25 +204,22 @@ export class RelatedLinksFeature extends Component {
 			return;
 		}
 
+		const deferToObsidianLinkUpdates = this.shouldDeferToObsidianLinkUpdates();
+		if (deferToObsidianLinkUpdates) {
+			const previousContribution = this.sourceContributionsByPath.get(oldPath) ?? null;
+			this.trackPendingObsidianRenameTargets(previousContribution);
+		}
+
 		this.pendingRenamedFiles.set(file.path, {file, oldPath});
 		this.plugin.debugLog('Queued file rename.', {
 			filePath: file.path,
 			oldPath,
+			deferToObsidianLinkUpdates,
 		});
 		this.scheduleFlush();
 	}
 
-	private queueFullSync() {
-		if (!this.isEnabled()) {
-			return;
-		}
-
-		this.fullSyncQueued = true;
-		this.plugin.debugLog('Queued full sync because of vault change.');
-		this.scheduleFlush();
-	}
-
-	private scheduleFlush() {
+	private scheduleFlush(delayMs = DEFAULT_FLUSH_DELAY_MS) {
 		if (this.flushTimer !== null) {
 			window.clearTimeout(this.flushTimer);
 		}
@@ -210,7 +227,7 @@ export class RelatedLinksFeature extends Component {
 		this.flushTimer = window.setTimeout(() => {
 			this.flushTimer = null;
 			void this.flushPendingWork();
-		}, 300);
+		}, delayMs);
 	}
 
 	private async flushPendingWork() {
@@ -218,7 +235,9 @@ export class RelatedLinksFeature extends Component {
 			this.pendingChangedFiles.clear();
 			this.pendingCreatedFiles.clear();
 			this.pendingDeletedFiles.clear();
+			this.pendingFollowUpTargetPaths.clear();
 			this.pendingRenamedFiles.clear();
+			this.pendingObsidianRenameTargetPaths.clear();
 			this.fullSyncQueued = false;
 			this.plugin.debugLog('Pending work cleared because related links are disabled.');
 			return;
@@ -227,10 +246,12 @@ export class RelatedLinksFeature extends Component {
 		const pendingChanges = [...this.pendingChangedFiles.values()];
 		const pendingCreatedFiles = [...this.pendingCreatedFiles.values()];
 		const pendingDeletedFiles = [...this.pendingDeletedFiles.values()];
+		const pendingFollowUpTargetPaths = [...this.pendingFollowUpTargetPaths];
 		const pendingRenamedFiles = [...this.pendingRenamedFiles.values()];
 		this.pendingChangedFiles.clear();
 		this.pendingCreatedFiles.clear();
 		this.pendingDeletedFiles.clear();
+		this.pendingFollowUpTargetPaths.clear();
 		this.pendingRenamedFiles.clear();
 		const externalChanges: PendingFileChange[] = [];
 
@@ -238,6 +259,7 @@ export class RelatedLinksFeature extends Component {
 			|| !this.hasInitialized
 			|| pendingCreatedFiles.length > 0
 			|| pendingDeletedFiles.length > 0
+			|| pendingFollowUpTargetPaths.length > 0
 			|| pendingRenamedFiles.length > 0;
 		for (const change of pendingChanges) {
 			if (!this.shouldIgnoreOwnWrite(change)) {
@@ -257,6 +279,7 @@ export class RelatedLinksFeature extends Component {
 			externalChangeCount: externalChanges.length,
 			createdFileCount: pendingCreatedFiles.length,
 			deletedFileCount: pendingDeletedFiles.length,
+			followUpTargetCount: pendingFollowUpTargetPaths.length,
 			renamedFileCount: pendingRenamedFiles.length,
 			fullSyncQueued: this.fullSyncQueued,
 			hasInitialized: this.hasInitialized,
@@ -271,11 +294,13 @@ export class RelatedLinksFeature extends Component {
 			changedFiles: externalChanges,
 			createdFiles: pendingCreatedFiles,
 			deletedFiles: pendingDeletedFiles,
+			followUpTargetPaths: pendingFollowUpTargetPaths,
 			renamedFiles: pendingRenamedFiles,
 		}, {notifyOnError: shouldNotifyOnError});
 	}
 
 	private async syncAllRelatedLinks() {
+		this.renamedSourcePaths.clear();
 		const syncModel = this.buildSyncModel();
 		this.sourceContributionsByPath.clear();
 		this.sourceDisplayTextByPath.clear();
@@ -299,12 +324,14 @@ export class RelatedLinksFeature extends Component {
 		changedFiles: PendingFileChange[];
 		createdFiles: TFile[];
 		deletedFiles: PendingDeletedFile[];
+		followUpTargetPaths: string[];
 		renamedFiles: PendingRenamedFile[];
 	}, options: FullSyncOptions = {}): Promise<void> {
 		if (
 			work.changedFiles.length === 0
 			&& work.createdFiles.length === 0
 			&& work.deletedFiles.length === 0
+			&& work.followUpTargetPaths.length === 0
 			&& work.renamedFiles.length === 0
 		) {
 			this.plugin.debugLog('Incremental sync skipped because there was no queued incremental work.');
@@ -315,6 +342,7 @@ export class RelatedLinksFeature extends Component {
 			changeCount: work.changedFiles.length,
 			createCount: work.createdFiles.length,
 			deleteCount: work.deletedFiles.length,
+			followUpTargetCount: work.followUpTargetPaths.length,
 			renameCount: work.renamedFiles.length,
 			notifyOnError: options.notifyOnError ?? true,
 		});
@@ -469,11 +497,14 @@ export class RelatedLinksFeature extends Component {
 		changedFiles: PendingFileChange[];
 		createdFiles: TFile[];
 		deletedFiles: PendingDeletedFile[];
+		followUpTargetPaths: string[];
 		renamedFiles: PendingRenamedFile[];
 	}) {
-		const affectedTargetPaths = new Set<string>();
+		const affectedTargetPaths = new Set<string>(work.followUpTargetPaths);
 		const sourcePathsToRefresh = new Set<string>();
+		const handledChangedPaths = new Set<string>();
 		const changedFilePaths = new Set(work.changedFiles.map((change) => change.file.path));
+		const deferRenameLinkUpdatesToObsidian = this.shouldDeferToObsidianLinkUpdates();
 
 		for (const deletedFile of work.deletedFiles) {
 			const previousContribution = this.removeTrackedSource(deletedFile.file.path);
@@ -492,6 +523,22 @@ export class RelatedLinksFeature extends Component {
 			const previousContribution = this.sourceContributionsByPath.get(renamedFile.oldPath) ?? null;
 			this.sourceContributionsByPath.delete(renamedFile.oldPath);
 			this.sourceDisplayTextByPath.delete(renamedFile.oldPath);
+
+			if (deferRenameLinkUpdatesToObsidian) {
+				this.removeTrackedRenameMappings(renamedFile.oldPath);
+				const refreshedContribution = this.refreshTrackedSource(renamedFile.file);
+				handledChangedPaths.add(renamedFile.file.path);
+				this.trackPendingObsidianRenameTargets(previousContribution);
+				this.trackPendingObsidianRenameTargets(refreshedContribution.nextContribution);
+				this.plugin.debugLog('Deferred rename-driven link destination updates to Obsidian automatic link management.', {
+					filePath: renamedFile.file.path,
+					oldPath: renamedFile.oldPath,
+					previousTargets: previousContribution?.targetPaths ?? [],
+					nextTargets: refreshedContribution.nextContribution?.targetPaths ?? [],
+				});
+				continue;
+			}
+
 			this.trackRenamedSourcePath(renamedFile.oldPath, renamedFile.file.path);
 			this.addContributionTargets(affectedTargetPaths, previousContribution);
 
@@ -521,6 +568,13 @@ export class RelatedLinksFeature extends Component {
 		}
 
 		for (const change of work.changedFiles) {
+			if (handledChangedPaths.has(change.file.path)) {
+				this.plugin.debugLog('Skipped metadata-driven target sync because rename handling already refreshed this file.', {
+					filePath: change.file.path,
+				});
+				continue;
+			}
+
 			const previousContribution = this.sourceContributionsByPath.get(change.file.path) ?? null;
 			this.addContributionTargets(affectedTargetPaths, previousContribution);
 			sourcePathsToRefresh.add(change.file.path);
@@ -545,6 +599,10 @@ export class RelatedLinksFeature extends Component {
 		}
 
 		for (const change of work.changedFiles) {
+			if (handledChangedPaths.has(change.file.path)) {
+				continue;
+			}
+
 			const refreshedContribution = this.refreshTrackedSource(change.file, change.cache);
 			this.addContributionTargets(affectedTargetPaths, refreshedContribution.nextContribution);
 		}
@@ -733,6 +791,19 @@ export class RelatedLinksFeature extends Component {
 				}
 
 				presentManagedSourcePaths.add(sourcePath);
+				if (this.shouldDeferManagedRenameRewrite(matchReason, actualDestination, canonicalDestination)) {
+					nextContent += fullMatch;
+					this.plugin.debugLog('Deferred renamed markdown destination rewrite to Obsidian automatic link updates.', {
+						targetPath: targetFile.path,
+						sourcePath,
+						match: fullMatch,
+						actualDestination,
+						canonicalDestination,
+						matchReason,
+					});
+					continue;
+				}
+
 				const desiredLink = desiredLinks.get(sourcePath);
 				const normalizedMatch = desiredLink && canonicalDestination
 					? buildMarkdownLinkLine(desiredLink.displayText, canonicalDestination)
@@ -1049,6 +1120,28 @@ export class RelatedLinksFeature extends Component {
 
 	private isLikelyExternalDestination(destination: string): boolean {
 		return /^[a-z][a-z0-9+.-]*:/i.test(destination);
+	}
+
+	private shouldDeferManagedRenameRewrite(
+		matchReason: 'renamed-source' | 'resolved-source' | 'stale-display' | null,
+		actualDestination: string | null,
+		canonicalDestination: string | null,
+	): boolean {
+		return this.shouldDeferToObsidianLinkUpdates()
+			&& canonicalDestination !== null
+			&& actualDestination !== canonicalDestination
+			&& (matchReason === 'renamed-source' || matchReason === 'stale-display');
+	}
+
+	private shouldDeferToObsidianLinkUpdates(): boolean {
+		const vaultConfigReader = this.plugin.app.vault as VaultConfigReader;
+		return vaultConfigReader.getConfig?.('alwaysUpdateLinks') === true;
+	}
+
+	private trackPendingObsidianRenameTargets(contribution: SourceContribution | null) {
+		for (const targetPath of contribution?.targetPaths ?? []) {
+			this.pendingObsidianRenameTargetPaths.add(targetPath);
+		}
 	}
 
 	private enqueue(task: () => Promise<void>): Promise<void> {
