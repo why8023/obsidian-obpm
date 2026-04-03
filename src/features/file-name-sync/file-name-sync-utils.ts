@@ -1,6 +1,6 @@
 import {FrontMatterCache} from 'obsidian';
 
-export const DEFAULT_FILE_NAME_MAX_LENGTH = 120;
+export const DEFAULT_FILE_NAME_MAX_LENGTH = 50;
 export const MIN_FILE_NAME_MAX_LENGTH = 10;
 export const MAX_FILE_NAME_MAX_LENGTH = 240;
 

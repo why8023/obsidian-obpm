@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 	},
 	fileNameSync: {
 		enabled: false,
-		propertyName: 'title',
+		propertyName: 'obpm_title',
 		invalidCharacterReplacement: '_',
 		maxFileNameLength: DEFAULT_FILE_NAME_MAX_LENGTH,
 	},
@@ -177,13 +177,32 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName('Maximum file name length')
 			.setDesc(`Limit the markdown file basename to ${MIN_FILE_NAME_MAX_LENGTH}-${MAX_FILE_NAME_MAX_LENGTH} characters. Default: ${DEFAULT_FILE_NAME_MAX_LENGTH}.`)
-			.addSlider((slider) => slider
-				.setLimits(MIN_FILE_NAME_MAX_LENGTH, MAX_FILE_NAME_MAX_LENGTH, 1)
-				.setDynamicTooltip()
-				.setValue(this.plugin.settings.fileNameSync.maxFileNameLength)
-				.onChange(async (value) => {
-					this.plugin.settings.fileNameSync.maxFileNameLength = value;
+			.addText((text) => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = String(MIN_FILE_NAME_MAX_LENGTH);
+				text.inputEl.max = String(MAX_FILE_NAME_MAX_LENGTH);
+				text.inputEl.step = '1';
+				text.setValue(this.plugin.settings.fileNameSync.maxFileNameLength.toString());
+
+				const applyValue = async () => {
+					const normalizedValue = normalizeFileNameMaxLength(
+						text.inputEl.value,
+						DEFAULT_SETTINGS.fileNameSync.maxFileNameLength,
+					);
+					this.plugin.settings.fileNameSync.maxFileNameLength = normalizedValue;
 					await this.plugin.saveSettings();
-				}));
+
+					if (text.inputEl.value !== normalizedValue.toString()) {
+						text.setValue(normalizedValue.toString());
+						new Notice(`Maximum file name length must be between ${MIN_FILE_NAME_MAX_LENGTH} and ${MAX_FILE_NAME_MAX_LENGTH}.`);
+					}
+				};
+
+				text.inputEl.addEventListener('change', () => {
+					void applyValue();
+				});
+
+				return text;
+			});
 	}
 }
