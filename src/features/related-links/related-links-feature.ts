@@ -22,6 +22,16 @@ interface PendingFileChange {
 	file: TFile;
 }
 
+interface PendingDeletedFile {
+	file: TFile;
+	prevCache: CachedMetadata | null;
+}
+
+interface PendingRenamedFile {
+	file: TFile;
+	oldPath: string;
+}
+
 interface DesiredTargetLink {
 	displayText: string;
 	sourcePath: string;
@@ -40,6 +50,9 @@ interface ProcessedTargetContent {
 
 export class RelatedLinksFeature extends Component {
 	private readonly pendingChangedFiles = new Map<string, PendingFileChange>();
+	private readonly pendingCreatedFiles = new Map<string, TFile>();
+	private readonly pendingDeletedFiles = new Map<string, PendingDeletedFile>();
+	private readonly pendingRenamedFiles = new Map<string, PendingRenamedFile>();
 	private readonly pendingOwnWrites = new Map<string, string>();
 	private readonly sourceContributionsByPath = new Map<string, SourceContribution>();
 	private readonly sourceDisplayTextByPath = new Map<string, string>();
@@ -57,21 +70,19 @@ export class RelatedLinksFeature extends Component {
 			this.queueChangedFile(file, data, cache);
 		}));
 
+		this.registerEvent(this.plugin.app.metadataCache.on('deleted', (file, prevCache) => {
+			this.queueDeletedFile(file, prevCache);
+		}));
+
 		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
 			if (this.isMarkdownFile(file)) {
-				this.queueFullSync();
+				this.queueCreatedFile(file);
 			}
 		}));
 
-		this.registerEvent(this.plugin.app.vault.on('delete', (file) => {
+		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
 			if (this.isMarkdownFile(file)) {
-				this.queueFullSync();
-			}
-		}));
-
-		this.registerEvent(this.plugin.app.vault.on('rename', (file) => {
-			if (this.isMarkdownFile(file)) {
-				this.queueFullSync();
+				this.queueRenamedFile(file, oldPath);
 			}
 		}));
 
@@ -88,10 +99,14 @@ export class RelatedLinksFeature extends Component {
 
 	async refresh(): Promise<void> {
 		this.pendingChangedFiles.clear();
+		this.pendingCreatedFiles.clear();
+		this.pendingDeletedFiles.clear();
+		this.pendingRenamedFiles.clear();
 		this.fullSyncQueued = false;
 		this.plugin.debugLog('Refresh requested.');
 
 		if (!this.isEnabled()) {
+			this.pendingOwnWrites.clear();
 			this.sourceContributionsByPath.clear();
 			this.sourceDisplayTextByPath.clear();
 			this.hasInitialized = false;
@@ -137,6 +152,44 @@ export class RelatedLinksFeature extends Component {
 		this.scheduleFlush();
 	}
 
+	private queueCreatedFile(file: TFile) {
+		if (!this.isEnabled()) {
+			return;
+		}
+
+		this.pendingCreatedFiles.set(file.path, file);
+		this.plugin.debugLog('Queued file creation.', {
+			filePath: file.path,
+		});
+		this.scheduleFlush();
+	}
+
+	private queueDeletedFile(file: TFile, prevCache: CachedMetadata | null) {
+		if (!this.isEnabled()) {
+			return;
+		}
+
+		this.pendingDeletedFiles.set(file.path, {file, prevCache});
+		this.plugin.debugLog('Queued file deletion.', {
+			filePath: file.path,
+			hasPrevCache: Boolean(prevCache),
+		});
+		this.scheduleFlush();
+	}
+
+	private queueRenamedFile(file: TFile, oldPath: string) {
+		if (!this.isEnabled()) {
+			return;
+		}
+
+		this.pendingRenamedFiles.set(file.path, {file, oldPath});
+		this.plugin.debugLog('Queued file rename.', {
+			filePath: file.path,
+			oldPath,
+		});
+		this.scheduleFlush();
+	}
+
 	private queueFullSync() {
 		if (!this.isEnabled()) {
 			return;
@@ -161,16 +214,29 @@ export class RelatedLinksFeature extends Component {
 	private async flushPendingWork() {
 		if (!this.isEnabled()) {
 			this.pendingChangedFiles.clear();
+			this.pendingCreatedFiles.clear();
+			this.pendingDeletedFiles.clear();
+			this.pendingRenamedFiles.clear();
 			this.fullSyncQueued = false;
 			this.plugin.debugLog('Pending work cleared because related links are disabled.');
 			return;
 		}
 
 		const pendingChanges = [...this.pendingChangedFiles.values()];
+		const pendingCreatedFiles = [...this.pendingCreatedFiles.values()];
+		const pendingDeletedFiles = [...this.pendingDeletedFiles.values()];
+		const pendingRenamedFiles = [...this.pendingRenamedFiles.values()];
 		this.pendingChangedFiles.clear();
+		this.pendingCreatedFiles.clear();
+		this.pendingDeletedFiles.clear();
+		this.pendingRenamedFiles.clear();
 		const externalChanges: PendingFileChange[] = [];
 
-		let hasExternalChanges = this.fullSyncQueued || !this.hasInitialized;
+		let hasExternalChanges = this.fullSyncQueued
+			|| !this.hasInitialized
+			|| pendingCreatedFiles.length > 0
+			|| pendingDeletedFiles.length > 0
+			|| pendingRenamedFiles.length > 0;
 		for (const change of pendingChanges) {
 			if (!this.shouldIgnoreOwnWrite(change)) {
 				externalChanges.push(change);
@@ -187,6 +253,9 @@ export class RelatedLinksFeature extends Component {
 		this.plugin.debugLog('Flushing pending work.', {
 			pendingChangeCount: pendingChanges.length,
 			externalChangeCount: externalChanges.length,
+			createdFileCount: pendingCreatedFiles.length,
+			deletedFileCount: pendingDeletedFiles.length,
+			renamedFileCount: pendingRenamedFiles.length,
 			fullSyncQueued: this.fullSyncQueued,
 			hasInitialized: this.hasInitialized,
 		});
@@ -196,7 +265,12 @@ export class RelatedLinksFeature extends Component {
 			return;
 		}
 
-		await this.runIncrementalSync(externalChanges, {notifyOnError: shouldNotifyOnError});
+		await this.runIncrementalSync({
+			changedFiles: externalChanges,
+			createdFiles: pendingCreatedFiles,
+			deletedFiles: pendingDeletedFiles,
+			renamedFiles: pendingRenamedFiles,
+		}, {notifyOnError: shouldNotifyOnError});
 	}
 
 	private async syncAllRelatedLinks() {
@@ -219,19 +293,32 @@ export class RelatedLinksFeature extends Component {
 		}
 	}
 
-	private async runIncrementalSync(changes: PendingFileChange[], options: FullSyncOptions = {}): Promise<void> {
-		if (changes.length === 0) {
-			this.plugin.debugLog('Incremental sync skipped because there were no external metadata changes to process.');
+	private async runIncrementalSync(work: {
+		changedFiles: PendingFileChange[];
+		createdFiles: TFile[];
+		deletedFiles: PendingDeletedFile[];
+		renamedFiles: PendingRenamedFile[];
+	}, options: FullSyncOptions = {}): Promise<void> {
+		if (
+			work.changedFiles.length === 0
+			&& work.createdFiles.length === 0
+			&& work.deletedFiles.length === 0
+			&& work.renamedFiles.length === 0
+		) {
+			this.plugin.debugLog('Incremental sync skipped because there was no queued incremental work.');
 			return;
 		}
 
 		this.plugin.debugLog('Starting incremental sync.', {
-			changeCount: changes.length,
+			changeCount: work.changedFiles.length,
+			createCount: work.createdFiles.length,
+			deleteCount: work.deletedFiles.length,
+			renameCount: work.renamedFiles.length,
 			notifyOnError: options.notifyOnError ?? true,
 		});
 		await this.enqueue(async () => {
 			try {
-				await this.syncChangedFiles(changes);
+				await this.syncIncrementalWork(work);
 				this.plugin.debugLog('Incremental sync completed successfully.');
 			} catch (error) {
 				this.handleError(error, options.notifyOnError ?? true);
@@ -376,39 +463,86 @@ export class RelatedLinksFeature extends Component {
 		await this.writeFileIfChanged(targetFile, currentContent, nextContent);
 	}
 
-	private async syncChangedFiles(changes: PendingFileChange[]) {
+	private async syncIncrementalWork(work: {
+		changedFiles: PendingFileChange[];
+		createdFiles: TFile[];
+		deletedFiles: PendingDeletedFile[];
+		renamedFiles: PendingRenamedFile[];
+	}) {
 		const affectedTargetPaths = new Set<string>();
+		const sourcePathsToRefresh = new Set<string>();
+		const changedFilePaths = new Set(work.changedFiles.map((change) => change.file.path));
 
-		for (const change of changes) {
+		for (const deletedFile of work.deletedFiles) {
+			const previousContribution = this.removeTrackedSource(deletedFile.file.path);
+			this.addContributionTargets(affectedTargetPaths, previousContribution);
+			for (const sourcePath of this.collectTrackedSourcePathsForTargetPath(deletedFile.file.path)) {
+				sourcePathsToRefresh.add(sourcePath);
+			}
+			this.plugin.debugLog('Prepared incremental delete update.', {
+				filePath: deletedFile.file.path,
+				previousTargets: previousContribution?.targetPaths ?? [],
+			});
+		}
+
+		for (const renamedFile of work.renamedFiles) {
+			const previousContribution = this.sourceContributionsByPath.get(renamedFile.oldPath) ?? null;
+			this.sourceContributionsByPath.delete(renamedFile.oldPath);
+			this.sourceDisplayTextByPath.delete(renamedFile.oldPath);
+			this.addContributionTargets(affectedTargetPaths, previousContribution);
+
+			sourcePathsToRefresh.add(renamedFile.file.path);
+			for (const sourcePath of this.collectTrackedSourcePathsForTargetPath(renamedFile.oldPath)) {
+				sourcePathsToRefresh.add(sourcePath);
+			}
+			for (const sourcePath of this.collectCandidateSourcePathsForTargetFile(renamedFile.file)) {
+				sourcePathsToRefresh.add(sourcePath);
+			}
+
+			this.plugin.debugLog('Prepared incremental rename update.', {
+				filePath: renamedFile.file.path,
+				oldPath: renamedFile.oldPath,
+				previousTargets: previousContribution?.targetPaths ?? [],
+			});
+		}
+
+		for (const createdFile of work.createdFiles) {
+			sourcePathsToRefresh.add(createdFile.path);
+			for (const sourcePath of this.collectCandidateSourcePathsForTargetFile(createdFile)) {
+				sourcePathsToRefresh.add(sourcePath);
+			}
+			this.plugin.debugLog('Prepared incremental create update.', {
+				filePath: createdFile.path,
+			});
+		}
+
+		for (const change of work.changedFiles) {
 			const previousContribution = this.sourceContributionsByPath.get(change.file.path) ?? null;
-			const displayText = getDisplayText(
-				change.file,
-				change.cache.frontmatter,
-				this.plugin.settings.relatedLinks.displayProperty.trim(),
-			);
-			this.sourceDisplayTextByPath.set(change.file.path, displayText);
-
-			const nextContribution = this.buildSourceContribution(change.file, change.cache, displayText);
-			if (nextContribution) {
-				this.sourceContributionsByPath.set(change.file.path, nextContribution);
-			} else {
-				this.sourceContributionsByPath.delete(change.file.path);
-			}
-
-			for (const targetPath of previousContribution?.targetPaths ?? []) {
-				affectedTargetPaths.add(targetPath);
-			}
-
-			for (const targetPath of nextContribution?.targetPaths ?? []) {
-				affectedTargetPaths.add(targetPath);
-			}
-
-			this.plugin.debugLog('Prepared incremental source update.', {
+			this.addContributionTargets(affectedTargetPaths, previousContribution);
+			sourcePathsToRefresh.add(change.file.path);
+			this.plugin.debugLog('Prepared incremental metadata update.', {
 				filePath: change.file.path,
 				previousTargets: previousContribution?.targetPaths ?? [],
-				nextTargets: nextContribution?.targetPaths ?? [],
-				displayText,
 			});
+		}
+
+		for (const sourcePath of sourcePathsToRefresh) {
+			if (changedFilePaths.has(sourcePath)) {
+				continue;
+			}
+
+			const file = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
+			if (!(file instanceof TFile)) {
+				continue;
+			}
+
+			const refreshedContribution = this.refreshTrackedSource(file);
+			this.addContributionTargets(affectedTargetPaths, refreshedContribution.nextContribution);
+		}
+
+		for (const change of work.changedFiles) {
+			const refreshedContribution = this.refreshTrackedSource(change.file, change.cache);
+			this.addContributionTargets(affectedTargetPaths, refreshedContribution.nextContribution);
 		}
 
 		if (affectedTargetPaths.size === 0) {
@@ -432,6 +566,76 @@ export class RelatedLinksFeature extends Component {
 
 			await this.syncTargetFile(targetFile, this.buildSyncModelForTargets([targetPath]));
 		}
+	}
+
+	private refreshTrackedSource(file: TFile, cache: CachedMetadata | null = this.plugin.app.metadataCache.getFileCache(file)) {
+		const displayText = getDisplayText(file, cache?.frontmatter, this.plugin.settings.relatedLinks.displayProperty.trim());
+		this.sourceDisplayTextByPath.set(file.path, displayText);
+
+		const nextContribution = this.buildSourceContribution(file, cache, displayText);
+		if (nextContribution) {
+			this.sourceContributionsByPath.set(file.path, nextContribution);
+		} else {
+			this.sourceContributionsByPath.delete(file.path);
+		}
+
+		this.plugin.debugLog('Refreshed tracked source.', {
+			filePath: file.path,
+			displayText,
+			targetPaths: nextContribution?.targetPaths ?? [],
+		});
+
+		return {
+			displayText,
+			nextContribution,
+		};
+	}
+
+	private removeTrackedSource(sourcePath: string): SourceContribution | null {
+		const previousContribution = this.sourceContributionsByPath.get(sourcePath) ?? null;
+		this.sourceContributionsByPath.delete(sourcePath);
+		this.sourceDisplayTextByPath.delete(sourcePath);
+		return previousContribution;
+	}
+
+	private addContributionTargets(targetPaths: Set<string>, contribution: SourceContribution | null) {
+		for (const targetPath of contribution?.targetPaths ?? []) {
+			targetPaths.add(targetPath);
+		}
+	}
+
+	private collectTrackedSourcePathsForTargetPath(targetPath: string): Set<string> {
+		const sourcePaths = new Set<string>();
+
+		for (const contribution of this.sourceContributionsByPath.values()) {
+			if (contribution.targetPaths.includes(targetPath)) {
+				sourcePaths.add(contribution.sourcePath);
+			}
+		}
+
+		return sourcePaths;
+	}
+
+	private collectCandidateSourcePathsForTargetFile(targetFile: TFile): Set<string> {
+		const sourcePaths = this.collectTrackedSourcePathsForTargetPath(targetFile.path);
+
+		for (const [sourcePath, destinations] of Object.entries(this.plugin.app.metadataCache.resolvedLinks)) {
+			if (destinations[targetFile.path]) {
+				sourcePaths.add(sourcePath);
+			}
+		}
+
+		for (const [sourcePath, destinations] of Object.entries(this.plugin.app.metadataCache.unresolvedLinks)) {
+			for (const unresolvedLinkpath of Object.keys(destinations)) {
+				const resolvedFile = this.plugin.app.metadataCache.getFirstLinkpathDest(unresolvedLinkpath, sourcePath);
+				if (resolvedFile?.path === targetFile.path) {
+					sourcePaths.add(sourcePath);
+					break;
+				}
+			}
+		}
+
+		return sourcePaths;
 	}
 
 	private processTargetContent(
