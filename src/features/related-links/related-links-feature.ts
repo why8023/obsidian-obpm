@@ -1,5 +1,6 @@
 import {CachedMetadata, Component, Notice, normalizePath, TAbstractFile, TFile} from 'obsidian';
 import OBPMPlugin from '../../main';
+import {getFileNamePropertyValue, sanitizeFileBasename} from '../file-name-sync/file-name-sync-utils';
 import {
 	appendLinkLine,
 	buildMarkdownLinkLine,
@@ -112,6 +113,7 @@ export class RelatedLinksFeature extends Component {
 		this.pendingDeletedFiles.clear();
 		this.pendingFollowUpTargetPaths.clear();
 		this.pendingRenamedFiles.clear();
+		this.pendingObsidianRenameTargetPaths.clear();
 		this.fullSyncQueued = false;
 		this.plugin.debugLog('Refresh requested.');
 
@@ -171,6 +173,14 @@ export class RelatedLinksFeature extends Component {
 			filePath: file.path,
 			hasFrontmatter: Boolean(cache.frontmatter),
 		});
+		const expectedRenamePath = this.getExpectedFileNameSyncPath(file, cache);
+		if (expectedRenamePath && expectedRenamePath !== file.path) {
+			this.plugin.debugLog('Metadata change is expected to trigger a file name sync rename.', {
+				filePath: file.path,
+				expectedRenamePath,
+			});
+		}
+
 		this.scheduleFlush();
 	}
 
@@ -300,6 +310,7 @@ export class RelatedLinksFeature extends Component {
 	}
 
 	private async syncAllRelatedLinks() {
+		this.pendingObsidianRenameTargetPaths.clear();
 		this.renamedSourcePaths.clear();
 		const syncModel = this.buildSyncModel();
 		this.sourceContributionsByPath.clear();
@@ -575,12 +586,24 @@ export class RelatedLinksFeature extends Component {
 				continue;
 			}
 
+			const expectedRenamePath = this.getExpectedFileNameSyncPath(change.file, change.cache);
+			if (deferRenameLinkUpdatesToObsidian && expectedRenamePath) {
+				this.refreshTrackedSource(change.file, change.cache);
+				handledChangedPaths.add(change.file.path);
+				this.plugin.debugLog('Deferred metadata-driven related-link target sync because file name sync is expected to rename the source file.', {
+					filePath: change.file.path,
+					expectedRenamePath,
+				});
+				continue;
+			}
+
 			const previousContribution = this.sourceContributionsByPath.get(change.file.path) ?? null;
 			this.addContributionTargets(affectedTargetPaths, previousContribution);
 			sourcePathsToRefresh.add(change.file.path);
 			this.plugin.debugLog('Prepared incremental metadata update.', {
 				filePath: change.file.path,
 				previousTargets: previousContribution?.targetPaths ?? [],
+				expectedRenamePath,
 			});
 		}
 
@@ -791,7 +814,7 @@ export class RelatedLinksFeature extends Component {
 				}
 
 				presentManagedSourcePaths.add(sourcePath);
-				if (this.shouldDeferManagedRenameRewrite(matchReason, actualDestination, canonicalDestination)) {
+				if (this.shouldDeferManagedRenameRewrite(targetFile.path, actualDestination, canonicalDestination)) {
 					nextContent += fullMatch;
 					this.plugin.debugLog('Deferred renamed markdown destination rewrite to Obsidian automatic link updates.', {
 						targetPath: targetFile.path,
@@ -1075,6 +1098,18 @@ export class RelatedLinksFeature extends Component {
 			filePath: change.file.path,
 			matchesExpectedContent: expectedContent === change.data,
 		});
+		if (expectedContent !== change.data) {
+			const difference = this.summarizeContentDifference(expectedContent, change.data);
+			this.plugin.debugLog('Observed concurrent modification after a plugin-authored write.', {
+				filePath: change.file.path,
+				actualExcerpt: difference.actualExcerpt,
+				actualLength: difference.actualLength,
+				expectedExcerpt: difference.expectedExcerpt,
+				expectedLength: difference.expectedLength,
+				firstDifferenceIndex: difference.firstDifferenceIndex,
+			});
+		}
+
 		return expectedContent === change.data;
 	}
 
@@ -1123,14 +1158,14 @@ export class RelatedLinksFeature extends Component {
 	}
 
 	private shouldDeferManagedRenameRewrite(
-		matchReason: 'renamed-source' | 'resolved-source' | 'stale-display' | null,
+		targetFilePath: string,
 		actualDestination: string | null,
 		canonicalDestination: string | null,
 	): boolean {
 		return this.shouldDeferToObsidianLinkUpdates()
+			&& this.pendingObsidianRenameTargetPaths.has(targetFilePath)
 			&& canonicalDestination !== null
-			&& actualDestination !== canonicalDestination
-			&& (matchReason === 'renamed-source' || matchReason === 'stale-display');
+			&& actualDestination !== canonicalDestination;
 	}
 
 	private shouldDeferToObsidianLinkUpdates(): boolean {
@@ -1142,6 +1177,80 @@ export class RelatedLinksFeature extends Component {
 		for (const targetPath of contribution?.targetPaths ?? []) {
 			this.pendingObsidianRenameTargetPaths.add(targetPath);
 		}
+	}
+
+	private getExpectedFileNameSyncPath(file: TFile, cache: CachedMetadata | null): string | null {
+		if (!this.plugin.settings.fileNameSync.enabled) {
+			return null;
+		}
+
+		const propertyName = this.plugin.settings.fileNameSync.propertyName.trim();
+		if (!propertyName) {
+			return null;
+		}
+
+		const propertyValue = getFileNamePropertyValue(cache?.frontmatter, propertyName);
+		if (!propertyValue) {
+			return null;
+		}
+
+		const nextBasename = sanitizeFileBasename(propertyValue, {
+			invalidCharacterReplacement: this.plugin.settings.fileNameSync.invalidCharacterReplacement,
+			maxLength: this.plugin.settings.fileNameSync.maxFileNameLength,
+		});
+		if (!nextBasename || nextBasename === file.basename) {
+			return null;
+		}
+
+		const parentPath = file.parent?.path ?? '';
+		const nextFileName = `${nextBasename}.${file.extension}`;
+		const nextPath = parentPath ? normalizePath(`${parentPath}/${nextFileName}`) : nextFileName;
+		const existingFile = this.plugin.app.vault.getAbstractFileByPath(nextPath);
+		if (existingFile && existingFile.path !== file.path) {
+			return null;
+		}
+
+		return nextPath;
+	}
+
+	private summarizeContentDifference(expectedContent: string, actualContent: string): {
+		actualExcerpt: string;
+		actualLength: number;
+		expectedExcerpt: string;
+		expectedLength: number;
+		firstDifferenceIndex: number;
+	} {
+		const limit = Math.min(expectedContent.length, actualContent.length);
+		let firstDifferenceIndex = limit;
+
+		for (let index = 0; index < limit; index += 1) {
+			if (expectedContent[index] !== actualContent[index]) {
+				firstDifferenceIndex = index;
+				break;
+			}
+		}
+
+		if (expectedContent.length !== actualContent.length && firstDifferenceIndex === limit) {
+			firstDifferenceIndex = limit;
+		}
+
+		const start = Math.max(0, firstDifferenceIndex - 24);
+		const expectedEnd = Math.min(expectedContent.length, firstDifferenceIndex + 48);
+		const actualEnd = Math.min(actualContent.length, firstDifferenceIndex + 48);
+
+		return {
+			actualExcerpt: this.formatDebugExcerpt(actualContent.slice(start, actualEnd)),
+			actualLength: actualContent.length,
+			expectedExcerpt: this.formatDebugExcerpt(expectedContent.slice(start, expectedEnd)),
+			expectedLength: expectedContent.length,
+			firstDifferenceIndex,
+		};
+	}
+
+	private formatDebugExcerpt(value: string): string {
+		return value
+			.replace(/\r/g, '\\r')
+			.replace(/\n/g, '\\n');
 	}
 
 	private enqueue(task: () => Promise<void>): Promise<void> {
