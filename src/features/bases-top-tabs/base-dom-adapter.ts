@@ -1,5 +1,5 @@
 import {WorkspaceLeaf} from 'obsidian';
-import {BasesTopTabsPlacement} from '../../settings';
+import {BasesTopTabsOrientation, BasesTopTabsPlacement} from '../../settings';
 
 const BASES_HEADER_SELECTOR = '.bases-header';
 const BASES_TOOLBAR_SELECTOR = '.bases-toolbar';
@@ -53,7 +53,11 @@ export class BaseDomAdapter {
 		}
 	}
 
-	resolveMountContext(leaf: WorkspaceLeaf, requestedPlacement: BasesTopTabsPlacement): BasesTabsMountContext | null {
+	resolveMountContext(
+		leaf: WorkspaceLeaf,
+		requestedPlacement: BasesTopTabsPlacement,
+		orientation: BasesTopTabsOrientation,
+	): BasesTabsMountContext | null {
 		const rootEl = leaf.view.containerEl;
 		if (!(rootEl instanceof HTMLElement)) {
 			return null;
@@ -63,7 +67,11 @@ export class BaseDomAdapter {
 		const toolbarEl = rootEl.querySelector<HTMLElement>(BASES_TOOLBAR_SELECTOR);
 		const viewContentEl = rootEl.querySelector<HTMLElement>(VIEW_CONTENT_SELECTOR) ?? rootEl;
 
-		if (requestedPlacement === 'inside-toolbar' && toolbarEl) {
+		if (requestedPlacement === 'inside-toolbar' && orientation === 'vertical') {
+			this.debugLog('Falling back to above-toolbar placement because vertical tabs need their own row.');
+		}
+
+		if (requestedPlacement === 'inside-toolbar' && orientation !== 'vertical' && toolbarEl) {
 			return {
 				actualPlacement: 'inside-toolbar',
 				hostEl: toolbarEl,
@@ -71,7 +79,7 @@ export class BaseDomAdapter {
 			};
 		}
 
-		if (requestedPlacement === 'inside-toolbar' && !toolbarEl) {
+		if (requestedPlacement === 'inside-toolbar' && orientation !== 'vertical' && !toolbarEl) {
 			this.debugLog('Falling back to above-toolbar placement because the Bases toolbar is not available.');
 		}
 

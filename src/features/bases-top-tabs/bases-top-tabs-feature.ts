@@ -3,6 +3,7 @@ import {BaseConfigAdapter} from './base-config-adapter';
 import {BaseDomAdapter} from './base-dom-adapter';
 import {BaseViewSwitcherAdapter} from './base-view-switcher-adapter';
 import {BasesTabsController} from './bases-top-tabs-controller';
+import {BasesTopTabsStateStore} from './bases-top-tabs-state-store';
 import {BasesTopTabsPluginContext} from './types';
 
 const FEATURE_ID = 'bases-top-tabs';
@@ -11,6 +12,7 @@ export class BasesTopTabsFeature extends Component {
 	private readonly configAdapter: BaseConfigAdapter;
 	private readonly controllers = new Map<WorkspaceLeaf, BasesTabsController>();
 	private readonly domAdapter: BaseDomAdapter;
+	private readonly stateStore: BasesTopTabsStateStore;
 	private readonly syncControllers = debounce(() => {
 		this.reconcileControllers();
 	}, 100, true);
@@ -25,6 +27,7 @@ export class BasesTopTabsFeature extends Component {
 
 		this.configAdapter = new BaseConfigAdapter(this.plugin.app, debugLog);
 		this.domAdapter = new BaseDomAdapter(debugLog);
+		this.stateStore = new BasesTopTabsStateStore(this.plugin);
 		this.viewSwitcherAdapter = new BaseViewSwitcherAdapter(this.plugin.app);
 	}
 
@@ -47,7 +50,7 @@ export class BasesTopTabsFeature extends Component {
 			}
 
 			this.configAdapter.forgetFile(file.path);
-			this.requestSync(`modify:${file.path}`);
+			this.requestRefreshForFilePaths(`modify:${file.path}`, [file.path]);
 		}));
 
 		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
@@ -59,8 +62,19 @@ export class BasesTopTabsFeature extends Component {
 				this.configAdapter.forgetFile(file.path);
 			}
 
+			if (isBasePath(oldPath) && file instanceof TFile && file.extension === 'base') {
+				void this.stateStore.moveFileState(oldPath, file.path);
+			} else if (isBasePath(oldPath)) {
+				void this.stateStore.clearFileState(oldPath);
+			}
+
 			if (isBasePath(oldPath) || (file instanceof TFile && file.extension === 'base')) {
-				this.requestSync(`rename:${oldPath}`);
+				const affectedPaths = [oldPath];
+				if (file instanceof TFile && file.extension === 'base') {
+					affectedPaths.push(file.path);
+				}
+
+				this.requestRefreshForFilePaths(`rename:${oldPath}`, affectedPaths);
 			}
 		}));
 
@@ -70,12 +84,15 @@ export class BasesTopTabsFeature extends Component {
 			}
 
 			this.configAdapter.forgetFile(file.path);
-			this.requestSync(`delete:${file.path}`);
+			void this.stateStore.clearFileState(file.path);
+			this.requestRefreshForFilePaths(`delete:${file.path}`, [file.path]);
 		}));
 
 		this.plugin.app.workspace.onLayoutReady(() => {
 			this.requestSync('layout-ready');
 		});
+
+		this.requestSync('feature-load');
 	}
 
 	onunload() {
@@ -123,6 +140,7 @@ export class BasesTopTabsFeature extends Component {
 					this.configAdapter,
 					this.domAdapter,
 					this.viewSwitcherAdapter,
+					this.stateStore,
 				);
 				this.controllers.set(leaf, controller);
 			}
@@ -141,8 +159,33 @@ export class BasesTopTabsFeature extends Component {
 			reason,
 		});
 		this.syncControllers();
-		for (const controller of this.controllers.values()) {
-			controller.requestRefresh(reason);
+	}
+
+	private requestRefreshForFilePaths(reason: string, filePaths: string[]) {
+		if (!this.plugin.settings.basesTopTabs.enabled) {
+			this.destroyAllControllers();
+			return;
+		}
+
+		const normalizedPaths = new Set(filePaths.filter((filePath) => filePath.length > 0));
+		if (normalizedPaths.size === 0) {
+			return;
+		}
+
+		this.plugin.debugFeatureLog(
+			FEATURE_ID,
+			this.plugin.settings.basesTopTabs.debugMode,
+			'Requesting targeted Base tabs refresh.',
+			{
+				filePaths: [...normalizedPaths],
+				reason,
+			},
+		);
+		for (const [leaf, controller] of this.controllers) {
+			const leafState = this.viewSwitcherAdapter.getLeafState(leaf);
+			if (leafState && normalizedPaths.has(leafState.filePath)) {
+				controller.requestRefresh(reason);
+			}
 		}
 	}
 

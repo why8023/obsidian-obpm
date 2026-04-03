@@ -10,6 +10,11 @@ import {
 import {getSettingsLocalization} from './settings-localization';
 
 export type BasesTopTabsPlacement = 'above-toolbar' | 'inside-toolbar';
+export type BasesTopTabsOrientation = 'horizontal' | 'vertical';
+
+const DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS = 8;
+const MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS = 50;
+const MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS = 0;
 
 export interface RelatedLinksSettings {
 	enabled: boolean;
@@ -18,12 +23,21 @@ export interface RelatedLinksSettings {
 	verboseLogging: boolean;
 }
 
+export interface BasesTopTabsFileState {
+	lastViewName: string | null;
+	pinnedViewNames: string[];
+}
+
 export interface BasesTopTabsSettings {
 	autoRefresh: boolean;
 	debugMode: boolean;
 	enabled: boolean;
+	filesState: Record<string, BasesTopTabsFileState>;
 	hideWhenSingleView: boolean;
+	maxVisibleTabs: number;
+	orientation: BasesTopTabsOrientation;
 	placement: BasesTopTabsPlacement;
+	rememberLastView: boolean;
 	scrollable: boolean;
 	showIcons: boolean;
 	showViewCount: boolean;
@@ -47,8 +61,12 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		autoRefresh: true,
 		debugMode: false,
 		enabled: false,
+		filesState: {},
 		hideWhenSingleView: true,
+		maxVisibleTabs: DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+		orientation: 'horizontal',
 		placement: 'above-toolbar',
+		rememberLastView: true,
 		scrollable: true,
 		showIcons: true,
 		showViewCount: false,
@@ -73,13 +91,26 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 			autoRefresh: normalizeBoolean(settings?.basesTopTabs?.autoRefresh, DEFAULT_SETTINGS.basesTopTabs.autoRefresh),
 			debugMode: normalizeBoolean(settings?.basesTopTabs?.debugMode, DEFAULT_SETTINGS.basesTopTabs.debugMode),
 			enabled: normalizeBoolean(settings?.basesTopTabs?.enabled, DEFAULT_SETTINGS.basesTopTabs.enabled),
+			filesState: normalizeBasesTopTabsFileStateMap(settings?.basesTopTabs?.filesState),
 			hideWhenSingleView: normalizeBoolean(
 				settings?.basesTopTabs?.hideWhenSingleView,
 				DEFAULT_SETTINGS.basesTopTabs.hideWhenSingleView,
 			),
+			maxVisibleTabs: normalizeBasesTopTabsMaxVisibleTabs(
+				settings?.basesTopTabs?.maxVisibleTabs,
+				DEFAULT_SETTINGS.basesTopTabs.maxVisibleTabs,
+			),
+			orientation: normalizeBasesTopTabsOrientation(
+				settings?.basesTopTabs?.orientation,
+				DEFAULT_SETTINGS.basesTopTabs.orientation,
+			),
 			placement: normalizeBasesTopTabsPlacement(
 				settings?.basesTopTabs?.placement,
 				DEFAULT_SETTINGS.basesTopTabs.placement,
+			),
+			rememberLastView: normalizeBoolean(
+				settings?.basesTopTabs?.rememberLastView,
+				DEFAULT_SETTINGS.basesTopTabs.rememberLastView,
 			),
 			scrollable: normalizeBoolean(settings?.basesTopTabs?.scrollable, DEFAULT_SETTINGS.basesTopTabs.scrollable),
 			showIcons: normalizeBoolean(settings?.basesTopTabs?.showIcons, DEFAULT_SETTINGS.basesTopTabs.showIcons),
@@ -116,6 +147,72 @@ function normalizeText(value: unknown, fallback: string): string {
 
 function normalizeBasesTopTabsPlacement(value: unknown, fallback: BasesTopTabsPlacement): BasesTopTabsPlacement {
 	return value === 'inside-toolbar' || value === 'above-toolbar' ? value : fallback;
+}
+
+function normalizeBasesTopTabsOrientation(value: unknown, fallback: BasesTopTabsOrientation): BasesTopTabsOrientation {
+	return value === 'vertical' || value === 'horizontal' ? value : fallback;
+}
+
+function normalizeBasesTopTabsMaxVisibleTabs(value: unknown, fallback: number): number {
+	if (typeof value === 'number' && Number.isInteger(value)) {
+		return clamp(value, MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS, MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS);
+	}
+
+	if (typeof value === 'string' && value.trim().length > 0) {
+		const parsedValue = Number.parseInt(value, 10);
+		if (Number.isInteger(parsedValue)) {
+			return clamp(parsedValue, MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS, MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS);
+		}
+	}
+
+	return fallback;
+}
+
+function normalizeBasesTopTabsFileStateMap(value: unknown): Record<string, BasesTopTabsFileState> {
+	if (!isObjectRecord(value)) {
+		return {};
+	}
+
+	const normalizedEntries = Object.entries(value)
+		.map(([filePath, fileState]) => {
+			const normalizedPath = typeof filePath === 'string' ? filePath.trim() : '';
+			if (!normalizedPath || !isObjectRecord(fileState)) {
+				return null;
+			}
+
+			const lastViewName = typeof fileState.lastViewName === 'string' && fileState.lastViewName.trim().length > 0
+				? fileState.lastViewName.trim()
+				: null;
+			const pinnedViewNames = normalizeStringArray(fileState.pinnedViewNames);
+
+			if (lastViewName === null && pinnedViewNames.length === 0) {
+				return null;
+			}
+
+			return [normalizedPath, {lastViewName, pinnedViewNames}] as const;
+		})
+		.filter((entry): entry is readonly [string, BasesTopTabsFileState] => entry !== null);
+
+	return Object.fromEntries(normalizedEntries);
+}
+
+function normalizeStringArray(value: unknown): string[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return [...new Set(value
+		.filter((entry): entry is string => typeof entry === 'string')
+		.map((entry) => entry.trim())
+		.filter((entry) => entry.length > 0))];
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null;
+}
+
+function clamp(value: number, min: number, max: number): number {
+	return Math.min(Math.max(value, min), max);
 }
 
 export class OBPMPluginSettingTab extends PluginSettingTab {
@@ -182,6 +279,21 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
+			.setName(strings.basesTopTabsOrientationName)
+			.setDesc(strings.basesTopTabsOrientationDesc)
+			.addDropdown((dropdown) => dropdown
+				.addOption('horizontal', strings.basesTopTabsOrientationHorizontalLabel)
+				.addOption('vertical', strings.basesTopTabsOrientationVerticalLabel)
+				.setValue(this.plugin.settings.basesTopTabs.orientation)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.orientation = normalizeBasesTopTabsOrientation(
+						value,
+						DEFAULT_SETTINGS.basesTopTabs.orientation,
+					);
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
 			.setName(strings.basesTopTabsScrollableName)
 			.setDesc(strings.basesTopTabsScrollableDesc)
 			.addToggle((toggle) => toggle
@@ -198,6 +310,54 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesTopTabs.showViewCount)
 				.onChange(async (value) => {
 					this.plugin.settings.basesTopTabs.showViewCount = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsMaxVisibleTabsName)
+			.setDesc(strings.basesTopTabsMaxVisibleTabsDesc(
+				MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+				MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+				DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+			))
+			.addText((text) => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = String(MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS);
+				text.inputEl.max = String(MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS);
+				text.inputEl.step = '1';
+				text.setValue(this.plugin.settings.basesTopTabs.maxVisibleTabs.toString());
+
+				const applyValue = async () => {
+					const normalizedValue = normalizeBasesTopTabsMaxVisibleTabs(
+						text.inputEl.value,
+						DEFAULT_SETTINGS.basesTopTabs.maxVisibleTabs,
+					);
+					this.plugin.settings.basesTopTabs.maxVisibleTabs = normalizedValue;
+					await this.plugin.saveSettings();
+
+					if (text.inputEl.value !== normalizedValue.toString()) {
+						text.setValue(normalizedValue.toString());
+						new Notice(strings.basesTopTabsMaxVisibleTabsNotice(
+							MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+							MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+						));
+					}
+				};
+
+				text.inputEl.addEventListener('change', () => {
+					void applyValue();
+				});
+
+				return text;
+			});
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsRememberLastViewName)
+			.setDesc(strings.basesTopTabsRememberLastViewDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.rememberLastView)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.rememberLastView = value;
 					await this.plugin.saveSettings();
 				}));
 

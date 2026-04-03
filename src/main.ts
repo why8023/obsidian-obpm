@@ -40,9 +40,14 @@ export default class OBPMPlugin extends Plugin {
 		this.settings = normalizePluginSettings(loadedData);
 	}
 
-	async saveSettings() {
+	async saveSettings(options?: {refreshFeatures?: boolean}) {
 		this.settings = normalizePluginSettings(this.settings);
 		await this.saveData(this.settings);
+
+		if (options?.refreshFeatures === false) {
+			return;
+		}
+
 		await Promise.all([
 			this.basesTopTabsFeature?.refresh(),
 			this.relatedLinksFeature?.refresh(),

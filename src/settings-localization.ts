@@ -10,10 +10,19 @@ export interface SettingsLocalization {
 	basesTopTabsHeading: string;
 	basesTopTabsHideWhenSingleViewDesc: string;
 	basesTopTabsHideWhenSingleViewName: string;
+	basesTopTabsMaxVisibleTabsDesc: (min: number, max: number, defaultValue: number) => string;
+	basesTopTabsMaxVisibleTabsName: string;
+	basesTopTabsMaxVisibleTabsNotice: (min: number, max: number) => string;
+	basesTopTabsOrientationDesc: string;
+	basesTopTabsOrientationHorizontalLabel: string;
+	basesTopTabsOrientationName: string;
+	basesTopTabsOrientationVerticalLabel: string;
 	basesTopTabsPlacementAboveToolbarLabel: string;
 	basesTopTabsPlacementDesc: string;
 	basesTopTabsPlacementInsideToolbarLabel: string;
 	basesTopTabsPlacementName: string;
+	basesTopTabsRememberLastViewDesc: string;
+	basesTopTabsRememberLastViewName: string;
 	basesTopTabsScrollableDesc: string;
 	basesTopTabsScrollableName: string;
 	basesTopTabsShowIconsDesc: string;
@@ -56,10 +65,20 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsHeading: 'Bases top tabs',
 	basesTopTabsHideWhenSingleViewDesc: 'Hide the tab bar when the current Base only has one view.',
 	basesTopTabsHideWhenSingleViewName: 'Hide when there is only one view',
+	basesTopTabsMaxVisibleTabsDesc: (min, max, defaultValue) =>
+		`Show a More menu after this many tabs. Use ${min} to disable overflow. Range: ${min}-${max}. Default: ${defaultValue}.`,
+	basesTopTabsMaxVisibleTabsName: 'Maximum visible tabs',
+	basesTopTabsMaxVisibleTabsNotice: (min, max) => `Maximum visible tabs must be between ${min} and ${max}.`,
+	basesTopTabsOrientationDesc: 'Choose whether the tabs are arranged horizontally or as a vertical stack.',
+	basesTopTabsOrientationHorizontalLabel: 'Horizontal',
+	basesTopTabsOrientationName: 'Orientation',
+	basesTopTabsOrientationVerticalLabel: 'Vertical',
 	basesTopTabsPlacementAboveToolbarLabel: 'Above the toolbar',
 	basesTopTabsPlacementDesc: 'Choose whether the tabs appear on their own row or inside the native Bases toolbar.',
 	basesTopTabsPlacementInsideToolbarLabel: 'Inside the toolbar',
 	basesTopTabsPlacementName: 'Placement',
+	basesTopTabsRememberLastViewDesc: 'Reopen each .base file in the last view you selected there.',
+	basesTopTabsRememberLastViewName: 'Remember last view per Base',
 	basesTopTabsScrollableDesc: 'Allow horizontal scrolling instead of wrapping when there are many tabs.',
 	basesTopTabsScrollableName: 'Allow horizontal scrolling',
 	basesTopTabsShowIconsDesc: 'Display a view icon next to each tab label when one is available.',
@@ -102,10 +121,20 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsHeading: 'Bases 顶部 Tabs',
 	basesTopTabsHideWhenSingleViewDesc: '当当前 Base 只有一个视图时隐藏 Tabs。',
 	basesTopTabsHideWhenSingleViewName: '单视图时隐藏',
+	basesTopTabsMaxVisibleTabsDesc: (min, max, defaultValue) =>
+		`超过这个数量后折叠到“更多”菜单。设为 ${min} 可禁用折叠。范围：${min}-${max}。默认值：${defaultValue}。`,
+	basesTopTabsMaxVisibleTabsName: '最大可见 Tabs 数量',
+	basesTopTabsMaxVisibleTabsNotice: (min, max) => `最大可见 Tabs 数量必须在 ${min} 到 ${max} 之间。`,
+	basesTopTabsOrientationDesc: '选择 Tabs 横向排列，还是改为纵向堆叠显示。',
+	basesTopTabsOrientationHorizontalLabel: '横向',
+	basesTopTabsOrientationName: '排列方向',
+	basesTopTabsOrientationVerticalLabel: '纵向',
 	basesTopTabsPlacementAboveToolbarLabel: '工具栏上方',
 	basesTopTabsPlacementDesc: '选择 Tabs 是单独占一行，还是嵌入到原生 Bases 工具栏里。',
 	basesTopTabsPlacementInsideToolbarLabel: '工具栏内',
 	basesTopTabsPlacementName: '位置',
+	basesTopTabsRememberLastViewDesc: '为每个 .base 文件记住上次打开的视图，并在下次打开时自动恢复。',
+	basesTopTabsRememberLastViewName: '记住每个 Base 的上次视图',
 	basesTopTabsScrollableDesc: '当 Tabs 过多时允许横向滚动，而不是自动换行。',
 	basesTopTabsScrollableName: '允许横向滚动',
 	basesTopTabsShowIconsDesc: '当视图存在图标时，在 Tab 名称旁显示图标。',
