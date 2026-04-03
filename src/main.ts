@@ -1,9 +1,11 @@
 import {Plugin} from 'obsidian';
+import {FileNameSyncFeature} from './features/file-name-sync/file-name-sync-feature';
 import {RelatedLinksFeature} from './features/related-links/related-links-feature';
-import {DEFAULT_SETTINGS, OBPMPluginSettingTab, OBPMPluginSettings} from './settings';
+import {normalizePluginSettings, OBPMPluginSettingTab, OBPMPluginSettings} from './settings';
 
 export default class OBPMPlugin extends Plugin {
 	settings: OBPMPluginSettings;
+	private fileNameSyncFeature: FileNameSyncFeature | null = null;
 	private relatedLinksFeature: RelatedLinksFeature | null = null;
 
 	async onload() {
@@ -11,6 +13,8 @@ export default class OBPMPlugin extends Plugin {
 
 		this.relatedLinksFeature = new RelatedLinksFeature(this);
 		this.addChild(this.relatedLinksFeature);
+		this.fileNameSyncFeature = new FileNameSyncFeature(this);
+		this.addChild(this.fileNameSyncFeature);
 
 		this.addCommand({
 			id: 'sync-related-frontmatter-links',
@@ -29,20 +33,16 @@ export default class OBPMPlugin extends Plugin {
 
 	async loadSettings() {
 		const loadedData = await this.loadData() as Partial<OBPMPluginSettings> | null;
-
-		this.settings = {
-			...DEFAULT_SETTINGS,
-			...loadedData,
-			relatedLinks: {
-				...DEFAULT_SETTINGS.relatedLinks,
-				...loadedData?.relatedLinks,
-			},
-		};
+		this.settings = normalizePluginSettings(loadedData);
 	}
 
 	async saveSettings() {
+		this.settings = normalizePluginSettings(this.settings);
 		await this.saveData(this.settings);
-		await this.relatedLinksFeature?.refresh();
+		await Promise.all([
+			this.relatedLinksFeature?.refresh(),
+			this.fileNameSyncFeature?.refresh(),
+		]);
 	}
 
 	debugLog(message: string, details?: unknown) {
