@@ -218,3 +218,18 @@
 .obpm-bases-tabs-modal-error.is-visible {
 	visibility: visible;
 }
+
+.obpm-same-folder-note-modal-input input {
+	width: 100%;
+}
+
+.obpm-same-folder-note-modal-error {
+	min-height: 1.25em;
+	margin-top: var(--size-2-1);
+	color: var(--text-error);
+	visibility: hidden;
+}
+
+.obpm-same-folder-note-modal-error.is-visible {
+	visibility: visible;
+}

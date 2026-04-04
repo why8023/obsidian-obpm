@@ -50,10 +50,15 @@ export interface FileNameSyncSettings {
 	maxFileNameLength: number;
 }
 
+export interface SameFolderNoteSettings {
+	enabled: boolean;
+}
+
 export interface OBPMPluginSettings {
 	basesTopTabs: BasesTopTabsSettings;
 	relatedLinks: RelatedLinksSettings;
 	fileNameSync: FileNameSyncSettings;
+	sameFolderNote: SameFolderNoteSettings;
 }
 
 export const DEFAULT_SETTINGS: OBPMPluginSettings = {
@@ -82,6 +87,9 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		propertyName: 'obpm_title',
 		invalidCharacterReplacement: '_',
 		maxFileNameLength: DEFAULT_FILE_NAME_MAX_LENGTH,
+	},
+	sameFolderNote: {
+		enabled: false,
 	},
 };
 
@@ -133,6 +141,9 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 				settings?.fileNameSync?.maxFileNameLength,
 				DEFAULT_SETTINGS.fileNameSync.maxFileNameLength,
 			),
+		},
+		sameFolderNote: {
+			enabled: normalizeBoolean(settings?.sameFolderNote?.enabled, DEFAULT_SETTINGS.sameFolderNote.enabled),
 		},
 	};
 }
@@ -506,5 +517,19 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 				return text;
 			});
+
+		new Setting(containerEl)
+			.setName(strings.sameFolderNoteHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.enableSameFolderNoteName)
+			.setDesc(strings.enableSameFolderNoteDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.sameFolderNote.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.sameFolderNote.enabled = value;
+					await this.plugin.saveSettings();
+				}));
 	}
 }

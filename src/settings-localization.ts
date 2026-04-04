@@ -53,6 +53,9 @@ export interface SettingsLocalization {
 	maxFileNameLengthName: string;
 	maxFileNameLengthDesc: (min: number, max: number, defaultValue: number) => string;
 	maxFileNameLengthNotice: (min: number, max: number) => string;
+	sameFolderNoteHeading: string;
+	enableSameFolderNoteName: string;
+	enableSameFolderNoteDesc: string;
 }
 
 const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
@@ -109,6 +112,9 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	maxFileNameLengthName: 'Maximum file name length',
 	maxFileNameLengthDesc: (min, max, defaultValue) => `Limit the markdown file basename to ${min}-${max} characters. Default: ${defaultValue}.`,
 	maxFileNameLengthNotice: (min, max) => `Maximum file name length must be between ${min} and ${max}.`,
+	sameFolderNoteHeading: 'Create note in same folder',
+	enableSameFolderNoteName: 'Enable same-folder note command',
+	enableSameFolderNoteDesc: 'Add a file context-menu command that creates a new markdown note next to the selected file.',
 };
 
 const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
@@ -165,6 +171,9 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	maxFileNameLengthName: '文件名最大长度',
 	maxFileNameLengthDesc: (min, max, defaultValue) => `将 Markdown 文件名限制在 ${min}-${max} 个字符之间。默认值：${defaultValue}。`,
 	maxFileNameLengthNotice: (min, max) => `文件名最大长度必须在 ${min} 到 ${max} 之间。`,
+	sameFolderNoteHeading: '同目录新建笔记',
+	enableSameFolderNoteName: '启用同目录新建命令',
+	enableSameFolderNoteDesc: '在文件右键菜单中增加一个命令，用来在所选文件同目录下新建 Markdown 笔记。',
 };
 
 export function getSettingsLocalization(): SettingsLocalization {

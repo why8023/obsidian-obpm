@@ -2,6 +2,7 @@ import {Plugin} from 'obsidian';
 import {BasesTopTabsFeature} from './features/bases-top-tabs/bases-top-tabs-feature';
 import {FileNameSyncFeature} from './features/file-name-sync/file-name-sync-feature';
 import {RelatedLinksFeature} from './features/related-links/related-links-feature';
+import {SameFolderNoteFeature} from './features/same-folder-note/same-folder-note-feature';
 import {normalizeRelatedLinksState} from './features/related-links/related-links-state-store';
 import {RelatedLinksState} from './features/related-links/types';
 import {normalizePluginSettings, OBPMPluginSettingTab, OBPMPluginSettings} from './settings';
@@ -16,6 +17,7 @@ export default class OBPMPlugin extends Plugin {
 	private basesTopTabsFeature: BasesTopTabsFeature | null = null;
 	private fileNameSyncFeature: FileNameSyncFeature | null = null;
 	private relatedLinksFeature: RelatedLinksFeature | null = null;
+	private sameFolderNoteFeature: SameFolderNoteFeature | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -26,6 +28,8 @@ export default class OBPMPlugin extends Plugin {
 		this.addChild(this.relatedLinksFeature);
 		this.fileNameSyncFeature = new FileNameSyncFeature(this);
 		this.addChild(this.fileNameSyncFeature);
+		this.sameFolderNoteFeature = new SameFolderNoteFeature(this);
+		this.addChild(this.sameFolderNoteFeature);
 
 		this.addCommand({
 			id: 'sync-related-frontmatter-links',
@@ -60,6 +64,7 @@ export default class OBPMPlugin extends Plugin {
 			this.basesTopTabsFeature?.refresh(),
 			this.relatedLinksFeature?.refresh(),
 			this.fileNameSyncFeature?.refresh(),
+			this.sameFolderNoteFeature?.refresh(),
 		]);
 	}
 
