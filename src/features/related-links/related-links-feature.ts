@@ -2,15 +2,16 @@ import {CachedMetadata, Component, Notice, normalizePath, TAbstractFile, TFile} 
 import OBPMPlugin from '../../main';
 import {getFileNamePropertyValue, sanitizeFileBasename} from '../file-name-sync/file-name-sync-utils';
 import {
-	appendLinkLine,
-	buildMarkdownLinkLine,
-	buildRelativeMarkdownDestination,
 	extractMarkdownLinkpath,
-	getDisplayText,
-	getTargetLinkpaths,
-	SourceContribution,
-	unescapeMarkdownLinkText,
-} from './related-link-utils';
+	extractManagedInlineLinks,
+	hasManagedInlineLinks,
+	ManagedInlineLink,
+	resolveMarkdownDestinationCandidates,
+} from './managed-link-protocol';
+import {buildRelatedLinksState} from './related-links-state-store';
+import {buildDesiredLinksByTarget, buildFullSourceIndex, buildSourceContribution} from './source-index';
+import {syncManagedLinksInContent} from './target-sync';
+import {DesiredLinksByTarget, DesiredTargetLink, RelatedLinksState, SourceContribution} from './types';
 
 interface FullSyncOptions {
 	force?: boolean;
@@ -18,7 +19,7 @@ interface FullSyncOptions {
 }
 
 interface PendingFileChange {
-	cache: CachedMetadata;
+	cache: CachedMetadata | null;
 	data: string;
 	file: TFile;
 }
@@ -31,22 +32,7 @@ interface PendingDeletedFile {
 interface PendingRenamedFile {
 	file: TFile;
 	oldPath: string;
-}
-
-interface DesiredTargetLink {
-	displayText: string;
-	sourcePath: string;
-}
-
-interface SyncModel {
-	desiredLinksByTarget: Map<string, Map<string, DesiredTargetLink>>;
-	sourceContributionsByPath: Map<string, SourceContribution>;
-	sourceDisplayTextByPath: Map<string, string>;
-}
-
-interface ProcessedTargetContent {
-	content: string;
-	presentManagedSourcePaths: Set<string>;
+	wasManagedTarget: boolean;
 }
 
 interface VaultConfigReader {
@@ -65,7 +51,7 @@ export class RelatedLinksFeature extends Component {
 	private readonly pendingObsidianRenameTargetPaths = new Set<string>();
 	private readonly renamedSourcePaths = new Map<string, string>();
 	private readonly sourceContributionsByPath = new Map<string, SourceContribution>();
-	private readonly sourceDisplayTextByPath = new Map<string, string>();
+	private currentState: RelatedLinksState;
 	private flushTimer: number | null = null;
 	private fullSyncQueued = false;
 	private hasInitialized = false;
@@ -73,6 +59,7 @@ export class RelatedLinksFeature extends Component {
 
 	constructor(private readonly plugin: OBPMPlugin) {
 		super();
+		this.currentState = this.plugin.getRelatedLinksState();
 	}
 
 	onload() {
@@ -115,6 +102,7 @@ export class RelatedLinksFeature extends Component {
 		this.pendingRenamedFiles.clear();
 		this.pendingObsidianRenameTargetPaths.clear();
 		this.fullSyncQueued = false;
+		this.currentState = this.plugin.getRelatedLinksState();
 		this.plugin.debugLog('Refresh requested.');
 
 		if (!this.isEnabled()) {
@@ -123,7 +111,6 @@ export class RelatedLinksFeature extends Component {
 			this.pendingObsidianRenameTargetPaths.clear();
 			this.renamedSourcePaths.clear();
 			this.sourceContributionsByPath.clear();
-			this.sourceDisplayTextByPath.clear();
 			this.hasInitialized = false;
 			this.plugin.debugLog('Refresh skipped because related links are disabled.');
 			return;
@@ -154,7 +141,7 @@ export class RelatedLinksFeature extends Component {
 		});
 	}
 
-	private queueChangedFile(file: TFile, data: string, cache: CachedMetadata) {
+	private queueChangedFile(file: TFile, data: string, cache: CachedMetadata | null) {
 		if (!this.isEnabled() || !this.isMarkdownFile(file)) {
 			return;
 		}
@@ -164,20 +151,19 @@ export class RelatedLinksFeature extends Component {
 			this.plugin.debugLog('Queued follow-up target sync after Obsidian-managed link update.', {
 				filePath: file.path,
 			});
-			this.scheduleFlush();
-			return;
 		}
 
 		this.pendingChangedFiles.set(file.path, {cache, data, file});
 		this.plugin.debugLog('Queued metadata change.', {
 			filePath: file.path,
-			hasFrontmatter: Boolean(cache.frontmatter),
+			hasFrontmatter: Boolean(cache?.frontmatter),
+			hasManagedLinks: hasManagedInlineLinks(data),
 		});
 		const expectedRenamePath = this.getExpectedFileNameSyncPath(file, cache);
 		if (expectedRenamePath && expectedRenamePath !== file.path) {
 			this.plugin.debugLog('Metadata change is expected to trigger a file name sync rename.', {
-				filePath: file.path,
 				expectedRenamePath,
+				filePath: file.path,
 			});
 		}
 
@@ -214,17 +200,21 @@ export class RelatedLinksFeature extends Component {
 			return;
 		}
 
+		const wasManagedTarget = this.isTrackedManagedTarget(oldPath);
 		const deferToObsidianLinkUpdates = this.shouldDeferToObsidianLinkUpdates();
 		if (deferToObsidianLinkUpdates) {
-			const previousContribution = this.sourceContributionsByPath.get(oldPath) ?? null;
-			this.trackPendingObsidianRenameTargets(previousContribution);
+			this.trackPendingObsidianRenameTargets(this.sourceContributionsByPath.get(oldPath) ?? null);
+			if (wasManagedTarget) {
+				this.pendingObsidianRenameTargetPaths.add(file.path);
+			}
 		}
 
-		this.pendingRenamedFiles.set(file.path, {file, oldPath});
+		this.pendingRenamedFiles.set(file.path, {file, oldPath, wasManagedTarget});
 		this.plugin.debugLog('Queued file rename.', {
+			deferToObsidianLinkUpdates,
 			filePath: file.path,
 			oldPath,
-			deferToObsidianLinkUpdates,
+			wasManagedTarget,
 		});
 		this.scheduleFlush();
 	}
@@ -285,14 +275,14 @@ export class RelatedLinksFeature extends Component {
 
 		const shouldNotifyOnError = this.hasInitialized;
 		this.plugin.debugLog('Flushing pending work.', {
-			pendingChangeCount: pendingChanges.length,
-			externalChangeCount: externalChanges.length,
 			createdFileCount: pendingCreatedFiles.length,
 			deletedFileCount: pendingDeletedFiles.length,
+			externalChangeCount: externalChanges.length,
 			followUpTargetCount: pendingFollowUpTargetPaths.length,
-			renamedFileCount: pendingRenamedFiles.length,
 			fullSyncQueued: this.fullSyncQueued,
 			hasInitialized: this.hasInitialized,
+			pendingChangeCount: pendingChanges.length,
+			renamedFileCount: pendingRenamedFiles.length,
 		});
 
 		if (this.fullSyncQueued || !this.hasInitialized) {
@@ -312,23 +302,38 @@ export class RelatedLinksFeature extends Component {
 	private async syncAllRelatedLinks() {
 		this.pendingObsidianRenameTargetPaths.clear();
 		this.renamedSourcePaths.clear();
-		const syncModel = this.buildSyncModel();
+		const relationProperty = this.plugin.settings.relatedLinks.relationProperty.trim();
+		const displayProperty = this.plugin.settings.relatedLinks.displayProperty.trim();
+		const sourceIndex = buildFullSourceIndex(this.plugin.app, relationProperty, displayProperty);
+
 		this.sourceContributionsByPath.clear();
-		this.sourceDisplayTextByPath.clear();
-		for (const [sourcePath, displayText] of syncModel.sourceDisplayTextByPath) {
-			this.sourceDisplayTextByPath.set(sourcePath, displayText);
-		}
-		for (const contribution of syncModel.sourceContributionsByPath.values()) {
+		for (const contribution of sourceIndex.sourceContributionsByPath.values()) {
 			this.sourceContributionsByPath.set(contribution.sourcePath, contribution);
 		}
-		this.plugin.debugLog('Built sync model.', {
-			targetCount: syncModel.desiredLinksByTarget.size,
-			sourceCount: syncModel.sourceDisplayTextByPath.size,
+
+		const targetPathsToSync = new Set<string>([
+			...sourceIndex.desiredLinksByTarget.keys(),
+			...this.currentState.managedTargets,
+		]);
+		this.plugin.debugLog('Built full related-links source index.', {
+			historicalTargetCount: this.currentState.managedTargets.length,
+			sourceCount: this.sourceContributionsByPath.size,
+			targetCount: targetPathsToSync.size,
 		});
 
-		for (const targetFile of this.plugin.app.vault.getMarkdownFiles()) {
-			await this.syncTargetFile(targetFile, syncModel);
+		for (const targetPath of [...targetPathsToSync].sort((left, right) => left.localeCompare(right))) {
+			const targetFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
+			if (!(targetFile instanceof TFile)) {
+				continue;
+			}
+
+			await this.syncTargetFile(
+				targetFile,
+				sourceIndex.desiredLinksByTarget.get(targetPath) ?? new Map<string, DesiredTargetLink>(),
+			);
 		}
+
+		await this.persistTrackedState();
 	}
 
 	private async runIncrementalSync(work: {
@@ -354,8 +359,8 @@ export class RelatedLinksFeature extends Component {
 			createCount: work.createdFiles.length,
 			deleteCount: work.deletedFiles.length,
 			followUpTargetCount: work.followUpTargetPaths.length,
-			renameCount: work.renamedFiles.length,
 			notifyOnError: options.notifyOnError ?? true,
+			renameCount: work.renamedFiles.length,
 		});
 		await this.enqueue(async () => {
 			try {
@@ -365,143 +370,6 @@ export class RelatedLinksFeature extends Component {
 				this.handleError(error, options.notifyOnError ?? true);
 			}
 		});
-	}
-
-	private buildSyncModel(): SyncModel {
-		const desiredLinksByTarget = new Map<string, Map<string, DesiredTargetLink>>();
-		const sourceDisplayTextByPath = new Map<string, string>();
-		const sourceContributionsByPath = new Map<string, SourceContribution>();
-
-		for (const file of this.plugin.app.vault.getMarkdownFiles()) {
-			const cache = this.plugin.app.metadataCache.getFileCache(file);
-			const displayText = getDisplayText(file, cache?.frontmatter, this.plugin.settings.relatedLinks.displayProperty.trim());
-			sourceDisplayTextByPath.set(file.path, displayText);
-			this.plugin.debugLog('Computed source display text.', {
-				filePath: file.path,
-				displayText,
-			});
-
-			const contribution = this.buildSourceContribution(file, cache, displayText);
-			if (!contribution) {
-				continue;
-			}
-
-			sourceContributionsByPath.set(contribution.sourcePath, contribution);
-
-			for (const targetPath of contribution.targetPaths) {
-				let targetEntries = desiredLinksByTarget.get(targetPath);
-				if (!targetEntries) {
-					targetEntries = new Map<string, DesiredTargetLink>();
-					desiredLinksByTarget.set(targetPath, targetEntries);
-				}
-
-				targetEntries.set(contribution.sourcePath, {
-					displayText: contribution.displayText,
-					sourcePath: contribution.sourcePath,
-				});
-			}
-
-			this.plugin.debugLog('Registered desired source contribution.', contribution);
-		}
-
-		return {
-			desiredLinksByTarget,
-			sourceContributionsByPath,
-			sourceDisplayTextByPath,
-		};
-	}
-
-	private buildSourceContribution(file: TFile, cache: CachedMetadata | null, displayText: string): SourceContribution | null {
-		const relationProperty = this.plugin.settings.relatedLinks.relationProperty.trim();
-		if (!relationProperty) {
-			this.plugin.debugLog('Skipped source contribution because relation property is empty.', {
-				filePath: file.path,
-			});
-			return null;
-		}
-
-		const frontmatter = cache?.frontmatter;
-		const targetLinkpaths = getTargetLinkpaths(frontmatter, relationProperty);
-		if (targetLinkpaths.length === 0) {
-			this.plugin.debugLog('No relation targets found in frontmatter.', {
-				filePath: file.path,
-				relationProperty,
-			});
-			return null;
-		}
-
-		const targetPaths = new Set<string>();
-		for (const linkpath of targetLinkpaths) {
-			const targetFile = this.plugin.app.metadataCache.getFirstLinkpathDest(linkpath, file.path);
-			if (!targetFile || targetFile.path === file.path) {
-				this.plugin.debugLog('Skipped unresolved or self-referencing relation target.', {
-					filePath: file.path,
-					linkpath,
-				});
-				continue;
-			}
-
-			targetPaths.add(targetFile.path);
-		}
-
-		if (targetPaths.size === 0) {
-			this.plugin.debugLog('Skipped source contribution because no valid target files remained.', {
-				filePath: file.path,
-			});
-			return null;
-		}
-
-		return {
-			displayText,
-			sourcePath: file.path,
-			targetPaths: [...targetPaths],
-		};
-	}
-
-	private async syncTargetFile(targetFile: TFile, syncModel: SyncModel) {
-		const currentContent = await this.plugin.app.vault.cachedRead(targetFile);
-		const desiredLinks = syncModel.desiredLinksByTarget.get(targetFile.path) ?? new Map<string, DesiredTargetLink>();
-		this.plugin.debugLog('Syncing target file.', {
-			targetPath: targetFile.path,
-			desiredLinkCount: desiredLinks.size,
-		});
-		const processedContent = this.processTargetContent(currentContent, targetFile, desiredLinks, syncModel.sourceDisplayTextByPath);
-
-		let nextContent = processedContent.content;
-		const missingLinks = [...desiredLinks.values()]
-			.filter((link) => !processedContent.presentManagedSourcePaths.has(link.sourcePath))
-			.sort((left, right) => {
-				const displayComparison = left.displayText.localeCompare(right.displayText);
-				if (displayComparison !== 0) {
-					return displayComparison;
-				}
-
-				return left.sourcePath.localeCompare(right.sourcePath);
-			});
-
-		for (const missingLink of missingLinks) {
-			const sourceFile = this.plugin.app.vault.getAbstractFileByPath(missingLink.sourcePath);
-			if (!(sourceFile instanceof TFile)) {
-				this.plugin.debugLog('Skipped missing link because source file no longer exists.', {
-					targetPath: targetFile.path,
-					sourcePath: missingLink.sourcePath,
-				});
-				continue;
-			}
-
-			const destination = buildRelativeMarkdownDestination(sourceFile, targetFile);
-			const linkLine = buildMarkdownLinkLine(missingLink.displayText, destination);
-			this.plugin.debugLog('Appending missing managed link.', {
-				targetPath: targetFile.path,
-				sourcePath: missingLink.sourcePath,
-				displayText: missingLink.displayText,
-				destination,
-				linkLine,
-			});
-			nextContent = appendLinkLine(nextContent, linkLine);
-		}
-
-		await this.writeFileIfChanged(targetFile, currentContent, nextContent);
 	}
 
 	private async syncIncrementalWork(work: {
@@ -533,7 +401,10 @@ export class RelatedLinksFeature extends Component {
 		for (const renamedFile of work.renamedFiles) {
 			const previousContribution = this.sourceContributionsByPath.get(renamedFile.oldPath) ?? null;
 			this.sourceContributionsByPath.delete(renamedFile.oldPath);
-			this.sourceDisplayTextByPath.delete(renamedFile.oldPath);
+
+			if (renamedFile.wasManagedTarget && !deferRenameLinkUpdatesToObsidian) {
+				affectedTargetPaths.add(renamedFile.file.path);
+			}
 
 			if (deferRenameLinkUpdatesToObsidian) {
 				this.removeTrackedRenameMappings(renamedFile.oldPath);
@@ -541,18 +412,33 @@ export class RelatedLinksFeature extends Component {
 				handledChangedPaths.add(renamedFile.file.path);
 				this.trackPendingObsidianRenameTargets(previousContribution);
 				this.trackPendingObsidianRenameTargets(refreshedContribution.nextContribution);
+				const shouldSyncTargetsImmediately = await this.shouldSyncTargetsImmediatelyForDeferredRename(
+					previousContribution,
+					refreshedContribution.nextContribution,
+				);
+				if (shouldSyncTargetsImmediately) {
+					this.addContributionTargets(affectedTargetPaths, previousContribution);
+					this.addContributionTargets(affectedTargetPaths, refreshedContribution.nextContribution);
+				}
+				for (const sourcePath of this.collectTrackedSourcePathsForTargetPath(renamedFile.oldPath)) {
+					sourcePathsToRefresh.add(sourcePath);
+				}
+				for (const sourcePath of this.collectCandidateSourcePathsForTargetFile(renamedFile.file)) {
+					sourcePathsToRefresh.add(sourcePath);
+				}
 				this.plugin.debugLog('Deferred rename-driven link destination updates to Obsidian automatic link management.', {
 					filePath: renamedFile.file.path,
+					nextTargets: refreshedContribution.nextContribution?.targetPaths ?? [],
 					oldPath: renamedFile.oldPath,
 					previousTargets: previousContribution?.targetPaths ?? [],
-					nextTargets: refreshedContribution.nextContribution?.targetPaths ?? [],
+					shouldSyncTargetsImmediately,
+					wasManagedTarget: renamedFile.wasManagedTarget,
 				});
 				continue;
 			}
 
 			this.trackRenamedSourcePath(renamedFile.oldPath, renamedFile.file.path);
 			this.addContributionTargets(affectedTargetPaths, previousContribution);
-
 			sourcePathsToRefresh.add(renamedFile.file.path);
 			for (const sourcePath of this.collectTrackedSourcePathsForTargetPath(renamedFile.oldPath)) {
 				sourcePathsToRefresh.add(sourcePath);
@@ -565,6 +451,7 @@ export class RelatedLinksFeature extends Component {
 				filePath: renamedFile.file.path,
 				oldPath: renamedFile.oldPath,
 				previousTargets: previousContribution?.targetPaths ?? [],
+				wasManagedTarget: renamedFile.wasManagedTarget,
 			});
 		}
 
@@ -586,13 +473,17 @@ export class RelatedLinksFeature extends Component {
 				continue;
 			}
 
+			if (this.shouldSyncChangedFileAsTarget(change.file.path, change.data)) {
+				affectedTargetPaths.add(change.file.path);
+			}
+
 			const expectedRenamePath = this.getExpectedFileNameSyncPath(change.file, change.cache);
 			if (deferRenameLinkUpdatesToObsidian && expectedRenamePath) {
 				this.refreshTrackedSource(change.file, change.cache);
 				handledChangedPaths.add(change.file.path);
-				this.plugin.debugLog('Deferred metadata-driven related-link target sync because file name sync is expected to rename the source file.', {
-					filePath: change.file.path,
+				this.plugin.debugLog('Deferred metadata-driven related-link sync because file name sync is expected to rename the source file.', {
 					expectedRenamePath,
+					filePath: change.file.path,
 				});
 				continue;
 			}
@@ -601,9 +492,9 @@ export class RelatedLinksFeature extends Component {
 			this.addContributionTargets(affectedTargetPaths, previousContribution);
 			sourcePathsToRefresh.add(change.file.path);
 			this.plugin.debugLog('Prepared incremental metadata update.', {
+				expectedRenamePath,
 				filePath: change.file.path,
 				previousTargets: previousContribution?.targetPaths ?? [],
-				expectedRenamePath,
 			});
 		}
 
@@ -632,6 +523,7 @@ export class RelatedLinksFeature extends Component {
 
 		if (affectedTargetPaths.size === 0) {
 			this.plugin.debugLog('Incremental sync found no affected target files.');
+			await this.persistTrackedState();
 			return;
 		}
 
@@ -640,7 +532,8 @@ export class RelatedLinksFeature extends Component {
 			targetPaths: [...affectedTargetPaths],
 		});
 
-		for (const targetPath of affectedTargetPaths) {
+		const desiredLinksByTarget = this.buildDesiredLinksByTargetPaths([...affectedTargetPaths]);
+		for (const targetPath of [...affectedTargetPaths].sort((left, right) => left.localeCompare(right))) {
 			const targetFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
 			if (!(targetFile instanceof TFile)) {
 				this.plugin.debugLog('Skipped incremental target sync because target file no longer exists.', {
@@ -649,15 +542,44 @@ export class RelatedLinksFeature extends Component {
 				continue;
 			}
 
-			await this.syncTargetFile(targetFile, this.buildSyncModelForTargets([targetPath]));
+			await this.syncTargetFile(targetFile, desiredLinksByTarget.get(targetPath) ?? new Map<string, DesiredTargetLink>());
 		}
+
+		await this.persistTrackedState();
+	}
+
+	private async syncTargetFile(targetFile: TFile, desiredLinks: Map<string, DesiredTargetLink>) {
+		const currentContent = await this.plugin.app.vault.cachedRead(targetFile);
+		this.plugin.debugLog('Syncing target file.', {
+			desiredLinkCount: desiredLinks.size,
+			targetPath: targetFile.path,
+		});
+		const processedContent = syncManagedLinksInContent(currentContent, {
+			debugLog: (message, details) => {
+				this.plugin.debugLog(message, details);
+			},
+			desiredLinks,
+			resolveManagedSourcePath: (link) => this.resolveManagedSourcePath(link, targetFile),
+			resolveSourceFile: (sourcePath) => {
+				const sourceFile = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
+				return sourceFile instanceof TFile ? sourceFile : null;
+			},
+			shouldDeferDestinationRewrite: (targetFilePath, actualDestination, canonicalDestination) =>
+				this.shouldDeferManagedRenameRewrite(targetFilePath, actualDestination, canonicalDestination),
+			targetFile,
+		});
+
+		await this.writeFileIfChanged(targetFile, currentContent, processedContent.content);
 	}
 
 	private refreshTrackedSource(file: TFile, cache: CachedMetadata | null = this.plugin.app.metadataCache.getFileCache(file)) {
-		const displayText = getDisplayText(file, cache?.frontmatter, this.plugin.settings.relatedLinks.displayProperty.trim());
-		this.sourceDisplayTextByPath.set(file.path, displayText);
-
-		const nextContribution = this.buildSourceContribution(file, cache, displayText);
+		const nextContribution = buildSourceContribution(
+			this.plugin.app,
+			file,
+			this.plugin.settings.relatedLinks.relationProperty.trim(),
+			this.plugin.settings.relatedLinks.displayProperty.trim(),
+			cache,
+		);
 		if (nextContribution) {
 			this.sourceContributionsByPath.set(file.path, nextContribution);
 		} else {
@@ -665,13 +587,12 @@ export class RelatedLinksFeature extends Component {
 		}
 
 		this.plugin.debugLog('Refreshed tracked source.', {
+			displayText: nextContribution?.displayText ?? file.basename,
 			filePath: file.path,
-			displayText,
 			targetPaths: nextContribution?.targetPaths ?? [],
 		});
 
 		return {
-			displayText,
 			nextContribution,
 		};
 	}
@@ -679,7 +600,6 @@ export class RelatedLinksFeature extends Component {
 	private removeTrackedSource(sourcePath: string): SourceContribution | null {
 		const previousContribution = this.sourceContributionsByPath.get(sourcePath) ?? null;
 		this.sourceContributionsByPath.delete(sourcePath);
-		this.sourceDisplayTextByPath.delete(sourcePath);
 		return previousContribution;
 	}
 
@@ -696,6 +616,13 @@ export class RelatedLinksFeature extends Component {
 			if (contribution.targetPaths.includes(targetPath)) {
 				sourcePaths.add(contribution.sourcePath);
 			}
+		}
+
+		const historicalSources = Object.entries(this.currentState.sourceTargetsByPath)
+			.filter(([, targetPaths]) => targetPaths.includes(targetPath))
+			.map(([sourcePath]) => sourcePath);
+		for (const sourcePath of historicalSources) {
+			sourcePaths.add(sourcePath);
 		}
 
 		return sourcePaths;
@@ -723,411 +650,106 @@ export class RelatedLinksFeature extends Component {
 		return sourcePaths;
 	}
 
-	private processTargetContent(
-		content: string,
-		targetFile: TFile,
-		desiredLinks: Map<string, DesiredTargetLink>,
-		sourceDisplayTextByPath: Map<string, string>,
-	): ProcessedTargetContent {
-		const markdownLinkPattern = /\[((?:[^\]\\\r\n]|\\.)*)\]\((<[^>\r\n]+>|[^)\r\n]+)\)/g;
-		const presentManagedSourcePaths = new Set<string>();
-		let nextContent = '';
-		let lastIndex = 0;
-		let hasRemovedLinks = false;
-		let hasUpdatedLinks = false;
-		let match: RegExpExecArray | null;
-
-		while ((match = markdownLinkPattern.exec(content)) !== null) {
-			const [fullMatch, rawDisplayText, rawDestination] = match;
-			const matchIndex = match.index;
-			nextContent += content.slice(lastIndex, matchIndex);
-			lastIndex = matchIndex + fullMatch.length;
-
-			if (matchIndex > 0 && content[matchIndex - 1] === '!') {
-				nextContent += fullMatch;
-				this.plugin.debugLog('Skipped embedded markdown link during managed-link scan.', {
-					targetPath: targetFile.path,
-					match: fullMatch,
-				});
-				continue;
-			}
-
-			if (rawDisplayText === undefined || rawDestination === undefined) {
-				nextContent += fullMatch;
-				this.plugin.debugLog('Skipped malformed markdown link match.', {
-					targetPath: targetFile.path,
-					match: fullMatch,
-				});
-				continue;
-			}
-
-			const actualDisplayText = unescapeMarkdownLinkText(rawDisplayText);
-			const actualDestination = extractMarkdownLinkpath(rawDestination);
-			const {sourcePath, matchReason} = this.resolveManagedSourcePath(
-				rawDestination,
-				actualDisplayText,
-				targetFile,
-				desiredLinks,
-			);
-			const sourceFile = sourcePath ? this.plugin.app.vault.getAbstractFileByPath(sourcePath) : null;
-			const canonicalDestination = sourceFile instanceof TFile ? buildRelativeMarkdownDestination(sourceFile, targetFile) : null;
-			const expectedDisplayText = sourcePath ? sourceDisplayTextByPath.get(sourcePath) : undefined;
-			const hasCanonicalDestination = Boolean(canonicalDestination && actualDestination === canonicalDestination);
-			const isManagedMatch = Boolean(
-				sourcePath
-				&& expectedDisplayText !== undefined
-				&& (
-					actualDisplayText === expectedDisplayText
-					|| hasCanonicalDestination
-					|| matchReason === 'renamed-source'
-					|| matchReason === 'stale-display'
-				),
-			);
-			this.plugin.debugLog('Evaluated markdown link candidate.', {
-				targetPath: targetFile.path,
-				match: fullMatch,
-				rawDestination,
-				sourcePath,
-				actualDestination,
-				canonicalDestination,
-				actualDisplayText,
-				expectedDisplayText,
-				hasCanonicalDestination,
-				matchReason,
-				isManagedMatch,
-			});
-
-			if (!isManagedMatch || !sourcePath) {
-				nextContent += fullMatch;
-				continue;
-			}
-
-			if (desiredLinks.has(sourcePath)) {
-				if (presentManagedSourcePaths.has(sourcePath)) {
-					hasRemovedLinks = true;
-					this.plugin.debugLog('Removed duplicate managed link while keeping the first occurrence.', {
-						targetPath: targetFile.path,
-						sourcePath,
-						match: fullMatch,
-					});
-					continue;
-				}
-
-				presentManagedSourcePaths.add(sourcePath);
-				if (this.shouldDeferManagedRenameRewrite(targetFile.path, actualDestination, canonicalDestination)) {
-					nextContent += fullMatch;
-					this.plugin.debugLog('Deferred renamed markdown destination rewrite to Obsidian automatic link updates.', {
-						targetPath: targetFile.path,
-						sourcePath,
-						match: fullMatch,
-						actualDestination,
-						canonicalDestination,
-						matchReason,
-					});
-					continue;
-				}
-
-				const desiredLink = desiredLinks.get(sourcePath);
-				const normalizedMatch = desiredLink && canonicalDestination
-					? buildMarkdownLinkLine(desiredLink.displayText, canonicalDestination)
-					: fullMatch;
-				if (normalizedMatch !== fullMatch) {
-					nextContent += normalizedMatch;
-					hasUpdatedLinks = true;
-					this.plugin.debugLog('Updated managed link because display text or destination changed.', {
-						targetPath: targetFile.path,
-						sourcePath,
-						previousMatch: fullMatch,
-						nextMatch: normalizedMatch,
-					});
-				} else {
-					nextContent += fullMatch;
-				}
-				this.plugin.debugLog('Kept matched managed link because relation still exists.', {
-					targetPath: targetFile.path,
-					sourcePath,
-					match: fullMatch,
-				});
-				continue;
-			}
-
-			hasRemovedLinks = true;
-			this.plugin.debugLog('Removed matched managed link because relation no longer exists.', {
-				targetPath: targetFile.path,
-				sourcePath,
-				match: fullMatch,
-			});
-		}
-
-		nextContent += content.slice(lastIndex);
-
-		return {
-			content: hasRemovedLinks
-				? this.normalizeContentAfterRemoval(nextContent)
-				: hasUpdatedLinks
-					? nextContent
-					: content,
-			presentManagedSourcePaths,
-		};
-	}
-
-	private resolveManagedSourcePath(
-		rawDestination: string,
-		actualDisplayText: string,
-		targetFile: TFile,
-		desiredLinks: Map<string, DesiredTargetLink>,
-	): {matchReason: 'renamed-source' | 'resolved-source' | 'stale-display' | null; sourcePath: string | null} {
-		const resolvedSourcePath = this.resolveMarkdownSourcePath(rawDestination, targetFile);
-		if (resolvedSourcePath) {
-			return {
-				matchReason: 'resolved-source',
-				sourcePath: resolvedSourcePath,
-			};
-		}
-
-		const renamedSourcePath = this.resolveRenamedSourcePath(rawDestination, targetFile);
-		if (renamedSourcePath) {
-			return {
-				matchReason: 'renamed-source',
-				sourcePath: renamedSourcePath,
-			};
-		}
-
-		const staleManagedLink = this.resolveBrokenManagedSourceByDisplayText(
-			extractMarkdownLinkpath(rawDestination),
-			actualDisplayText,
-			desiredLinks,
-		);
-		if (staleManagedLink) {
-			return {
-				matchReason: 'stale-display',
-				sourcePath: staleManagedLink.sourcePath,
-			};
-		}
-
-		return {
-			matchReason: null,
-			sourcePath: null,
-		};
-	}
-
-	private resolveMarkdownSourcePath(rawDestination: string, targetFile: TFile): string | null {
-		const linkpath = extractMarkdownLinkpath(rawDestination);
-		if (!linkpath) {
-			this.plugin.debugLog('Failed to extract markdown link path.', {
-				targetPath: targetFile.path,
-				rawDestination,
-			});
-			return null;
-		}
-
-		for (const candidatePath of this.buildMarkdownDestinationCandidates(linkpath, targetFile)) {
-			const candidateFile = this.plugin.app.vault.getAbstractFileByPath(candidatePath);
-			if (candidateFile instanceof TFile) {
-				this.plugin.debugLog('Resolved markdown destination from vault path candidate.', {
-					targetPath: targetFile.path,
-					rawDestination,
-					linkpath,
-					candidatePath,
-					resolvedPath: candidateFile.path,
-				});
-				return candidateFile.path;
-			}
-		}
-
-		const resolvedFile = this.plugin.app.metadataCache.getFirstLinkpathDest(linkpath, targetFile.path);
-		this.plugin.debugLog('Resolved markdown destination.', {
-			targetPath: targetFile.path,
-			rawDestination,
-			linkpath,
-			resolvedPath: resolvedFile?.path ?? null,
-		});
-		return resolvedFile?.path ?? null;
-	}
-
-	private resolveRenamedSourcePath(rawDestination: string, targetFile: TFile): string | null {
-		const linkpath = extractMarkdownLinkpath(rawDestination);
-		if (!linkpath || this.isLikelyExternalDestination(linkpath)) {
-			return null;
-		}
-
-		for (const candidatePath of this.buildMarkdownDestinationCandidates(linkpath, targetFile)) {
-			const renamedPath = this.renamedSourcePaths.get(candidatePath);
-			if (renamedPath) {
-				this.plugin.debugLog('Resolved markdown destination from tracked rename.', {
-					targetPath: targetFile.path,
-					rawDestination,
-					linkpath,
-					candidatePath,
-					resolvedPath: renamedPath,
-				});
-				return renamedPath;
-			}
-		}
-
-		return null;
-	}
-
-	private buildMarkdownDestinationCandidates(linkpath: string, targetFile: TFile): string[] {
-		const candidates: string[] = [];
-		const seenCandidates = new Set<string>();
-		const normalizedLinkpath = linkpath.replace(/\\/g, '/').trim();
-		const targetDirectory = this.getParentDirectory(targetFile.path);
-
-		const addCandidate = (candidate: string) => {
-			const normalizedCandidate = normalizePath(candidate);
-			if (!normalizedCandidate || seenCandidates.has(normalizedCandidate)) {
-				return;
-			}
-
-			seenCandidates.add(normalizedCandidate);
-			candidates.push(normalizedCandidate);
-
-			if (!/\.[^./]+$/.test(normalizedCandidate)) {
-				const markdownCandidate = normalizePath(`${normalizedCandidate}.md`);
-				if (!seenCandidates.has(markdownCandidate)) {
-					seenCandidates.add(markdownCandidate);
-					candidates.push(markdownCandidate);
-				}
-			}
-		};
-
-		if (normalizedLinkpath.startsWith('/')) {
-			addCandidate(normalizedLinkpath.slice(1));
-			return candidates;
-		}
-
-		if (targetDirectory) {
-			addCandidate(`${targetDirectory}/${normalizedLinkpath}`);
-		}
-
-		addCandidate(normalizedLinkpath);
-
-		return candidates;
-	}
-
-	private getParentDirectory(path: string): string {
-		const lastSlashIndex = path.lastIndexOf('/');
-		return lastSlashIndex >= 0 ? path.slice(0, lastSlashIndex) : '';
-	}
-
-	private buildSyncModelForTargets(targetPaths: string[]): SyncModel {
-		const desiredLinksByTarget = new Map<string, Map<string, DesiredTargetLink>>();
+	private buildDesiredLinksByTargetPaths(targetPaths: string[]): DesiredLinksByTarget {
 		const targetPathSet = new Set(targetPaths);
-
-		for (const targetPath of targetPathSet) {
-			desiredLinksByTarget.set(targetPath, new Map<string, DesiredTargetLink>());
-		}
+		const filteredContributions: SourceContribution[] = [];
 
 		for (const contribution of this.sourceContributionsByPath.values()) {
-			for (const targetPath of contribution.targetPaths) {
-				if (!targetPathSet.has(targetPath)) {
-					continue;
-				}
-
-				const desiredLinks = desiredLinksByTarget.get(targetPath);
-				if (!desiredLinks) {
-					continue;
-				}
-
-				desiredLinks.set(contribution.sourcePath, {
-					displayText: contribution.displayText,
-					sourcePath: contribution.sourcePath,
-				});
-			}
-		}
-
-		return {
-			desiredLinksByTarget,
-			sourceContributionsByPath: new Map(this.sourceContributionsByPath),
-			sourceDisplayTextByPath: new Map(this.sourceDisplayTextByPath),
-		};
-	}
-
-	private resolveBrokenManagedSourceByDisplayText(
-		actualDestination: string | null,
-		actualDisplayText: string,
-		desiredLinks: Map<string, DesiredTargetLink>,
-	): DesiredTargetLink | null {
-		const normalizedDisplayText = actualDisplayText.trim();
-		if (!actualDestination || !normalizedDisplayText || this.isLikelyExternalDestination(actualDestination)) {
-			return null;
-		}
-
-		let matchedLink: DesiredTargetLink | null = null;
-		for (const desiredLink of desiredLinks.values()) {
-			if (desiredLink.displayText !== normalizedDisplayText) {
+			const relevantTargets = contribution.targetPaths.filter((targetPath) => targetPathSet.has(targetPath));
+			if (relevantTargets.length === 0) {
 				continue;
 			}
 
-			if (matchedLink) {
-				return null;
+			filteredContributions.push({
+				...contribution,
+				targetPaths: relevantTargets,
+			});
+		}
+
+		return buildDesiredLinksByTarget(filteredContributions);
+	}
+
+	private resolveManagedSourcePath(link: ManagedInlineLink, targetFile: TFile): string | null {
+		const linkpath = extractMarkdownLinkpath(link.destination);
+		if (linkpath) {
+			const resolvedFile = this.plugin.app.metadataCache.getFirstLinkpathDest(linkpath, targetFile.path);
+			if (resolvedFile) {
+				return resolvedFile.path;
+			}
+		}
+
+		let fallbackCandidate: string | null = null;
+		for (const candidatePath of resolveMarkdownDestinationCandidates(link.destination, targetFile)) {
+			if (fallbackCandidate === null || candidatePath.toLowerCase().endsWith('.md')) {
+				fallbackCandidate = candidatePath;
 			}
 
-			matchedLink = desiredLink;
+			const renamedPath = this.renamedSourcePaths.get(candidatePath);
+			if (renamedPath) {
+				return renamedPath;
+			}
+
+			const candidateFile = this.plugin.app.vault.getAbstractFileByPath(candidatePath);
+			if (candidateFile instanceof TFile) {
+				return candidateFile.path;
+			}
+
+			if (candidatePath in this.currentState.sourceTargetsByPath || this.sourceContributionsByPath.has(candidatePath)) {
+				return candidatePath;
+			}
 		}
 
-		if (matchedLink) {
-			this.plugin.debugLog('Resolved broken markdown link from a unique desired display text match.', {
-				actualDestination,
-				actualDisplayText: normalizedDisplayText,
-				sourcePath: matchedLink.sourcePath,
-			});
-		}
-
-		return matchedLink;
+		return fallbackCandidate;
 	}
 
-	private normalizeContentAfterRemoval(content: string): string {
-		const normalized = content
-			.replace(/[ \t]+\n/g, '\n')
-			.replace(/\n{3,}/g, '\n\n')
-			.trimEnd();
-
-		return normalized ? `${normalized}\n` : '';
+	private shouldSyncChangedFileAsTarget(filePath: string, data: string): boolean {
+		return this.isTrackedManagedTarget(filePath) || hasManagedInlineLinks(data);
 	}
 
-	private shouldIgnoreOwnWrite(change: PendingFileChange): boolean {
-		const expectedContent = this.pendingOwnWrites.get(change.file.path);
-		if (!expectedContent) {
-			return false;
-		}
-
-		this.pendingOwnWrites.delete(change.file.path);
-		this.plugin.debugLog('Observed plugin-authored write.', {
-			filePath: change.file.path,
-			matchesExpectedContent: expectedContent === change.data,
-		});
-		if (expectedContent !== change.data) {
-			const difference = this.summarizeContentDifference(expectedContent, change.data);
-			this.plugin.debugLog('Observed concurrent modification after a plugin-authored write.', {
-				filePath: change.file.path,
-				actualExcerpt: difference.actualExcerpt,
-				actualLength: difference.actualLength,
-				expectedExcerpt: difference.expectedExcerpt,
-				expectedLength: difference.expectedLength,
-				firstDifferenceIndex: difference.firstDifferenceIndex,
-			});
-		}
-
-		return expectedContent === change.data;
+	private isTrackedManagedTarget(filePath: string): boolean {
+		return this.currentState.managedTargets.includes(filePath);
 	}
 
-	private async writeFileIfChanged(file: TFile, currentContent: string, nextContent: string) {
-		if (nextContent === currentContent) {
-			this.plugin.debugLog('Skipped writing file because content did not change.', {
-				filePath: file.path,
-			});
-			return;
+	private async shouldSyncTargetsImmediatelyForDeferredRename(
+		previousContribution: SourceContribution | null,
+		nextContribution: SourceContribution | null,
+	): Promise<boolean> {
+		const candidateSourcePaths = new Set<string>();
+		if (previousContribution) {
+			candidateSourcePaths.add(previousContribution.sourcePath);
+		}
+		if (nextContribution) {
+			candidateSourcePaths.add(nextContribution.sourcePath);
 		}
 
-		this.pendingOwnWrites.set(file.path, nextContent);
-		this.plugin.debugLog('Writing updated file content.', {
-			filePath: file.path,
-			previousLength: currentContent.length,
-			nextLength: nextContent.length,
-		});
-		await this.plugin.app.vault.modify(file, nextContent);
+		const targetPaths = new Set<string>([
+			...(previousContribution?.targetPaths ?? []),
+			...(nextContribution?.targetPaths ?? []),
+		]);
+		for (const targetPath of targetPaths) {
+			const targetFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
+			if (!(targetFile instanceof TFile)) {
+				continue;
+			}
+
+			const content = await this.plugin.app.vault.cachedRead(targetFile);
+			const managedLinks = extractManagedInlineLinks(content);
+			const hasMatchingManagedLink = managedLinks.some((link) => {
+				const sourcePath = this.resolveManagedSourcePath(link, targetFile);
+				return sourcePath !== null && candidateSourcePaths.has(sourcePath);
+			});
+			if (!hasMatchingManagedLink) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private async persistTrackedState() {
+		const nextState = buildRelatedLinksState(this.sourceContributionsByPath.values());
+		this.currentState = nextState;
+		await this.plugin.saveRelatedLinksState(nextState);
 	}
 
 	private trackRenamedSourcePath(oldPath: string, nextPath: string) {
@@ -1153,18 +775,13 @@ export class RelatedLinksFeature extends Component {
 		}
 	}
 
-	private isLikelyExternalDestination(destination: string): boolean {
-		return /^[a-z][a-z0-9+.-]*:/i.test(destination);
-	}
-
 	private shouldDeferManagedRenameRewrite(
 		targetFilePath: string,
-		actualDestination: string | null,
-		canonicalDestination: string | null,
+		actualDestination: string,
+		canonicalDestination: string,
 	): boolean {
 		return this.shouldDeferToObsidianLinkUpdates()
 			&& this.pendingObsidianRenameTargetPaths.has(targetFilePath)
-			&& canonicalDestination !== null
 			&& actualDestination !== canonicalDestination;
 	}
 
@@ -1177,6 +794,49 @@ export class RelatedLinksFeature extends Component {
 		for (const targetPath of contribution?.targetPaths ?? []) {
 			this.pendingObsidianRenameTargetPaths.add(targetPath);
 		}
+	}
+
+	private shouldIgnoreOwnWrite(change: PendingFileChange): boolean {
+		const expectedContent = this.pendingOwnWrites.get(change.file.path);
+		if (!expectedContent) {
+			return false;
+		}
+
+		this.pendingOwnWrites.delete(change.file.path);
+		this.plugin.debugLog('Observed plugin-authored write.', {
+			filePath: change.file.path,
+			matchesExpectedContent: expectedContent === change.data,
+		});
+		if (expectedContent !== change.data) {
+			const difference = this.summarizeContentDifference(expectedContent, change.data);
+			this.plugin.debugLog('Observed concurrent modification after a plugin-authored write.', {
+				actualExcerpt: difference.actualExcerpt,
+				actualLength: difference.actualLength,
+				expectedExcerpt: difference.expectedExcerpt,
+				expectedLength: difference.expectedLength,
+				filePath: change.file.path,
+				firstDifferenceIndex: difference.firstDifferenceIndex,
+			});
+		}
+
+		return expectedContent === change.data;
+	}
+
+	private async writeFileIfChanged(file: TFile, currentContent: string, nextContent: string) {
+		if (nextContent === currentContent) {
+			this.plugin.debugLog('Skipped writing file because content did not change.', {
+				filePath: file.path,
+			});
+			return;
+		}
+
+		this.pendingOwnWrites.set(file.path, nextContent);
+		this.plugin.debugLog('Writing updated file content.', {
+			filePath: file.path,
+			nextLength: nextContent.length,
+			previousLength: currentContent.length,
+		});
+		await this.plugin.app.vault.modify(file, nextContent);
 	}
 
 	private getExpectedFileNameSyncPath(file: TFile, cache: CachedMetadata | null): string | null {
