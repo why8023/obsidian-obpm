@@ -16,6 +16,7 @@ export type BasesTopTabsOrientation = 'horizontal' | 'vertical';
 const DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS = 8;
 const MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS = 50;
 const MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS = 0;
+const DEFAULT_RELATED_LINKS_INBOX_HEADING = 'Inbox';
 
 interface CommittedTextSettingControl {
 	inputEl: HTMLInputElement;
@@ -34,6 +35,7 @@ export interface RelatedLinksSettings {
 	enabled: boolean;
 	relationProperty: string;
 	displayProperty: string;
+	inboxHeading: string;
 	verboseLogging: boolean;
 }
 
@@ -116,6 +118,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		enabled: false,
 		relationProperty: 'obpm_related',
 		displayProperty: 'obpm_title',
+		inboxHeading: DEFAULT_RELATED_LINKS_INBOX_HEADING,
 		verboseLogging: false,
 	},
 	fileNameSync: {
@@ -173,6 +176,10 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 			enabled: normalizeBoolean(settings?.relatedLinks?.enabled, DEFAULT_SETTINGS.relatedLinks.enabled),
 			relationProperty: normalizeText(settings?.relatedLinks?.relationProperty, DEFAULT_SETTINGS.relatedLinks.relationProperty),
 			displayProperty: normalizeText(settings?.relatedLinks?.displayProperty, DEFAULT_SETTINGS.relatedLinks.displayProperty),
+			inboxHeading: normalizeRequiredText(
+				settings?.relatedLinks?.inboxHeading,
+				DEFAULT_SETTINGS.relatedLinks.inboxHeading,
+			),
 			verboseLogging: normalizeBoolean(settings?.relatedLinks?.verboseLogging, DEFAULT_SETTINGS.relatedLinks.verboseLogging),
 		},
 		fileNameSync: {
@@ -199,6 +206,11 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
 
 function normalizeText(value: unknown, fallback: string): string {
 	return typeof value === 'string' ? value.trim() : fallback;
+}
+
+function normalizeRequiredText(value: unknown, fallback: string): string {
+	const normalized = normalizeText(value, fallback);
+	return normalized.length > 0 ? normalized : fallback;
 }
 
 function normalizeBasesTopTabsPlacement(value: unknown, fallback: BasesTopTabsPlacement): BasesTopTabsPlacement {
@@ -609,6 +621,22 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					normalize: (value) => value.trim(),
 					onCommit: (value) => {
 						this.plugin.settings.relatedLinks.displayProperty = value;
+					},
+					refreshFeatures: ['relatedLinks'],
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.inboxHeadingName)
+			.setDesc(strings.inboxHeadingDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.inboxHeadingPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.relatedLinks.inboxHeading,
+					normalize: (value) =>
+						normalizeRequiredText(value, DEFAULT_SETTINGS.relatedLinks.inboxHeading),
+					onCommit: (value) => {
+						this.plugin.settings.relatedLinks.inboxHeading = value;
 					},
 					refreshFeatures: ['relatedLinks'],
 				});

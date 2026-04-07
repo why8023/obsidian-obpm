@@ -45,6 +45,9 @@ export interface SettingsLocalization {
 	displayPropertyName: string;
 	displayPropertyDesc: string;
 	displayPropertyPlaceholder: string;
+	inboxHeadingName: string;
+	inboxHeadingDesc: string;
+	inboxHeadingPlaceholder: string;
 	verboseLoggingName: string;
 	verboseLoggingDesc: string;
 	fileNameSyncHeading: string;
@@ -111,6 +114,9 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	displayPropertyName: 'Display property',
 	displayPropertyDesc: 'Frontmatter property used as the link label. Falls back to the file name when empty.',
 	displayPropertyPlaceholder: 'Enter display property',
+	inboxHeadingName: 'Inbox heading',
+	inboxHeadingDesc: 'Missing related links are inserted as list items under the first matching level-2 heading.',
+	inboxHeadingPlaceholder: 'Enter Inbox heading',
 	verboseLoggingName: 'Verbose logging',
 	verboseLoggingDesc: 'Write detailed related-links synchronization logs to the developer console.',
 	fileNameSyncHeading: 'File names from property',
@@ -177,6 +183,9 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	displayPropertyName: '显示属性名',
 	displayPropertyDesc: '用作链接显示文本的属性名。留空时回退为文件名。',
 	displayPropertyPlaceholder: '输入显示属性名',
+	inboxHeadingName: 'Inbox 标题',
+	inboxHeadingDesc: '缺失的关联链接会以列表项形式插入到第一个匹配的二级标题下。',
+	inboxHeadingPlaceholder: '输入 Inbox 标题',
 	verboseLoggingName: '详细日志',
 	verboseLoggingDesc: '将关联链接同步的详细日志输出到开发者控制台。',
 	fileNameSyncHeading: '根据属性同步文件名',

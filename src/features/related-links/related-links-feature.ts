@@ -557,6 +557,7 @@ export class RelatedLinksFeature extends Component {
 				this.plugin.debugLog(message, details);
 			},
 			desiredLinks,
+			inboxHeading: this.plugin.settings.relatedLinks.inboxHeading,
 			resolveManagedSourcePath: (link) => this.resolveManagedSourcePath(link, targetFile),
 			resolveSourceFile: (sourcePath) => {
 				const sourceFile = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
