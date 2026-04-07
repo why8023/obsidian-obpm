@@ -5,6 +5,7 @@ const BASES_EMBED_SELECTOR = '.bases-embed';
 const BASES_GROUP_HEADING_SELECTOR = '.bases-group-heading';
 const BASES_GROUP_PROPERTY_SELECTOR = '.bases-group-property';
 const BASES_GROUP_VALUE_SELECTOR = '.bases-group-value';
+const BASES_TABLE_GROUP_SUMMARY_ROW_SELECTOR = '.bases-table-group-summary-row';
 const BASES_TABLE_BODY_SELECTOR = '.bases-tbody';
 const BASES_TABLE_CONTAINER_SELECTOR = '.bases-table-container';
 const BASES_TABLE_SELECTOR = '.bases-table';
@@ -23,6 +24,7 @@ export interface DetectedBaseGroup {
 	headingEl: HTMLElement | null;
 	key: string;
 	label: string;
+	summaryEl: HTMLElement | null;
 }
 
 interface EnsureToggleButtonOptions {
@@ -43,7 +45,7 @@ export class BasesGroupFoldDomAdapter {
 		}
 
 		const observer = new MutationObserver((records) => {
-			if (!records.some((record) => record.addedNodes.length > 0 || record.removedNodes.length > 0)) {
+			if (!records.some((record) => shouldHandleMutationRecord(record))) {
 				return;
 			}
 
@@ -104,7 +106,10 @@ export class BasesGroupFoldDomAdapter {
 				continue;
 			}
 
-			groups.push(this.buildDetectedGroup(containerEl, headerEl, bodyEl, headingEl));
+			const summaryEl = findDirectChild(containerEl, BASES_TABLE_GROUP_SUMMARY_ROW_SELECTOR)
+				?? toHtmlElement(containerEl.querySelector(`:scope > ${BASES_TABLE_GROUP_SUMMARY_ROW_SELECTOR}`));
+
+			groups.push(this.buildDetectedGroup(containerEl, headerEl, bodyEl, headingEl, summaryEl));
 		}
 
 		return groups;
@@ -123,12 +128,13 @@ export class BasesGroupFoldDomAdapter {
 			}
 
 			const headingEl = findDirectChild(tableEl, BASES_GROUP_HEADING_SELECTOR);
+			const summaryEl = findDirectChild(tableEl, BASES_TABLE_GROUP_SUMMARY_ROW_SELECTOR);
 			const bodyEl = findDirectChild(tableEl, BASES_TABLE_BODY_SELECTOR);
 			if (!headingEl || !bodyEl) {
 				continue;
 			}
 
-			groups.push(this.buildDetectedGroup(tableEl, headingEl, bodyEl, headingEl));
+			groups.push(this.buildDetectedGroup(tableEl, headingEl, bodyEl, headingEl, summaryEl));
 		}
 
 		return groups;
@@ -139,15 +145,17 @@ export class BasesGroupFoldDomAdapter {
 		headerEl: HTMLElement,
 		bodyEl: HTMLElement,
 		headingEl: HTMLElement,
+		summaryEl: HTMLElement | null,
 	): DetectedBaseGroup {
-		const label = extractGroupLabel(headerEl, headingEl);
+		const metadata = extractGroupMetadata(headerEl, headingEl);
 		return {
 			bodyEl,
 			containerEl,
 			headerEl,
 			headingEl,
-			key: getGroupKey(label),
-			label,
+			key: metadata.key,
+			label: metadata.label,
+			summaryEl,
 		};
 	}
 
@@ -157,6 +165,10 @@ export class BasesGroupFoldDomAdapter {
 		group.bodyEl.dataset.obpmBasesGroupFoldBody = 'true';
 		group.headerEl.classList.add('obpm-bases-group-fold-header');
 		group.bodyEl.classList.add('obpm-bases-group-fold-body');
+		if (group.summaryEl) {
+			group.summaryEl.dataset.obpmBasesGroupFoldSummary = 'true';
+			group.summaryEl.classList.add('obpm-bases-group-fold-summary');
+		}
 
 		const buttonEl = this.getOrCreateToggleButton(group);
 		const nextState = options.collapsed ? 'collapsed' : 'expanded';
@@ -186,64 +198,25 @@ export class BasesGroupFoldDomAdapter {
 
 	applyCollapsed(group: DetectedBaseGroup, collapsed: boolean): void {
 		group.containerEl.dataset.obpmBasesGroupFoldContainer = 'true';
+		group.containerEl.dataset.obpmBasesGroupFoldCollapsed = collapsed ? 'true' : 'false';
 		group.headerEl.dataset.obpmBasesGroupFoldHeader = 'true';
 		group.bodyEl.dataset.obpmBasesGroupFoldBody = 'true';
 		group.headerEl.classList.add('obpm-bases-group-fold-header');
 		group.bodyEl.classList.add('obpm-bases-group-fold-body');
+		if (group.summaryEl) {
+			group.summaryEl.dataset.obpmBasesGroupFoldSummary = 'true';
+			group.summaryEl.classList.add('obpm-bases-group-fold-summary');
+			group.summaryEl.hidden = collapsed;
+			group.summaryEl.setAttribute('aria-hidden', String(collapsed));
+		}
 		group.containerEl.classList.toggle('is-obpm-collapsed', collapsed);
-		group.bodyEl.hidden = collapsed;
+		group.bodyEl.hidden = false;
 		group.bodyEl.setAttribute('aria-hidden', String(collapsed));
 
 		const buttonEl = group.headerEl.querySelector(TOGGLE_BUTTON_SELECTOR);
 		if (buttonEl) {
 			buttonEl.setAttribute('aria-expanded', String(!collapsed));
 		}
-	}
-
-	reflowGroupLayout(group: DetectedBaseGroup): void {
-		const layoutRootEl = group.containerEl.parentElement;
-		if (!(layoutRootEl instanceof HTMLElement) || !layoutRootEl.matches(BASES_TABLE_CONTAINER_SELECTOR)) {
-			return;
-		}
-
-		this.rememberOriginalLayoutRootHeight(layoutRootEl);
-
-		const tableEls = Array.from(layoutRootEl.children)
-			.filter((childNode): childNode is HTMLElement => childNode instanceof HTMLElement && childNode.matches(BASES_TABLE_SELECTOR));
-		if (tableEls.length === 0) {
-			return;
-		}
-
-		const computedStyles = getComputedStyle(layoutRootEl);
-		const groupGap = parsePixelValue(computedStyles.getPropertyValue('--bases-table-group-gap'));
-		let nextTop = 0;
-
-		for (let index = 0; index < tableEls.length; index += 1) {
-			const tableEl = tableEls[index];
-			if (!tableEl) {
-				continue;
-			}
-
-			this.rememberOriginalTableTop(tableEl);
-			const headingEl = findDirectChild(tableEl, BASES_GROUP_HEADING_SELECTOR)
-				?? toHtmlElement(tableEl.querySelector(BASES_GROUP_HEADING_SELECTOR));
-			if (!headingEl) {
-				continue;
-			}
-
-			const bodyEl = findDirectChild(tableEl, BASES_TABLE_BODY_SELECTOR)
-				?? toHtmlElement(tableEl.querySelector(BASES_TABLE_BODY_SELECTOR));
-			const headingHeight = headingEl.getBoundingClientRect().height;
-			const bodyHeight = bodyEl && !bodyEl.hidden ? bodyEl.getBoundingClientRect().height : 0;
-
-			tableEl.style.top = `${nextTop}px`;
-			nextTop += headingHeight + bodyHeight;
-			if (index < tableEls.length - 1) {
-				nextTop += groupGap;
-			}
-		}
-
-		layoutRootEl.style.height = `${nextTop}px`;
 	}
 
 	cleanup(leaf: WorkspaceLeaf): void {
@@ -262,7 +235,7 @@ export class BasesGroupFoldDomAdapter {
 			}
 
 			containerEl.classList.remove('is-obpm-collapsed');
-			this.restoreOriginalTableTop(containerEl);
+			delete containerEl.dataset.obpmBasesGroupFoldCollapsed;
 			delete containerEl.dataset.obpmBasesGroupFoldContainer;
 		}
 
@@ -282,16 +255,20 @@ export class BasesGroupFoldDomAdapter {
 
 			bodyEl.classList.remove('obpm-bases-group-fold-body');
 			bodyEl.hidden = false;
+			bodyEl.setCssProps({height: ''});
 			bodyEl.removeAttribute('aria-hidden');
 			delete bodyEl.dataset.obpmBasesGroupFoldBody;
 		}
 
-		for (const layoutRootEl of Array.from(rootEl.querySelectorAll('[data-obpm-bases-group-fold-layout-root]'))) {
-			if (!(layoutRootEl instanceof HTMLElement)) {
+		for (const summaryEl of Array.from(rootEl.querySelectorAll('[data-obpm-bases-group-fold-summary]'))) {
+			if (!(summaryEl instanceof HTMLElement)) {
 				continue;
 			}
 
-			this.restoreOriginalLayoutRootHeight(layoutRootEl);
+			summaryEl.classList.remove('obpm-bases-group-fold-summary');
+			summaryEl.hidden = false;
+			summaryEl.removeAttribute('aria-hidden');
+			delete summaryEl.dataset.obpmBasesGroupFoldSummary;
 		}
 	}
 
@@ -352,43 +329,25 @@ export class BasesGroupFoldDomAdapter {
 
 		return null;
 	}
-
-	private rememberOriginalLayoutRootHeight(layoutRootEl: HTMLElement): void {
-		if (layoutRootEl.dataset.obpmBasesGroupFoldLayoutRoot !== 'true') {
-			layoutRootEl.dataset.obpmBasesGroupFoldLayoutRoot = 'true';
-			layoutRootEl.dataset.obpmBasesGroupFoldOriginalHeight = layoutRootEl.style.height;
-		}
-	}
-
-	private rememberOriginalTableTop(tableEl: HTMLElement): void {
-		if (!tableEl.dataset.obpmBasesGroupFoldOriginalTop) {
-			tableEl.dataset.obpmBasesGroupFoldOriginalTop = tableEl.style.top;
-		}
-	}
-
-	private restoreOriginalLayoutRootHeight(layoutRootEl: HTMLElement): void {
-		layoutRootEl.style.height = layoutRootEl.dataset.obpmBasesGroupFoldOriginalHeight ?? '';
-		delete layoutRootEl.dataset.obpmBasesGroupFoldOriginalHeight;
-		delete layoutRootEl.dataset.obpmBasesGroupFoldLayoutRoot;
-	}
-
-	private restoreOriginalTableTop(tableEl: HTMLElement): void {
-		if (tableEl.dataset.obpmBasesGroupFoldOriginalTop !== undefined) {
-			tableEl.style.top = tableEl.dataset.obpmBasesGroupFoldOriginalTop;
-			delete tableEl.dataset.obpmBasesGroupFoldOriginalTop;
-		}
-	}
 }
 
-function extractGroupLabel(headerEl: HTMLElement, headingEl: HTMLElement): string {
+function extractGroupMetadata(headerEl: HTMLElement, headingEl: HTMLElement): {
+	label: string;
+	key: string;
+} {
 	const propertyText = toHtmlElement(headingEl.querySelector(BASES_GROUP_PROPERTY_SELECTOR))?.textContent?.trim() ?? '';
 	const valueText = toHtmlElement(headingEl.querySelector(BASES_GROUP_VALUE_SELECTOR))?.textContent?.trim() ?? '';
-	if (propertyText || valueText) {
-		return [propertyText, valueText].filter((entry) => entry.length > 0).join(' ');
-	}
+	const label = propertyText || valueText
+		? [propertyText, valueText].filter((entry) => entry.length > 0).join(' ')
+		: toHtmlElement(headerEl.querySelector(GROUP_HEADER_TEXT_SELECTOR))?.textContent?.trim()
+			?? headingEl.textContent?.trim()
+			?? '';
+	const normalizedValue = valueText.length > 0 ? valueText : label;
 
-	const headerText = toHtmlElement(headerEl.querySelector(GROUP_HEADER_TEXT_SELECTOR))?.textContent?.trim();
-	return headerText ?? headingEl.textContent?.trim() ?? '';
+	return {
+		label,
+		key: getGroupKey(normalizedValue),
+	};
 }
 
 function findDirectChild(containerEl: HTMLElement, selector: string): HTMLElement | null {
@@ -405,12 +364,42 @@ function toHtmlElement(element: Element | null): HTMLElement | null {
 	return element instanceof HTMLElement ? element : null;
 }
 
-function parsePixelValue(value: string): number {
-	const parsedValue = Number.parseFloat(value);
-	return Number.isFinite(parsedValue) ? parsedValue : 0;
-}
-
 function stopToggleEvent(event: Event): void {
 	event.preventDefault();
 	event.stopPropagation();
+}
+
+function shouldHandleMutationRecord(record: MutationRecord): boolean {
+	if (record.addedNodes.length === 0 && record.removedNodes.length === 0) {
+		return false;
+	}
+
+	return !mutationOnlyTouchesManagedToggle(record);
+}
+
+function mutationOnlyTouchesManagedToggle(record: MutationRecord): boolean {
+	const changedNodes = collectChangedNodes(record);
+	if (changedNodes.length === 0) {
+		return false;
+	}
+
+	return changedNodes.every((node) => nodeBelongsToManagedToggle(node));
+}
+
+function nodeBelongsToManagedToggle(node: Node): boolean {
+	const element = node instanceof Element ? node : node.parentElement;
+	return element?.closest('[data-obpm-bases-group-fold-toggle="true"]') !== null;
+}
+
+function collectChangedNodes(record: MutationRecord): Node[] {
+	const changedNodes: Node[] = [];
+
+	record.addedNodes.forEach((node) => {
+		changedNodes.push(node);
+	});
+	record.removedNodes.forEach((node) => {
+		changedNodes.push(node);
+	});
+
+	return changedNodes;
 }

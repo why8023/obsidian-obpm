@@ -3,6 +3,7 @@ import {BaseViewSwitcherAdapter} from '../bases-top-tabs/base-view-switcher-adap
 import {BasesGroupFoldController} from './bases-group-fold-controller';
 import {BasesGroupFoldDomAdapter} from './bases-group-fold-dom-adapter';
 import {BasesGroupFoldStateStore} from './bases-group-fold-state-store';
+import {BasesGroupFoldTableAdapter} from './bases-group-fold-table-adapter';
 import {BasesGroupFoldPluginContext} from './types';
 
 const FEATURE_ID = 'bases-group-fold';
@@ -11,6 +12,7 @@ export class BasesGroupFoldFeature extends Component {
 	private readonly controllers = new Map<WorkspaceLeaf, BasesGroupFoldController>();
 	private readonly domAdapter: BasesGroupFoldDomAdapter;
 	private readonly stateStore: BasesGroupFoldStateStore;
+	private readonly tableAdapter: BasesGroupFoldTableAdapter;
 	private readonly syncControllers = debounce(() => {
 		this.reconcileControllers();
 	}, 100, true);
@@ -25,6 +27,7 @@ export class BasesGroupFoldFeature extends Component {
 
 		this.domAdapter = new BasesGroupFoldDomAdapter(debugLog);
 		this.stateStore = new BasesGroupFoldStateStore(this.plugin);
+		this.tableAdapter = new BasesGroupFoldTableAdapter(debugLog);
 		this.viewSwitcherAdapter = new BaseViewSwitcherAdapter(this.plugin.app);
 	}
 
@@ -126,6 +129,7 @@ export class BasesGroupFoldFeature extends Component {
 					this.plugin,
 					leaf,
 					this.domAdapter,
+					this.tableAdapter,
 					this.viewSwitcherAdapter,
 					this.stateStore,
 				);

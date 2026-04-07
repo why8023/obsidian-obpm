@@ -13,3 +13,33 @@ export interface BasesGroupFoldViewContext {
 	filePath: string;
 	viewStateKey: string;
 }
+
+export interface BasesTableGroupKey {
+	toString?: () => string;
+}
+
+export interface BasesTableGroup {
+	entries: unknown[];
+	key?: BasesTableGroupKey;
+}
+
+export interface BasesTableData {
+	groupedData?: BasesTableGroup[];
+	groupedDataCache?: BasesTableGroup[] | null;
+}
+
+export interface BasesTableView {
+	config?: {
+		groupBy?: {
+			property?: string;
+		};
+	};
+	containerEl?: HTMLElement;
+	data?: BasesTableData;
+	display?: () => void;
+	scrollEl?: HTMLElement;
+	updateVirtualDisplay?: () => void;
+	__obpmBasesGroupFoldGroupCountMap?: Record<string, number>;
+	__obpmBasesGroupFoldOriginalGroupedData?: BasesTableGroup[];
+	__obpmBasesGroupFoldOriginalUpdateVirtualDisplay?: (() => void) | null;
+}

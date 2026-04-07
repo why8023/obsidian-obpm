@@ -249,6 +249,22 @@
 	min-width: 0;
 }
 
+[data-obpm-bases-group-fold-summary][hidden] {
+	display: none !important;
+}
+
+[data-obpm-bases-group-fold-collapsed="true"] > .bases-table-group-summary-row {
+	display: none !important;
+}
+
+[data-obpm-bases-group-fold-collapsed="true"] > .bases-tbody {
+	display: none !important;
+}
+
+[data-obpm-bases-group-fold-container].is-obpm-collapsed > .obpm-bases-group-fold-summary {
+	display: none !important;
+}
+
 [data-obpm-bases-group-fold-container].is-obpm-collapsed > .obpm-bases-group-fold-body {
 	display: none;
 }

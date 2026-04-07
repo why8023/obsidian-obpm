@@ -4,6 +4,7 @@ import {createViewContextKey, getViewStateKey} from './bases-group-fold-key-util
 import {getBasesGroupFoldLocalization} from './bases-group-fold-localization';
 import {BasesGroupFoldDomAdapter, DetectedBaseGroup} from './bases-group-fold-dom-adapter';
 import {BasesGroupFoldStateStore} from './bases-group-fold-state-store';
+import {BasesGroupFoldTableAdapter} from './bases-group-fold-table-adapter';
 import {BasesGroupFoldPluginContext, BasesGroupFoldViewContext} from './types';
 
 const FEATURE_ID = 'bases-group-fold';
@@ -22,6 +23,7 @@ export class BasesGroupFoldController {
 		private readonly plugin: BasesGroupFoldPluginContext,
 		private readonly leaf: WorkspaceLeaf,
 		private readonly domAdapter: BasesGroupFoldDomAdapter,
+		private readonly tableAdapter: BasesGroupFoldTableAdapter,
 		private readonly viewSwitcherAdapter: BaseViewSwitcherAdapter,
 		private readonly stateStore: BasesGroupFoldStateStore,
 	) {
@@ -42,6 +44,7 @@ export class BasesGroupFoldController {
 		}
 
 		this.observers.length = 0;
+		this.tableAdapter.cleanup(this.leaf);
 		this.domAdapter.cleanup(this.leaf);
 		this.sessionCollapsedGroups.clear();
 	}
@@ -93,6 +96,7 @@ export class BasesGroupFoldController {
 		}
 
 		if (detectedGroups.length === 0) {
+			this.tableAdapter.cleanup(this.leaf);
 			this.domAdapter.cleanup(this.leaf);
 			return;
 		}
@@ -106,13 +110,17 @@ export class BasesGroupFoldController {
 			}
 		}
 
+		if (this.needsCollapsedStateSync(detectedGroups, collapsedGroupKeys)) {
+			const applied = this.tableAdapter.applyCollapsedState(this.leaf, collapsedGroupKeys);
+			if (applied) {
+				this.requestRefresh('collapsed-state-sync');
+				return;
+			}
+		}
+
 		for (const group of detectedGroups) {
 			const collapsed = collapsedGroupKeys.has(group.key);
 			this.renderGroup(viewContext, group, collapsed);
-		}
-		const firstGroup = detectedGroups[0];
-		if (firstGroup) {
-			this.domAdapter.reflowGroupLayout(firstGroup);
 		}
 
 		this.plugin.debugFeatureLog(FEATURE_ID, this.plugin.settings.basesGroupFold.debugMode, 'Rendered Bases group fold controls.', {
@@ -120,6 +128,14 @@ export class BasesGroupFoldController {
 			groupCount: detectedGroups.length,
 			reason,
 			viewStateKey: viewContext.viewStateKey,
+		});
+	}
+
+	private needsCollapsedStateSync(detectedGroups: DetectedBaseGroup[], collapsedGroupKeys: ReadonlySet<string>): boolean {
+		return detectedGroups.some((group) => {
+			const domCollapsed = group.containerEl.dataset.obpmBasesGroupFoldCollapsed === 'true';
+			const expectedCollapsed = collapsedGroupKeys.has(group.key);
+			return domCollapsed !== expectedCollapsed;
 		});
 	}
 
@@ -174,8 +190,12 @@ export class BasesGroupFoldController {
 			this.sessionCollapsedGroups.set(contextKey, collapsedGroupKeys);
 		}
 
-		this.renderGroup(viewContext, group, nextCollapsed);
-		this.domAdapter.reflowGroupLayout(group);
+		const applied = this.tableAdapter.applyCollapsedState(this.leaf, collapsedGroupKeys);
+		if (applied) {
+			this.requestRefresh('toggle');
+		} else {
+			this.renderGroup(viewContext, group, nextCollapsed);
+		}
 		if (this.plugin.settings.basesGroupFold.rememberState) {
 			await this.stateStore.setGroupCollapsed(
 				viewContext.filePath,
