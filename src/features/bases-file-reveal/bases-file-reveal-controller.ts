@@ -1,4 +1,4 @@
-import {TAbstractFile, ViewState, Workspace, WorkspaceLeaf} from 'obsidian';
+import {TAbstractFile, ViewState, WorkspaceLeaf} from 'obsidian';
 import OBPMPlugin from '../../main';
 
 const BASES_ROW_SELECTOR = '.bases-tr';
@@ -146,7 +146,7 @@ export class BasesFileRevealController {
 			return existingLeaf;
 		}
 
-		const workspace = this.plugin.app.workspace as Workspace;
+		const workspace = this.plugin.app.workspace;
 		if (typeof workspace.ensureSideLeaf === 'function') {
 			try {
 				return await workspace.ensureSideLeaf('file-explorer', 'left', {
