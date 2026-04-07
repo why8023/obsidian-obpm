@@ -14,7 +14,6 @@ import {syncManagedLinksInContent} from './target-sync';
 import {DesiredLinksByTarget, DesiredTargetLink, RelatedLinksState, SourceContribution} from './types';
 
 interface FullSyncOptions {
-	force?: boolean;
 	notifyOnError?: boolean;
 }
 
@@ -116,7 +115,7 @@ export class RelatedLinksFeature extends Component {
 			return;
 		}
 
-		await this.runFullSync({force: true});
+		await this.runFullSync();
 	}
 
 	async runFullSync(options: FullSyncOptions = {}): Promise<void> {
@@ -127,7 +126,6 @@ export class RelatedLinksFeature extends Component {
 
 		this.fullSyncQueued = false;
 		this.plugin.debugLog('Starting full sync.', {
-			force: options.force ?? false,
 			notifyOnError: options.notifyOnError ?? true,
 		});
 		await this.enqueue(async () => {
@@ -286,7 +284,7 @@ export class RelatedLinksFeature extends Component {
 		});
 
 		if (this.fullSyncQueued || !this.hasInitialized) {
-			await this.runFullSync({force: true, notifyOnError: shouldNotifyOnError});
+			await this.runFullSync({notifyOnError: shouldNotifyOnError});
 			return;
 		}
 

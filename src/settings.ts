@@ -7,6 +7,7 @@ import {
 	normalizeFileNameMaxLength,
 	normalizeInvalidCharacterReplacement,
 } from './features/file-name-sync/file-name-sync-utils';
+import {RefreshableFeatureId} from './save-settings-options';
 import {getSettingsLocalization} from './settings-localization';
 
 export type BasesTopTabsPlacement = 'above-toolbar' | 'inside-toolbar';
@@ -15,6 +16,19 @@ export type BasesTopTabsOrientation = 'horizontal' | 'vertical';
 const DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS = 8;
 const MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS = 50;
 const MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS = 0;
+
+interface CommittedTextSettingControl {
+	inputEl: HTMLInputElement;
+	setValue(value: string): unknown;
+}
+
+interface CommittedTextSettingOptions {
+	initialValue: string;
+	normalize: (value: string) => string;
+	notice?: string;
+	onCommit: (value: string) => void;
+	refreshFeatures?: readonly RefreshableFeatureId[];
+}
 
 export interface RelatedLinksSettings {
 	enabled: boolean;
@@ -313,9 +327,60 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	private bindCommittedTextSetting(
+		text: CommittedTextSettingControl,
+		options: CommittedTextSettingOptions,
+	): CommittedTextSettingControl {
+		let lastCommittedValue = options.initialValue;
+		text.setValue(options.initialValue);
+
+		const commitValue = async () => {
+			const normalizedValue = options.normalize(text.inputEl.value);
+			if (normalizedValue === lastCommittedValue && text.inputEl.value === normalizedValue) {
+				return;
+			}
+
+			options.onCommit(normalizedValue);
+			await this.saveSettingsFor(...(options.refreshFeatures ?? []));
+			lastCommittedValue = normalizedValue;
+
+			if (text.inputEl.value !== normalizedValue) {
+				text.setValue(normalizedValue);
+				if (options.notice) {
+					new Notice(options.notice);
+				}
+			}
+		};
+
+		text.inputEl.addEventListener('change', () => {
+			void commitValue();
+		});
+		text.inputEl.addEventListener('keydown', (event) => {
+			if (event.key !== 'Enter') {
+				return;
+			}
+
+			event.preventDefault();
+			void commitValue();
+		});
+
+		return text;
+	}
+
+	private async saveSettingsFor(...features: RefreshableFeatureId[]): Promise<void> {
+		await this.plugin.saveSettings({
+			refreshFeatures: features.length > 0 ? features : false,
+		});
+	}
+
 	display(): void {
 		const {containerEl} = this;
 		const strings = getSettingsLocalization();
+		const saveBasesGroupFoldSettings = async () => this.saveSettingsFor('basesGroupFold');
+		const saveBasesTopTabsSettings = async () => this.saveSettingsFor('basesTopTabs');
+		const saveRelatedLinksSettings = async () => this.saveSettingsFor('relatedLinks');
+		const saveFileNameSyncSettings = async () => this.saveSettingsFor('fileNameSync');
+		const saveWithoutRefresh = async () => this.saveSettingsFor();
 
 		containerEl.empty();
 
@@ -330,7 +395,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesGroupFold.enabled)
 				.onChange(async (value) => {
 					this.plugin.settings.basesGroupFold.enabled = value;
-					await this.plugin.saveSettings();
+					await saveBasesGroupFoldSettings();
 				}));
 
 		new Setting(containerEl)
@@ -340,7 +405,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesGroupFold.rememberState)
 				.onChange(async (value) => {
 					this.plugin.settings.basesGroupFold.rememberState = value;
-					await this.plugin.saveSettings();
+					await saveWithoutRefresh();
 				}));
 
 		new Setting(containerEl)
@@ -350,7 +415,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesGroupFold.debugMode)
 				.onChange(async (value) => {
 					this.plugin.settings.basesGroupFold.debugMode = value;
-					await this.plugin.saveSettings();
+					await saveWithoutRefresh();
 				}));
 
 		new Setting(containerEl)
@@ -364,7 +429,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesTopTabs.enabled)
 				.onChange(async (value) => {
 					this.plugin.settings.basesTopTabs.enabled = value;
-					await this.plugin.saveSettings();
+					await saveBasesTopTabsSettings();
 				}));
 
 		new Setting(containerEl)
@@ -374,7 +439,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesTopTabs.showIcons)
 				.onChange(async (value) => {
 					this.plugin.settings.basesTopTabs.showIcons = value;
-					await this.plugin.saveSettings();
+					await saveBasesTopTabsSettings();
 				}));
 
 		new Setting(containerEl)
@@ -384,7 +449,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesTopTabs.hideWhenSingleView)
 				.onChange(async (value) => {
 					this.plugin.settings.basesTopTabs.hideWhenSingleView = value;
-					await this.plugin.saveSettings();
+					await saveBasesTopTabsSettings();
 				}));
 
 		new Setting(containerEl)
@@ -399,7 +464,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 						value,
 						DEFAULT_SETTINGS.basesTopTabs.placement,
 					);
-					await this.plugin.saveSettings();
+					await saveBasesTopTabsSettings();
 				}));
 
 		new Setting(containerEl)
@@ -414,7 +479,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 						value,
 						DEFAULT_SETTINGS.basesTopTabs.orientation,
 					);
-					await this.plugin.saveSettings();
+					await saveBasesTopTabsSettings();
 				}));
 
 		new Setting(containerEl)
@@ -424,7 +489,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesTopTabs.scrollable)
 				.onChange(async (value) => {
 					this.plugin.settings.basesTopTabs.scrollable = value;
-					await this.plugin.saveSettings();
+					await saveBasesTopTabsSettings();
 				}));
 
 		new Setting(containerEl)
@@ -434,7 +499,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesTopTabs.showViewCount)
 				.onChange(async (value) => {
 					this.plugin.settings.basesTopTabs.showViewCount = value;
-					await this.plugin.saveSettings();
+					await saveBasesTopTabsSettings();
 				}));
 
 		new Setting(containerEl)
@@ -457,7 +522,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 						DEFAULT_SETTINGS.basesTopTabs.maxVisibleTabs,
 					);
 					this.plugin.settings.basesTopTabs.maxVisibleTabs = normalizedValue;
-					await this.plugin.saveSettings();
+					await saveBasesTopTabsSettings();
 
 					if (text.inputEl.value !== normalizedValue.toString()) {
 						text.setValue(normalizedValue.toString());
@@ -482,7 +547,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesTopTabs.rememberLastView)
 				.onChange(async (value) => {
 					this.plugin.settings.basesTopTabs.rememberLastView = value;
-					await this.plugin.saveSettings();
+					await saveWithoutRefresh();
 				}));
 
 		new Setting(containerEl)
@@ -492,7 +557,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesTopTabs.autoRefresh)
 				.onChange(async (value) => {
 					this.plugin.settings.basesTopTabs.autoRefresh = value;
-					await this.plugin.saveSettings();
+					await saveWithoutRefresh();
 				}));
 
 		new Setting(containerEl)
@@ -502,7 +567,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.basesTopTabs.debugMode)
 				.onChange(async (value) => {
 					this.plugin.settings.basesTopTabs.debugMode = value;
-					await this.plugin.saveSettings();
+					await saveWithoutRefresh();
 				}));
 
 		new Setting(containerEl)
@@ -516,30 +581,38 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.relatedLinks.enabled)
 				.onChange(async (value) => {
 					this.plugin.settings.relatedLinks.enabled = value;
-					await this.plugin.saveSettings();
+					await saveRelatedLinksSettings();
 				}));
 
 		new Setting(containerEl)
 			.setName(strings.relationPropertyName)
 			.setDesc(strings.relationPropertyDesc)
-			.addText((text) => text
-				.setPlaceholder(strings.relationPropertyPlaceholder)
-				.setValue(this.plugin.settings.relatedLinks.relationProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.relatedLinks.relationProperty = value.trim();
-					await this.plugin.saveSettings();
-				}));
+			.addText((text) => {
+				text.setPlaceholder(strings.relationPropertyPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.relatedLinks.relationProperty,
+					normalize: (value) => value.trim(),
+					onCommit: (value) => {
+						this.plugin.settings.relatedLinks.relationProperty = value;
+					},
+					refreshFeatures: ['relatedLinks'],
+				});
+			});
 
 		new Setting(containerEl)
 			.setName(strings.displayPropertyName)
 			.setDesc(strings.displayPropertyDesc)
-			.addText((text) => text
-				.setPlaceholder(strings.displayPropertyPlaceholder)
-				.setValue(this.plugin.settings.relatedLinks.displayProperty)
-				.onChange(async (value) => {
-					this.plugin.settings.relatedLinks.displayProperty = value.trim();
-					await this.plugin.saveSettings();
-				}));
+			.addText((text) => {
+				text.setPlaceholder(strings.displayPropertyPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.relatedLinks.displayProperty,
+					normalize: (value) => value.trim(),
+					onCommit: (value) => {
+						this.plugin.settings.relatedLinks.displayProperty = value;
+					},
+					refreshFeatures: ['relatedLinks'],
+				});
+			});
 
 		new Setting(containerEl)
 			.setName(strings.verboseLoggingName)
@@ -548,7 +621,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.relatedLinks.verboseLogging)
 				.onChange(async (value) => {
 					this.plugin.settings.relatedLinks.verboseLogging = value;
-					await this.plugin.saveSettings();
+					await saveWithoutRefresh();
 				}));
 
 		new Setting(containerEl)
@@ -562,36 +635,40 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.fileNameSync.enabled)
 				.onChange(async (value) => {
 					this.plugin.settings.fileNameSync.enabled = value;
-					await this.plugin.saveSettings();
+					await saveFileNameSyncSettings();
 				}));
 
 		new Setting(containerEl)
 			.setName(strings.fileNamePropertyName)
 			.setDesc(strings.fileNamePropertyDesc)
-			.addText((text) => text
-				.setPlaceholder(strings.fileNamePropertyPlaceholder)
-				.setValue(this.plugin.settings.fileNameSync.propertyName)
-				.onChange(async (value) => {
-					this.plugin.settings.fileNameSync.propertyName = value.trim();
-					await this.plugin.saveSettings();
-				}));
+			.addText((text) => {
+				text.setPlaceholder(strings.fileNamePropertyPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.fileNameSync.propertyName,
+					normalize: (value) => value.trim(),
+					onCommit: (value) => {
+						this.plugin.settings.fileNameSync.propertyName = value;
+					},
+					refreshFeatures: ['fileNameSync'],
+				});
+			});
 
 		new Setting(containerEl)
 			.setName(strings.invalidCharacterReplacementName)
 			.setDesc(strings.invalidCharacterReplacementDesc)
-			.addText((text) => text
-				.setPlaceholder(strings.invalidCharacterReplacementPlaceholder)
-				.setValue(this.plugin.settings.fileNameSync.invalidCharacterReplacement)
-				.onChange(async (value) => {
-					const normalizedValue = normalizeInvalidCharacterReplacement(value, DEFAULT_SETTINGS.fileNameSync.invalidCharacterReplacement);
-					this.plugin.settings.fileNameSync.invalidCharacterReplacement = normalizedValue;
-					await this.plugin.saveSettings();
-
-					if (text.inputEl.value !== normalizedValue) {
-						text.setValue(normalizedValue);
-						new Notice(strings.invalidCharacterReplacementNotice);
-					}
-				}));
+			.addText((text) => {
+				text.setPlaceholder(strings.invalidCharacterReplacementPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.fileNameSync.invalidCharacterReplacement,
+					normalize: (value) =>
+						normalizeInvalidCharacterReplacement(value, DEFAULT_SETTINGS.fileNameSync.invalidCharacterReplacement),
+					notice: strings.invalidCharacterReplacementNotice,
+					onCommit: (value) => {
+						this.plugin.settings.fileNameSync.invalidCharacterReplacement = value;
+					},
+					refreshFeatures: ['fileNameSync'],
+				});
+			});
 
 		new Setting(containerEl)
 			.setName(strings.maxFileNameLengthName)
@@ -613,7 +690,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 						DEFAULT_SETTINGS.fileNameSync.maxFileNameLength,
 					);
 					this.plugin.settings.fileNameSync.maxFileNameLength = normalizedValue;
-					await this.plugin.saveSettings();
+					await saveFileNameSyncSettings();
 
 					if (text.inputEl.value !== normalizedValue.toString()) {
 						text.setValue(normalizedValue.toString());
@@ -642,7 +719,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.sameFolderNote.enabled)
 				.onChange(async (value) => {
 					this.plugin.settings.sameFolderNote.enabled = value;
-					await this.plugin.saveSettings();
+					await saveWithoutRefresh();
 				}));
 	}
 }

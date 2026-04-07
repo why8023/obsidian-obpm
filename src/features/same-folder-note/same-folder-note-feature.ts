@@ -57,10 +57,6 @@ export class SameFolderNoteFeature extends Component {
 		}));
 	}
 
-	async refresh(): Promise<void> {
-		return;
-	}
-
 	private registerMenuItem(menu: Menu, file: TAbstractFile) {
 		if (!this.plugin.settings.sameFolderNote.enabled || !(file instanceof TFile)) {
 			return;

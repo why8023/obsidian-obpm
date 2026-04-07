@@ -6,6 +6,7 @@ import {RelatedLinksFeature} from './features/related-links/related-links-featur
 import {SameFolderNoteFeature} from './features/same-folder-note/same-folder-note-feature';
 import {normalizeRelatedLinksState} from './features/related-links/related-links-state-store';
 import {RelatedLinksState} from './features/related-links/types';
+import {RefreshableFeatureId, SaveSettingsOptions} from './save-settings-options';
 import {normalizePluginSettings, OBPMPluginSettingTab, OBPMPluginSettings} from './settings';
 
 interface OBPMPluginData extends Partial<OBPMPluginSettings> {
@@ -19,7 +20,6 @@ export default class OBPMPlugin extends Plugin {
 	private basesTopTabsFeature: BasesTopTabsFeature | null = null;
 	private fileNameSyncFeature: FileNameSyncFeature | null = null;
 	private relatedLinksFeature: RelatedLinksFeature | null = null;
-	private sameFolderNoteFeature: SameFolderNoteFeature | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -32,8 +32,7 @@ export default class OBPMPlugin extends Plugin {
 		this.addChild(this.relatedLinksFeature);
 		this.fileNameSyncFeature = new FileNameSyncFeature(this);
 		this.addChild(this.fileNameSyncFeature);
-		this.sameFolderNoteFeature = new SameFolderNoteFeature(this);
-		this.addChild(this.sameFolderNoteFeature);
+		this.addChild(new SameFolderNoteFeature(this));
 
 		this.addCommand({
 			id: 'sync-related-frontmatter-links',
@@ -43,7 +42,7 @@ export default class OBPMPlugin extends Plugin {
 					return;
 				}
 
-				await this.relatedLinksFeature.runFullSync({force: true});
+				await this.relatedLinksFeature.runFullSync();
 			},
 		});
 
@@ -56,21 +55,16 @@ export default class OBPMPlugin extends Plugin {
 		this.relatedLinksState = normalizeRelatedLinksState(loadedData?.relatedLinksState);
 	}
 
-	async saveSettings(options?: {refreshFeatures?: boolean}) {
+	async saveSettings(options: SaveSettingsOptions = {refreshFeatures: false}) {
 		this.settings = normalizePluginSettings(this.settings);
 		await this.persistPluginData();
 
-		if (options?.refreshFeatures === false) {
+		const refreshFeatures = options.refreshFeatures;
+		if (refreshFeatures === false || refreshFeatures === undefined || refreshFeatures.length === 0) {
 			return;
 		}
 
-		await Promise.all([
-			this.basesGroupFoldFeature?.refresh(),
-			this.basesTopTabsFeature?.refresh(),
-			this.relatedLinksFeature?.refresh(),
-			this.fileNameSyncFeature?.refresh(),
-			this.sameFolderNoteFeature?.refresh(),
-		]);
+		await this.refreshConfiguredFeatures(refreshFeatures);
 	}
 
 	getRelatedLinksState(): RelatedLinksState {
@@ -98,6 +92,41 @@ export default class OBPMPlugin extends Plugin {
 		}
 
 		console.debug(prefix, details);
+	}
+
+	private async refreshConfiguredFeatures(featureIds: readonly RefreshableFeatureId[]): Promise<void> {
+		const refreshTasks: Promise<void>[] = [];
+
+		for (const featureId of new Set(featureIds)) {
+			switch (featureId) {
+				case 'basesGroupFold':
+					if (this.basesGroupFoldFeature) {
+						refreshTasks.push(this.basesGroupFoldFeature.refresh());
+					}
+					break;
+				case 'basesTopTabs':
+					if (this.basesTopTabsFeature) {
+						refreshTasks.push(this.basesTopTabsFeature.refresh());
+					}
+					break;
+				case 'relatedLinks':
+					if (this.relatedLinksFeature) {
+						refreshTasks.push(this.relatedLinksFeature.refresh());
+					}
+					break;
+				case 'fileNameSync':
+					if (this.fileNameSyncFeature) {
+						refreshTasks.push(this.fileNameSyncFeature.refresh());
+					}
+					break;
+			}
+		}
+
+		if (refreshTasks.length === 0) {
+			return;
+		}
+
+		await Promise.all(refreshTasks);
 	}
 
 	private async persistPluginData(): Promise<void> {
