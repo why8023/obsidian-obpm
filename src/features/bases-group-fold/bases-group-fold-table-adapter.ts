@@ -4,6 +4,8 @@ import {BasesTableGroup, BasesTableView} from './types';
 
 const BASES_GROUP_HEADING_SELECTOR = '.bases-group-heading';
 const BASES_GROUP_VALUE_SELECTOR = '.bases-group-value';
+const BASES_LIST_GROUP_LIST_SELECTOR = '.bases-list-group-list';
+const BASES_LIST_GROUP_SELECTOR = '.bases-list-group';
 const BASES_TABLE_BODY_SELECTOR = '.bases-tbody';
 const BASES_TABLE_GROUP_SUMMARY_ROW_SELECTOR = '.bases-table-group-summary-row';
 const BASES_TABLE_SELECTOR = '.bases-table';
@@ -131,6 +133,7 @@ export class BasesGroupFoldTableAdapter {
 			return;
 		}
 
+		let listGroupCount = 0;
 		const tableEls = rootEl.querySelectorAll<HTMLElement>(BASES_TABLE_SELECTOR);
 		for (const tableEl of Array.from(tableEls)) {
 			const headingEl = findDirectChild(tableEl, BASES_GROUP_HEADING_SELECTOR)
@@ -146,6 +149,7 @@ export class BasesGroupFoldTableAdapter {
 			const collapsed = collapsedGroupKeys.has(groupValueKey);
 
 			tableEl.dataset.obpmBasesGroupFoldCollapsed = collapsed ? 'true' : 'false';
+			tableEl.classList.toggle('is-obpm-collapsed', collapsed);
 			if (bodyEl) {
 				bodyEl.setCssProps({
 					height: collapsed
@@ -160,8 +164,38 @@ export class BasesGroupFoldTableAdapter {
 			}
 		}
 
-		this.debugLog('Synchronized Bases grouped table DOM state.', {
+		const listGroupEls = rootEl.querySelectorAll<HTMLElement>(BASES_LIST_GROUP_SELECTOR);
+		for (const groupEl of Array.from(listGroupEls)) {
+			const headingEl = findDirectChild(groupEl, BASES_GROUP_HEADING_SELECTOR)
+				?? toHtmlElement(groupEl.querySelector(`:scope > ${BASES_GROUP_HEADING_SELECTOR}`));
+			const bodyEl = findDirectChild(groupEl, BASES_LIST_GROUP_LIST_SELECTOR)
+				?? toHtmlElement(groupEl.querySelector(`:scope > ${BASES_LIST_GROUP_LIST_SELECTOR}`));
+			if (!headingEl) {
+				continue;
+			}
+
+			listGroupCount += 1;
+			const groupValue = toHtmlElement(headingEl.querySelector(BASES_GROUP_VALUE_SELECTOR))?.textContent?.trim()
+				?? headingEl.textContent?.trim()
+				?? '';
+			const groupValueKey = getGroupKey(groupValue);
+			const collapsed = collapsedGroupKeys.has(groupValueKey);
+
+			groupEl.dataset.obpmBasesGroupFoldCollapsed = collapsed ? 'true' : 'false';
+			groupEl.classList.toggle('is-obpm-collapsed', collapsed);
+			if (bodyEl) {
+				if (collapsed) {
+					bodyEl.setCssProps({
+						height: '0px',
+					});
+				}
+				bodyEl.setAttribute('aria-hidden', String(collapsed));
+			}
+		}
+
+		this.debugLog('Synchronized Bases grouped view DOM state.', {
 			collapsedGroupCount: collapsedGroupKeys.size,
+			listGroupCount,
 			tableCount: tableEls.length,
 		});
 	}

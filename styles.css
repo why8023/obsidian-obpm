@@ -222,6 +222,7 @@
 .obpm-bases-group-fold-header {
 	display: flex;
 	align-items: center;
+	cursor: pointer;
 	gap: var(--size-2-1);
 	min-width: 0;
 }
@@ -258,6 +259,10 @@
 }
 
 [data-obpm-bases-group-fold-collapsed="true"] > .bases-tbody {
+	display: none !important;
+}
+
+[data-obpm-bases-group-fold-collapsed="true"] > .bases-list-group-list {
 	display: none !important;
 }
 

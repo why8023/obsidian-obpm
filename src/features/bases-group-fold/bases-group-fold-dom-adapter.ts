@@ -5,11 +5,16 @@ const BASES_EMBED_SELECTOR = '.bases-embed';
 const BASES_GROUP_HEADING_SELECTOR = '.bases-group-heading';
 const BASES_GROUP_PROPERTY_SELECTOR = '.bases-group-property';
 const BASES_GROUP_VALUE_SELECTOR = '.bases-group-value';
+const BASES_LIST_CONTAINER_SELECTOR = '.bases-list-container';
+const BASES_LIST_GROUP_LIST_SELECTOR = '.bases-list-group-list';
+const BASES_LIST_GROUP_SELECTOR = '.bases-list-group';
 const BASES_TABLE_GROUP_SUMMARY_ROW_SELECTOR = '.bases-table-group-summary-row';
 const BASES_TABLE_BODY_SELECTOR = '.bases-tbody';
 const BASES_TABLE_CONTAINER_SELECTOR = '.bases-table-container';
 const BASES_TABLE_SELECTOR = '.bases-table';
-const BASES_TABLE_SIGNAL_SELECTOR = '.bases-table-container, .bases-table, .bases-tbody, .bases-tr, .bases-table-footer';
+const BASES_VIEW_CONTENT_SIGNAL_SELECTOR =
+	'.bases-list-container, .bases-list-group, .bases-list-group-list, .bases-list-item, '
+	+ '.bases-table-container, .bases-table, .bases-tbody, .bases-tr, .bases-table-footer';
 const BASES_VIEW_SELECTOR = '.bases-view';
 const GROUP_CONTAINER_SELECTOR = '.group-container';
 const GROUP_CONTENT_SELECTOR = '.group-content';
@@ -74,6 +79,15 @@ export class BasesGroupFoldDomAdapter {
 			return groups;
 		}
 
+		const listGroups = this.detectNativeListGroups(viewEl);
+		if (listGroups.length > 0) {
+			this.debugLog('Detected grouped Bases table groups.', {
+				groupCount: listGroups.length,
+				structure: 'native-bases-list',
+			});
+			return listGroups;
+		}
+
 		const legacyGroups = this.detectLegacyGroups(viewEl);
 		this.debugLog('Detected grouped Bases table groups.', {
 			groupCount: legacyGroups.length,
@@ -97,7 +111,7 @@ export class BasesGroupFoldDomAdapter {
 				?? toHtmlElement(containerEl.querySelector(GROUP_HEADER_SELECTOR));
 			const bodyEl = findDirectChild(containerEl, GROUP_CONTENT_SELECTOR)
 				?? toHtmlElement(containerEl.querySelector(GROUP_CONTENT_SELECTOR));
-			if (!headerEl || !bodyEl || !bodyEl.querySelector(BASES_TABLE_SIGNAL_SELECTOR)) {
+			if (!headerEl || !bodyEl || !bodyEl.querySelector(BASES_VIEW_CONTENT_SIGNAL_SELECTOR)) {
 				continue;
 			}
 
@@ -140,6 +154,30 @@ export class BasesGroupFoldDomAdapter {
 		return groups;
 	}
 
+	private detectNativeListGroups(viewEl: HTMLElement): DetectedBaseGroup[] {
+		const listContainerEl = toHtmlElement(viewEl.querySelector(BASES_LIST_CONTAINER_SELECTOR));
+		if (!listContainerEl) {
+			return [];
+		}
+
+		const groups: DetectedBaseGroup[] = [];
+		for (const groupEl of Array.from(listContainerEl.children)) {
+			if (!(groupEl instanceof HTMLElement) || !groupEl.matches(BASES_LIST_GROUP_SELECTOR)) {
+				continue;
+			}
+
+			const headingEl = findDirectChild(groupEl, BASES_GROUP_HEADING_SELECTOR);
+			const bodyEl = findDirectChild(groupEl, BASES_LIST_GROUP_LIST_SELECTOR);
+			if (!headingEl || !bodyEl) {
+				continue;
+			}
+
+			groups.push(this.buildDetectedGroup(groupEl, headingEl, bodyEl, headingEl, null));
+		}
+
+		return groups;
+	}
+
 	private buildDetectedGroup(
 		containerEl: HTMLElement,
 		headerEl: HTMLElement,
@@ -165,6 +203,14 @@ export class BasesGroupFoldDomAdapter {
 		group.bodyEl.dataset.obpmBasesGroupFoldBody = 'true';
 		group.headerEl.classList.add('obpm-bases-group-fold-header');
 		group.bodyEl.classList.add('obpm-bases-group-fold-body');
+		group.headerEl.onclick = (event) => {
+			if (shouldIgnoreHeaderToggle(event, group.headerEl)) {
+				return;
+			}
+
+			stopToggleEvent(event);
+			options.onToggle();
+		};
 		if (group.summaryEl) {
 			group.summaryEl.dataset.obpmBasesGroupFoldSummary = 'true';
 			group.summaryEl.classList.add('obpm-bases-group-fold-summary');
@@ -244,6 +290,7 @@ export class BasesGroupFoldDomAdapter {
 				continue;
 			}
 
+			headerEl.onclick = null;
 			headerEl.classList.remove('obpm-bases-group-fold-header');
 			delete headerEl.dataset.obpmBasesGroupFoldHeader;
 		}
@@ -314,11 +361,19 @@ export class BasesGroupFoldDomAdapter {
 				continue;
 			}
 
-			if (!viewEl.querySelector(BASES_TABLE_CONTAINER_SELECTOR)) {
+			if (
+				!viewEl.querySelector(BASES_LIST_CONTAINER_SELECTOR)
+				&& !viewEl.querySelector(BASES_TABLE_CONTAINER_SELECTOR)
+				&& !viewEl.querySelector(GROUP_CONTAINER_SELECTOR)
+			) {
 				continue;
 			}
 
 			if (viewEl.querySelector(`${BASES_TABLE_SELECTOR} > ${BASES_GROUP_HEADING_SELECTOR}`)) {
+				return viewEl;
+			}
+
+			if (viewEl.querySelector(`${BASES_LIST_GROUP_SELECTOR} > ${BASES_GROUP_HEADING_SELECTOR}`)) {
 				return viewEl;
 			}
 
@@ -367,6 +422,18 @@ function toHtmlElement(element: Element | null): HTMLElement | null {
 function stopToggleEvent(event: Event): void {
 	event.preventDefault();
 	event.stopPropagation();
+}
+
+function shouldIgnoreHeaderToggle(event: Event, headerEl: HTMLElement): boolean {
+	const targetEl = event.target instanceof HTMLElement ? event.target : null;
+	if (!targetEl || !headerEl.contains(targetEl)) {
+		return false;
+	}
+
+	const interactiveEl = targetEl.closest(
+		'a, button, input, select, textarea, summary, [contenteditable], [role="button"]',
+	);
+	return interactiveEl !== null && headerEl.contains(interactiveEl);
 }
 
 function shouldHandleMutationRecord(record: MutationRecord): boolean {
