@@ -1,4 +1,5 @@
 import {Plugin} from 'obsidian';
+import {BasesFileRevealFeature} from './features/bases-file-reveal/bases-file-reveal-feature';
 import {BasesGroupFoldFeature} from './features/bases-group-fold/bases-group-fold-feature';
 import {BasesTopTabsFeature} from './features/bases-top-tabs/bases-top-tabs-feature';
 import {FileNameSyncFeature} from './features/file-name-sync/file-name-sync-feature';
@@ -16,6 +17,7 @@ interface OBPMPluginData extends Partial<OBPMPluginSettings> {
 export default class OBPMPlugin extends Plugin {
 	settings: OBPMPluginSettings;
 	private relatedLinksState: RelatedLinksState = normalizeRelatedLinksState(null);
+	private basesFileRevealFeature: BasesFileRevealFeature | null = null;
 	private basesGroupFoldFeature: BasesGroupFoldFeature | null = null;
 	private basesTopTabsFeature: BasesTopTabsFeature | null = null;
 	private fileNameSyncFeature: FileNameSyncFeature | null = null;
@@ -24,6 +26,8 @@ export default class OBPMPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		this.basesFileRevealFeature = new BasesFileRevealFeature(this);
+		this.addChild(this.basesFileRevealFeature);
 		this.basesGroupFoldFeature = new BasesGroupFoldFeature(this);
 		this.addChild(this.basesGroupFoldFeature);
 		this.basesTopTabsFeature = new BasesTopTabsFeature(this);
@@ -99,6 +103,11 @@ export default class OBPMPlugin extends Plugin {
 
 		for (const featureId of new Set(featureIds)) {
 			switch (featureId) {
+				case 'basesFileReveal':
+					if (this.basesFileRevealFeature) {
+						refreshTasks.push(this.basesFileRevealFeature.refresh());
+					}
+					break;
 				case 'basesGroupFold':
 					if (this.basesGroupFoldFeature) {
 						refreshTasks.push(this.basesGroupFoldFeature.refresh());

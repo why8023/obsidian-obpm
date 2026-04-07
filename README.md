@@ -4,6 +4,7 @@ OBPM is an Obsidian community plugin that bundles several workflow improvements 
 
 ## Features
 
+- Bases file reveal: Hold `Alt` and click a row or file link in a native Bases table view to reveal that file in the file explorer.
 - Bases top tabs: Show always-visible tabs for the views defined in a `.base` file, with support for reordering, pinning, renaming, duplication, overflow handling, and restoring the last active view.
 - Bases group fold: Add collapse and expand controls to grouped native Bases table views and optionally remember the collapsed state per file and view.
 - Related frontmatter links: Keep backlinks in sync by inserting managed markdown links into the notes referenced by a frontmatter property.
@@ -64,6 +65,7 @@ npm run lint
 
 ## Settings overview
 
+- **Bases file reveal** enables `Alt`+click reveal behavior from Bases rows into the file explorer.
 - **Bases group fold** controls grouped Bases table folding behavior and state persistence.
 - **Bases top tabs** controls tab placement, layout, icon display, overflow behavior, and remembered view state.
 - **Related frontmatter links** configures the source relation property, optional display property, and verbose logging.

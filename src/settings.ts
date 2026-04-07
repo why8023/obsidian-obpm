@@ -39,6 +39,10 @@ export interface RelatedLinksSettings {
 	verboseLogging: boolean;
 }
 
+export interface BasesFileRevealSettings {
+	enabled: boolean;
+}
+
 export interface BasesTopTabsFileState {
 	lastViewName: string | null;
 	pinnedViewNames: string[];
@@ -86,6 +90,7 @@ export interface SameFolderNoteSettings {
 }
 
 export interface OBPMPluginSettings {
+	basesFileReveal: BasesFileRevealSettings;
 	basesGroupFold: BasesGroupFoldSettings;
 	basesTopTabs: BasesTopTabsSettings;
 	relatedLinks: RelatedLinksSettings;
@@ -94,6 +99,9 @@ export interface OBPMPluginSettings {
 }
 
 export const DEFAULT_SETTINGS: OBPMPluginSettings = {
+	basesFileReveal: {
+		enabled: false,
+	},
 	basesGroupFold: {
 		debugMode: false,
 		enabled: false,
@@ -134,6 +142,9 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 
 export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | null | undefined): OBPMPluginSettings {
 	return {
+		basesFileReveal: {
+			enabled: normalizeBoolean(settings?.basesFileReveal?.enabled, DEFAULT_SETTINGS.basesFileReveal.enabled),
+		},
 		basesGroupFold: {
 			debugMode: normalizeBoolean(settings?.basesGroupFold?.debugMode, DEFAULT_SETTINGS.basesGroupFold.debugMode),
 			enabled: normalizeBoolean(settings?.basesGroupFold?.enabled, DEFAULT_SETTINGS.basesGroupFold.enabled),
@@ -388,6 +399,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 	display(): void {
 		const {containerEl} = this;
 		const strings = getSettingsLocalization();
+		const saveBasesFileRevealSettings = async () => this.saveSettingsFor('basesFileReveal');
 		const saveBasesGroupFoldSettings = async () => this.saveSettingsFor('basesGroupFold');
 		const saveBasesTopTabsSettings = async () => this.saveSettingsFor('basesTopTabs');
 		const saveRelatedLinksSettings = async () => this.saveSettingsFor('relatedLinks');
@@ -395,6 +407,20 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		const saveWithoutRefresh = async () => this.saveSettingsFor();
 
 		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName(strings.basesFileRevealHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.basesFileRevealEnableName)
+			.setDesc(strings.basesFileRevealEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesFileReveal.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.basesFileReveal.enabled = value;
+					await saveBasesFileRevealSettings();
+				}));
 
 		new Setting(containerEl)
 			.setName(strings.basesGroupFoldHeading)

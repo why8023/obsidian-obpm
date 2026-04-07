@@ -1,6 +1,9 @@
 import {getLanguage} from 'obsidian';
 
 export interface SettingsLocalization {
+	basesFileRevealEnableDesc: string;
+	basesFileRevealEnableName: string;
+	basesFileRevealHeading: string;
 	basesGroupFoldDebugModeDesc: string;
 	basesGroupFoldDebugModeName: string;
 	basesGroupFoldEnableDesc: string;
@@ -69,6 +72,9 @@ export interface SettingsLocalization {
 }
 
 const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
+	basesFileRevealEnableDesc: 'Hold Alt and click a row or file link in a native Bases table view to reveal that file in the file explorer.',
+	basesFileRevealEnableName: 'Enable Bases Alt-click reveal',
+	basesFileRevealHeading: 'Bases file reveal',
 	basesGroupFoldDebugModeDesc: 'Write detailed Bases group fold diagnostics to the developer console.',
 	basesGroupFoldDebugModeName: 'Debug mode',
 	basesGroupFoldEnableDesc: 'Add collapse and expand controls to grouped native Bases table views.',
@@ -138,6 +144,9 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 };
 
 const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
+	basesFileRevealEnableDesc: '在原生 Bases 的表格视图中按住 Alt 再点击某一行或文件链接，即可在左侧文件列表里定位该文件。',
+	basesFileRevealEnableName: '启用 Bases Alt+点击定位文件',
+	basesFileRevealHeading: 'Bases 文件定位',
 	basesGroupFoldDebugModeDesc: '将 Bases 分组折叠的详细调试信息输出到开发者控制台。',
 	basesGroupFoldDebugModeName: '调试模式',
 	basesGroupFoldEnableDesc: '为原生 Bases 分组 table view 增加分组折叠与展开按钮。',
