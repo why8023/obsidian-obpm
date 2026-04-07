@@ -1,4 +1,5 @@
 import {Plugin} from 'obsidian';
+import {BasesGroupFoldFeature} from './features/bases-group-fold/bases-group-fold-feature';
 import {BasesTopTabsFeature} from './features/bases-top-tabs/bases-top-tabs-feature';
 import {FileNameSyncFeature} from './features/file-name-sync/file-name-sync-feature';
 import {RelatedLinksFeature} from './features/related-links/related-links-feature';
@@ -14,6 +15,7 @@ interface OBPMPluginData extends Partial<OBPMPluginSettings> {
 export default class OBPMPlugin extends Plugin {
 	settings: OBPMPluginSettings;
 	private relatedLinksState: RelatedLinksState = normalizeRelatedLinksState(null);
+	private basesGroupFoldFeature: BasesGroupFoldFeature | null = null;
 	private basesTopTabsFeature: BasesTopTabsFeature | null = null;
 	private fileNameSyncFeature: FileNameSyncFeature | null = null;
 	private relatedLinksFeature: RelatedLinksFeature | null = null;
@@ -22,6 +24,8 @@ export default class OBPMPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		this.basesGroupFoldFeature = new BasesGroupFoldFeature(this);
+		this.addChild(this.basesGroupFoldFeature);
 		this.basesTopTabsFeature = new BasesTopTabsFeature(this);
 		this.addChild(this.basesTopTabsFeature);
 		this.relatedLinksFeature = new RelatedLinksFeature(this);
@@ -61,6 +65,7 @@ export default class OBPMPlugin extends Plugin {
 		}
 
 		await Promise.all([
+			this.basesGroupFoldFeature?.refresh(),
 			this.basesTopTabsFeature?.refresh(),
 			this.relatedLinksFeature?.refresh(),
 			this.fileNameSyncFeature?.refresh(),

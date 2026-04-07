@@ -1,6 +1,13 @@
 import {getLanguage} from 'obsidian';
 
 export interface SettingsLocalization {
+	basesGroupFoldDebugModeDesc: string;
+	basesGroupFoldDebugModeName: string;
+	basesGroupFoldEnableDesc: string;
+	basesGroupFoldEnableName: string;
+	basesGroupFoldHeading: string;
+	basesGroupFoldRememberStateDesc: string;
+	basesGroupFoldRememberStateName: string;
 	basesTopTabsAutoRefreshDesc: string;
 	basesTopTabsAutoRefreshName: string;
 	basesTopTabsDebugModeDesc: string;
@@ -59,6 +66,13 @@ export interface SettingsLocalization {
 }
 
 const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
+	basesGroupFoldDebugModeDesc: 'Write detailed Bases group fold diagnostics to the developer console.',
+	basesGroupFoldDebugModeName: 'Debug mode',
+	basesGroupFoldEnableDesc: 'Add collapse and expand controls to grouped native Bases table views.',
+	basesGroupFoldEnableName: 'Enable Bases group fold',
+	basesGroupFoldHeading: 'Bases group fold',
+	basesGroupFoldRememberStateDesc: 'Remember collapsed groups for each .base file and view.',
+	basesGroupFoldRememberStateName: 'Remember collapsed state',
 	basesTopTabsAutoRefreshDesc: 'Automatically refresh the tabs when the current .base file changes on disk.',
 	basesTopTabsAutoRefreshName: 'Auto refresh',
 	basesTopTabsDebugModeDesc: 'Write detailed Bases top tabs diagnostics to the developer console.',
@@ -118,6 +132,13 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 };
 
 const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
+	basesGroupFoldDebugModeDesc: '将 Bases 分组折叠的详细调试信息输出到开发者控制台。',
+	basesGroupFoldDebugModeName: '调试模式',
+	basesGroupFoldEnableDesc: '为原生 Bases 分组 table view 增加分组折叠与展开按钮。',
+	basesGroupFoldEnableName: '启用 Bases 分组折叠',
+	basesGroupFoldHeading: 'Bases 分组折叠',
+	basesGroupFoldRememberStateDesc: '为每个 .base 文件和视图记住分组折叠状态。',
+	basesGroupFoldRememberStateName: '记住折叠状态',
 	basesTopTabsAutoRefreshDesc: '当当前 .base 文件内容变化时，自动刷新顶部 Tabs。',
 	basesTopTabsAutoRefreshName: '自动刷新',
 	basesTopTabsDebugModeDesc: '将 Bases 顶部 Tabs 的详细调试信息输出到开发者控制台。',

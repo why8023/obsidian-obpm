@@ -28,6 +28,21 @@ export interface BasesTopTabsFileState {
 	pinnedViewNames: string[];
 }
 
+export interface BasesGroupFoldViewState {
+	collapsedGroupKeys: string[];
+}
+
+export interface BasesGroupFoldFileState {
+	viewsState: Record<string, BasesGroupFoldViewState>;
+}
+
+export interface BasesGroupFoldSettings {
+	debugMode: boolean;
+	enabled: boolean;
+	filesState: Record<string, BasesGroupFoldFileState>;
+	rememberState: boolean;
+}
+
 export interface BasesTopTabsSettings {
 	autoRefresh: boolean;
 	debugMode: boolean;
@@ -55,6 +70,7 @@ export interface SameFolderNoteSettings {
 }
 
 export interface OBPMPluginSettings {
+	basesGroupFold: BasesGroupFoldSettings;
 	basesTopTabs: BasesTopTabsSettings;
 	relatedLinks: RelatedLinksSettings;
 	fileNameSync: FileNameSyncSettings;
@@ -62,6 +78,12 @@ export interface OBPMPluginSettings {
 }
 
 export const DEFAULT_SETTINGS: OBPMPluginSettings = {
+	basesGroupFold: {
+		debugMode: false,
+		enabled: false,
+		filesState: {},
+		rememberState: true,
+	},
 	basesTopTabs: {
 		autoRefresh: true,
 		debugMode: false,
@@ -95,6 +117,15 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 
 export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | null | undefined): OBPMPluginSettings {
 	return {
+		basesGroupFold: {
+			debugMode: normalizeBoolean(settings?.basesGroupFold?.debugMode, DEFAULT_SETTINGS.basesGroupFold.debugMode),
+			enabled: normalizeBoolean(settings?.basesGroupFold?.enabled, DEFAULT_SETTINGS.basesGroupFold.enabled),
+			filesState: normalizeBasesGroupFoldFileStateMap(settings?.basesGroupFold?.filesState),
+			rememberState: normalizeBoolean(
+				settings?.basesGroupFold?.rememberState,
+				DEFAULT_SETTINGS.basesGroupFold.rememberState,
+			),
+		},
 		basesTopTabs: {
 			autoRefresh: normalizeBoolean(settings?.basesTopTabs?.autoRefresh, DEFAULT_SETTINGS.basesTopTabs.autoRefresh),
 			debugMode: normalizeBoolean(settings?.basesTopTabs?.debugMode, DEFAULT_SETTINGS.basesTopTabs.debugMode),
@@ -207,6 +238,54 @@ function normalizeBasesTopTabsFileStateMap(value: unknown): Record<string, Bases
 	return Object.fromEntries(normalizedEntries);
 }
 
+function normalizeBasesGroupFoldFileStateMap(value: unknown): Record<string, BasesGroupFoldFileState> {
+	if (!isObjectRecord(value)) {
+		return {};
+	}
+
+	const normalizedEntries = Object.entries(value)
+		.map(([filePath, fileState]) => {
+			const normalizedPath = typeof filePath === 'string' ? filePath.trim() : '';
+			if (!normalizedPath || !isObjectRecord(fileState)) {
+				return null;
+			}
+
+			const viewsState = normalizeBasesGroupFoldViewStateMap(fileState.viewsState);
+			if (Object.keys(viewsState).length === 0) {
+				return null;
+			}
+
+			return [normalizedPath, {viewsState}] as const;
+		})
+		.filter((entry): entry is readonly [string, BasesGroupFoldFileState] => entry !== null);
+
+	return Object.fromEntries(normalizedEntries);
+}
+
+function normalizeBasesGroupFoldViewStateMap(value: unknown): Record<string, BasesGroupFoldViewState> {
+	if (!isObjectRecord(value)) {
+		return {};
+	}
+
+	const normalizedEntries = Object.entries(value)
+		.map(([viewStateKey, viewState]) => {
+			const normalizedViewStateKey = typeof viewStateKey === 'string' ? viewStateKey.trim() : '';
+			if (!normalizedViewStateKey || !isObjectRecord(viewState)) {
+				return null;
+			}
+
+			const collapsedGroupKeys = normalizeStringArray(viewState.collapsedGroupKeys);
+			if (collapsedGroupKeys.length === 0) {
+				return null;
+			}
+
+			return [normalizedViewStateKey, {collapsedGroupKeys}] as const;
+		})
+		.filter((entry): entry is readonly [string, BasesGroupFoldViewState] => entry !== null);
+
+	return Object.fromEntries(normalizedEntries);
+}
+
 function normalizeStringArray(value: unknown): string[] {
 	if (!Array.isArray(value)) {
 		return [];
@@ -239,6 +318,40 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		const strings = getSettingsLocalization();
 
 		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName(strings.basesGroupFoldHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.basesGroupFoldEnableName)
+			.setDesc(strings.basesGroupFoldEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesGroupFold.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.basesGroupFold.enabled = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesGroupFoldRememberStateName)
+			.setDesc(strings.basesGroupFoldRememberStateDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesGroupFold.rememberState)
+				.onChange(async (value) => {
+					this.plugin.settings.basesGroupFold.rememberState = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesGroupFoldDebugModeName)
+			.setDesc(strings.basesGroupFoldDebugModeDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesGroupFold.debugMode)
+				.onChange(async (value) => {
+					this.plugin.settings.basesGroupFold.debugMode = value;
+					await this.plugin.saveSettings();
+				}));
 
 		new Setting(containerEl)
 			.setName(strings.basesTopTabsHeading)
