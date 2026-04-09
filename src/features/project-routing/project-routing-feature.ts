@@ -11,6 +11,33 @@ import {ProjectCandidate} from './types';
 const FEATURE_ID = 'project-routing';
 const MAX_PENDING_FILE_AGE_MS = 120000;
 
+interface MoveFileToProjectFolderOptions {
+	alreadyInTargetNotice?: ((projectName: string) => string) | null;
+	excludePath?: string;
+	noCandidateNotice?: string | null;
+}
+
+type MoveFileToProjectFolderResult =
+	| {
+		kind: 'already-in-target';
+		targetPath: string;
+		targetProject: ProjectCandidate;
+	}
+	| {
+		kind: 'canceled';
+	}
+	| {
+		kind: 'failed';
+	}
+	| {
+		kind: 'moved';
+		targetPath: string;
+		targetProject: ProjectCandidate;
+	}
+	| {
+		kind: 'no-candidate';
+	};
+
 export class ProjectRoutingFeature extends Component {
 	private readonly localization = getProjectRoutingLocalization();
 	private readonly pendingQueue = new PendingProjectRoutingQueue();
@@ -28,6 +55,23 @@ export class ProjectRoutingFeature extends Component {
 	}
 
 	onload() {
+		this.plugin.addCommand({
+			id: 'move-current-file-to-project-folder',
+			name: this.localization.currentFileCommandName,
+			checkCallback: (checking) => {
+				const activeFile = this.plugin.app.workspace.getActiveFile();
+				if (!(activeFile instanceof TFile) || activeFile.extension !== 'md') {
+					return false;
+				}
+
+				if (!checking) {
+					void this.handleMoveCurrentFileCommand(activeFile);
+				}
+
+				return true;
+			},
+		});
+
 		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
 			this.handleFileCreated(file);
 		}));
@@ -191,12 +235,68 @@ export class ProjectRoutingFeature extends Component {
 		this.requestStatusBarRefresh();
 	}
 
+	private async handleMoveCurrentFileCommand(file: TFile): Promise<void> {
+		const sourcePath = file.path;
+
+		if (!this.currentFileCommandAllows(file)) {
+			this.debugLog('Skipped the move-current-file command because the file did not match command rules.', {
+				filePath: sourcePath,
+			});
+			new Notice(this.localization.currentFileCommandRestrictionNotice);
+			return;
+		}
+
+		const result = await this.moveFileToProjectFolder(file, {
+			alreadyInTargetNotice: this.localization.currentFileCommandAlreadyInProjectNotice,
+			noCandidateNotice: this.localization.currentFileCommandNoOpenProjectNotice,
+		});
+
+		switch (result.kind) {
+			case 'moved':
+				this.debugLog('Moved the current markdown file into the selected project folder.', {
+					filePath: sourcePath,
+					projectFilePath: result.targetProject.file.path,
+					targetPath: result.targetPath,
+				});
+				break;
+			case 'no-candidate':
+				this.debugLog('Skipped the move-current-file command because there is no open project candidate.', {
+					filePath: sourcePath,
+				});
+				break;
+			case 'canceled':
+				this.debugLog('User canceled the move-current-file command.', {
+					filePath: sourcePath,
+				});
+				break;
+			case 'already-in-target':
+				this.debugLog('Skipped the move-current-file command because the file is already in the chosen project folder.', {
+					filePath: sourcePath,
+					projectFilePath: result.targetProject.file.path,
+					targetPath: result.targetPath,
+				});
+				break;
+			case 'failed':
+				break;
+		}
+	}
+
 	private isEnabled(): boolean {
 		return this.plugin.settings.projectRouting.enabled;
 	}
 
 	private isMarkdownFile(file: TAbstractFile): file is TFile {
 		return file instanceof TFile && file.extension === 'md';
+	}
+
+	private currentFileCommandAllows(file: TFile): boolean {
+		const commandSettings = this.plugin.settings.projectRouting.currentFileCommand;
+		if (!commandSettings.limitToMatchingFiles) {
+			return true;
+		}
+
+		const frontmatter = this.plugin.app.metadataCache.getFileCache(file)?.frontmatter;
+		return matchesAnyFrontmatterRule(frontmatter, commandSettings.matchRules);
 	}
 
 	private async pickTargetProject(candidates: readonly ProjectCandidate[]): Promise<ProjectCandidate | null> {
@@ -269,55 +369,98 @@ export class ProjectRoutingFeature extends Component {
 
 	private async routeFile(file: TFile): Promise<void> {
 		const sourcePath = file.path;
+		const result = await this.moveFileToProjectFolder(file, {
+			excludePath: sourcePath,
+		});
+
+		this.pendingQueue.remove(sourcePath);
+		this.pendingQueue.remove(file.path);
+
+		switch (result.kind) {
+			case 'moved':
+				this.debugLog('Moved a new markdown file into the selected project folder.', {
+					filePath: sourcePath,
+					projectFilePath: result.targetProject.file.path,
+					targetPath: result.targetPath,
+				});
+				break;
+			case 'no-candidate':
+				this.debugLog('Skipped project routing because there is no open project candidate.', {
+					filePath: sourcePath,
+				});
+				break;
+			case 'canceled':
+				this.debugLog('User canceled project routing for a new file.', {
+					filePath: sourcePath,
+				});
+				break;
+			case 'already-in-target':
+				this.debugLog('Skipped project routing because the file is already in the target project folder.', {
+					filePath: sourcePath,
+					targetPath: result.targetPath,
+				});
+				break;
+			case 'failed':
+				break;
+		}
+	}
+
+	private async moveFileToProjectFolder(
+		file: TFile,
+		options: MoveFileToProjectFolderOptions = {},
+	): Promise<MoveFileToProjectFolderResult> {
+		const sourcePath = file.path;
 		const sourceName = file.name;
 
 		try {
 			const candidates = getOpenProjectCandidates(
 				this.plugin.app,
 				this.plugin.settings.projectRouting.projectRule,
-				{excludePath: sourcePath},
+				{
+					recognizeFilenameMatchesFolderAsProject:
+						this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject,
+				},
+				options.excludePath ? {excludePath: options.excludePath} : {},
 			);
 			if (candidates.length === 0) {
-				this.pendingQueue.remove(sourcePath);
-				this.debugLog('Skipped project routing because there is no open project candidate.', {
-					filePath: sourcePath,
-				});
-				return;
+				if (options.noCandidateNotice) {
+					new Notice(options.noCandidateNotice);
+				}
+				return {kind: 'no-candidate'};
 			}
 
 			const targetProject = await this.pickTargetProject(candidates);
-			this.pendingQueue.remove(sourcePath);
 			if (!targetProject) {
-				this.debugLog('User canceled project routing for a new file.', {
-					filePath: sourcePath,
-				});
-				return;
+				return {kind: 'canceled'};
 			}
 
 			const targetPath = this.buildTargetPath(file, targetProject.folderPath);
 			if (targetPath === sourcePath) {
-				this.debugLog('Skipped project routing because the file is already in the target project folder.', {
-					filePath: sourcePath,
-					targetPath,
-				});
+				if (options.alreadyInTargetNotice) {
+					new Notice(options.alreadyInTargetNotice(targetProject.name));
+				}
 				this.requestStatusBarRefresh();
-				return;
+				return {
+					kind: 'already-in-target',
+					targetPath,
+					targetProject,
+				};
 			}
 
 			await this.plugin.app.fileManager.renameFile(file, targetPath);
-			this.debugLog('Moved a new markdown file into the selected project folder.', {
-				filePath: sourcePath,
-				projectFilePath: targetProject.file.path,
-				targetPath,
-			});
 			if (this.plugin.settings.projectRouting.showNoticeAfterMove) {
 				new Notice(this.localization.moveNotice(sourceName, targetProject.name));
 			}
 			this.requestStatusBarRefresh();
+			return {
+				kind: 'moved',
+				targetPath,
+				targetProject,
+			};
 		} catch (error) {
-			this.pendingQueue.remove(sourcePath);
-			console.error('[OBPM] Failed to move a new markdown file into a project folder.', error);
+			console.error('[OBPM] Failed to move a markdown file into a project folder.', error);
 			new Notice(this.localization.moveFailureNotice);
+			return {kind: 'failed'};
 		}
 	}
 

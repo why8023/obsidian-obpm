@@ -1,4 +1,9 @@
-import {FrontmatterMatchMode, FrontmatterMatchRule, ProjectRoutingSettings} from './types';
+import {
+	CurrentFileCommandSettings,
+	FrontmatterMatchMode,
+	FrontmatterMatchRule,
+	ProjectRoutingSettings,
+} from './types';
 
 export const DEFAULT_PROJECT_ROUTING_PROJECT_RULE: FrontmatterMatchRule = {
 	key: 'obpm_type',
@@ -11,9 +16,19 @@ export const DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE: FrontmatterMatchRule = 
 	matchMode: 'key-exists',
 };
 
+export const DEFAULT_PROJECT_ROUTING_CURRENT_FILE_COMMAND_RULE: FrontmatterMatchRule = {
+	key: 'obar_session_id',
+	matchMode: 'key-exists',
+};
+
 export const DEFAULT_PROJECT_ROUTING_SETTINGS: ProjectRoutingSettings = {
+	currentFileCommand: {
+		limitToMatchingFiles: false,
+		matchRules: [cloneMatchRule(DEFAULT_PROJECT_ROUTING_CURRENT_FILE_COMMAND_RULE)],
+	},
 	enabled: false,
 	projectRule: cloneMatchRule(DEFAULT_PROJECT_ROUTING_PROJECT_RULE),
+	recognizeFilenameMatchesFolderAsProject: false,
 	routableFileRules: [cloneMatchRule(DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE)],
 	autoMoveWhenSingleCandidate: true,
 	showStatusBar: true,
@@ -25,13 +40,25 @@ export function createDefaultRoutableFileRule(): FrontmatterMatchRule {
 	return cloneMatchRule(DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE);
 }
 
+export function createDefaultCurrentFileCommandRule(): FrontmatterMatchRule {
+	return cloneMatchRule(DEFAULT_PROJECT_ROUTING_CURRENT_FILE_COMMAND_RULE);
+}
+
 export function normalizeProjectRoutingSettings(
 	settings: Partial<ProjectRoutingSettings> | null | undefined,
 ): ProjectRoutingSettings {
 	return {
+		currentFileCommand: normalizeCurrentFileCommandSettings(settings?.currentFileCommand),
 		enabled: normalizeBoolean(settings?.enabled, DEFAULT_PROJECT_ROUTING_SETTINGS.enabled),
 		projectRule: normalizeRequiredMatchRule(settings?.projectRule, DEFAULT_PROJECT_ROUTING_PROJECT_RULE),
-		routableFileRules: normalizeOptionalMatchRules(settings?.routableFileRules),
+		recognizeFilenameMatchesFolderAsProject: normalizeBoolean(
+			settings?.recognizeFilenameMatchesFolderAsProject,
+			DEFAULT_PROJECT_ROUTING_SETTINGS.recognizeFilenameMatchesFolderAsProject,
+		),
+		routableFileRules: normalizeOptionalMatchRules(
+			settings?.routableFileRules,
+			DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE,
+		),
 		autoMoveWhenSingleCandidate: normalizeBoolean(
 			settings?.autoMoveWhenSingleCandidate,
 			DEFAULT_PROJECT_ROUTING_SETTINGS.autoMoveWhenSingleCandidate,
@@ -50,6 +77,21 @@ export function normalizeFrontmatterMatchMode(
 	fallback: FrontmatterMatchMode = 'key-exists',
 ): FrontmatterMatchMode {
 	return value === 'key-value-equals' || value === 'key-exists' ? value : fallback;
+}
+
+function normalizeCurrentFileCommandSettings(
+	settings: Partial<CurrentFileCommandSettings> | null | undefined,
+): CurrentFileCommandSettings {
+	return {
+		limitToMatchingFiles: normalizeBoolean(
+			settings?.limitToMatchingFiles,
+			DEFAULT_PROJECT_ROUTING_SETTINGS.currentFileCommand.limitToMatchingFiles,
+		),
+		matchRules: normalizeOptionalMatchRules(
+			settings?.matchRules,
+			DEFAULT_PROJECT_ROUTING_CURRENT_FILE_COMMAND_RULE,
+		),
+	};
 }
 
 function normalizeRequiredMatchRule(
@@ -72,19 +114,19 @@ function normalizeRequiredMatchRule(
 	};
 }
 
-function normalizeOptionalMatchRules(value: unknown): FrontmatterMatchRule[] {
+function normalizeOptionalMatchRules(value: unknown, fallbackRule: FrontmatterMatchRule): FrontmatterMatchRule[] {
 	if (!Array.isArray(value)) {
-		return [cloneMatchRule(DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE)];
+		return [cloneMatchRule(fallbackRule)];
 	}
 
 	const normalizedRules = value
-		.map((rule) => normalizeOptionalMatchRule(rule))
+		.map((rule) => normalizeOptionalMatchRule(rule, fallbackRule))
 		.filter((rule): rule is FrontmatterMatchRule => rule !== null);
 
 	return normalizedRules;
 }
 
-function normalizeOptionalMatchRule(value: unknown): FrontmatterMatchRule | null {
+function normalizeOptionalMatchRule(value: unknown, fallbackRule: FrontmatterMatchRule): FrontmatterMatchRule | null {
 	if (!isObjectRecord(value)) {
 		return null;
 	}
@@ -94,7 +136,7 @@ function normalizeOptionalMatchRule(value: unknown): FrontmatterMatchRule | null
 		return null;
 	}
 
-	const matchMode = normalizeFrontmatterMatchMode(value.matchMode, DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE.matchMode);
+	const matchMode = normalizeFrontmatterMatchMode(value.matchMode, fallbackRule.matchMode);
 	if (matchMode === 'key-value-equals') {
 		return {
 			key,

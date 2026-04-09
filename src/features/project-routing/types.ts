@@ -8,9 +8,16 @@ export interface FrontmatterMatchRule {
 	value?: string;
 }
 
+export interface CurrentFileCommandSettings {
+	limitToMatchingFiles: boolean;
+	matchRules: FrontmatterMatchRule[];
+}
+
 export interface ProjectRoutingSettings {
+	currentFileCommand: CurrentFileCommandSettings;
 	enabled: boolean;
 	projectRule: FrontmatterMatchRule;
+	recognizeFilenameMatchesFolderAsProject: boolean;
 	routableFileRules: FrontmatterMatchRule[];
 	autoMoveWhenSingleCandidate: boolean;
 	showStatusBar: boolean;

@@ -79,6 +79,8 @@ export interface SettingsLocalization {
 	projectRoutingDebugLogDesc: string;
 	projectRoutingProjectRuleHeading: string;
 	projectRoutingProjectRuleDesc: string;
+	projectRoutingRecognizeFilenameMatchesFolderNameName: string;
+	projectRoutingRecognizeFilenameMatchesFolderNameDesc: string;
 	projectRoutingRuleKeyName: string;
 	projectRoutingRuleKeyDesc: string;
 	projectRoutingRuleKeyPlaceholder: string;
@@ -99,6 +101,20 @@ export interface SettingsLocalization {
 	projectRoutingRemoveRuleName: string;
 	projectRoutingRemoveRuleDesc: string;
 	projectRoutingRemoveRuleButton: string;
+	projectRoutingCurrentFileCommandHeading: string;
+	projectRoutingCurrentFileCommandDesc: string;
+	projectRoutingCurrentFileCommandLimitName: string;
+	projectRoutingCurrentFileCommandLimitDesc: string;
+	projectRoutingCurrentFileCommandRulesHeading: string;
+	projectRoutingCurrentFileCommandRulesDesc: string;
+	projectRoutingCurrentFileCommandRuleLabel: (index: number) => string;
+	projectRoutingCurrentFileCommandNoRules: string;
+	projectRoutingCurrentFileCommandAddRuleName: string;
+	projectRoutingCurrentFileCommandAddRuleDesc: string;
+	projectRoutingCurrentFileCommandAddRuleButton: string;
+	projectRoutingCurrentFileCommandRemoveRuleName: string;
+	projectRoutingCurrentFileCommandRemoveRuleDesc: string;
+	projectRoutingCurrentFileCommandRemoveRuleButton: string;
 	sameFolderNoteHeading: string;
 	enableSameFolderNoteName: string;
 	enableSameFolderNoteDesc: string;
@@ -184,6 +200,8 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectRoutingDebugLogDesc: 'Write detailed project-routing diagnostics to the developer console.',
 	projectRoutingProjectRuleHeading: 'Project file rule',
 	projectRoutingProjectRuleDesc: 'Open files whose frontmatter matches this rule are treated as project files.',
+	projectRoutingRecognizeFilenameMatchesFolderNameName: 'Also recognize file name = folder name',
+	projectRoutingRecognizeFilenameMatchesFolderNameDesc: 'When enabled, an open markdown file is also treated as a project file if its file name exactly matches its parent folder name. This is combined with the frontmatter rule above.',
 	projectRoutingRuleKeyName: 'Frontmatter key',
 	projectRoutingRuleKeyDesc: 'Frontmatter key used by this rule.',
 	projectRoutingRuleKeyPlaceholder: 'Enter a frontmatter key',
@@ -204,6 +222,20 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectRoutingRemoveRuleName: 'Remove this rule',
 	projectRoutingRemoveRuleDesc: 'Delete this routable rule from the list.',
 	projectRoutingRemoveRuleButton: 'Remove rule',
+	projectRoutingCurrentFileCommandHeading: 'Move current file command',
+	projectRoutingCurrentFileCommandDesc: 'This command moves the active markdown file into a selected open project folder.',
+	projectRoutingCurrentFileCommandLimitName: 'Require command rule match',
+	projectRoutingCurrentFileCommandLimitDesc: 'When enabled, the command only moves files whose frontmatter matches one of the rules below. Leave this off to allow any markdown file.',
+	projectRoutingCurrentFileCommandRulesHeading: 'Move current file rules',
+	projectRoutingCurrentFileCommandRulesDesc: 'These rules are independent from the new-file routing rules and apply only to the move-current-file command.',
+	projectRoutingCurrentFileCommandRuleLabel: (index) => `Current-file rule ${index}`,
+	projectRoutingCurrentFileCommandNoRules: 'No current-file command rules are configured.',
+	projectRoutingCurrentFileCommandAddRuleName: 'Add current-file rule',
+	projectRoutingCurrentFileCommandAddRuleDesc: 'Append another frontmatter rule for the move-current-file command.',
+	projectRoutingCurrentFileCommandAddRuleButton: 'Add rule',
+	projectRoutingCurrentFileCommandRemoveRuleName: 'Remove this current-file rule',
+	projectRoutingCurrentFileCommandRemoveRuleDesc: 'Delete this move-current-file command rule from the list.',
+	projectRoutingCurrentFileCommandRemoveRuleButton: 'Remove rule',
 	sameFolderNoteHeading: 'Create note in same folder',
 	enableSameFolderNoteName: 'Enable same-folder note command',
 	enableSameFolderNoteDesc: 'Add a file context-menu command that creates a new markdown note next to the selected file.',
@@ -289,6 +321,8 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectRoutingDebugLogDesc: '将项目归档路由的详细调试信息输出到开发者控制台。',
 	projectRoutingProjectRuleHeading: '项目文件规则',
 	projectRoutingProjectRuleDesc: '已打开文件中，frontmatter 命中这条规则的文件会被视为项目文件。',
+	projectRoutingRecognizeFilenameMatchesFolderNameName: '同时识别“文件名等于目录名”',
+	projectRoutingRecognizeFilenameMatchesFolderNameDesc: '开启后，如果某个已打开 Markdown 文件的文件名与其所在目录名完全一致，也会被视为项目文件。这条规则会与上面的 frontmatter 规则取并集。',
 	projectRoutingRuleKeyName: 'Frontmatter 键名',
 	projectRoutingRuleKeyDesc: '这条规则要匹配的 frontmatter 键名。',
 	projectRoutingRuleKeyPlaceholder: '输入 frontmatter 键名',
@@ -309,6 +343,20 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectRoutingRemoveRuleName: '删除这条规则',
 	projectRoutingRemoveRuleDesc: '从列表中移除这条待移动文件规则。',
 	projectRoutingRemoveRuleButton: '删除规则',
+	projectRoutingCurrentFileCommandHeading: '移动当前文件命令',
+	projectRoutingCurrentFileCommandDesc: '这个命令会把当前活动的 Markdown 文件移动到你选择的已打开项目目录中。',
+	projectRoutingCurrentFileCommandLimitName: '要求命中命令规则',
+	projectRoutingCurrentFileCommandLimitDesc: '开启后，只有 frontmatter 命中下面任一规则的文件才能执行该命令；关闭时默认允许任意 Markdown 文件移动。',
+	projectRoutingCurrentFileCommandRulesHeading: '移动当前文件规则',
+	projectRoutingCurrentFileCommandRulesDesc: '这组规则与“新建文件归档规则”完全独立，只作用于“移动当前文件”命令。',
+	projectRoutingCurrentFileCommandRuleLabel: (index) => `当前文件规则 ${index}`,
+	projectRoutingCurrentFileCommandNoRules: '当前没有配置“移动当前文件”命令的规则。',
+	projectRoutingCurrentFileCommandAddRuleName: '添加当前文件规则',
+	projectRoutingCurrentFileCommandAddRuleDesc: '再添加一条只用于“移动当前文件”命令的 frontmatter 规则。',
+	projectRoutingCurrentFileCommandAddRuleButton: '添加规则',
+	projectRoutingCurrentFileCommandRemoveRuleName: '删除这条当前文件规则',
+	projectRoutingCurrentFileCommandRemoveRuleDesc: '从列表中移除这条“移动当前文件”命令规则。',
+	projectRoutingCurrentFileCommandRemoveRuleButton: '删除规则',
 	sameFolderNoteHeading: '同目录新建笔记',
 	enableSameFolderNoteName: '启用同目录新建命令',
 	enableSameFolderNoteDesc: '在文件右键菜单中增加一个命令，用来在所选文件同目录下新建 Markdown 笔记。',

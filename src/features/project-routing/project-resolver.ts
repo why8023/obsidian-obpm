@@ -2,6 +2,10 @@ import {App, TFile, WorkspaceLeaf} from 'obsidian';
 import {matchesFrontmatterRule} from './matcher';
 import {CurrentProjectResolution, FrontmatterMatchRule, ProjectCandidate} from './types';
 
+interface ProjectFileRecognitionOptions {
+	recognizeFilenameMatchesFolderAsProject: boolean;
+}
+
 interface CandidateOptions {
 	excludePath?: string;
 }
@@ -9,6 +13,7 @@ interface CandidateOptions {
 export function getOpenProjectCandidates(
 	app: App,
 	projectRule: FrontmatterMatchRule,
+	projectFileRecognition: ProjectFileRecognitionOptions,
 	options: CandidateOptions = {},
 ): ProjectCandidate[] {
 	const candidatesByPath = new Map<string, ProjectCandidate>();
@@ -23,8 +28,7 @@ export function getOpenProjectCandidates(
 			return;
 		}
 
-		const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
-		if (!matchesFrontmatterRule(frontmatter, projectRule)) {
+		if (!isProjectFile(app, file, projectRule, projectFileRecognition)) {
 			return;
 		}
 
@@ -38,13 +42,13 @@ export function resolveCurrentProject(
 	app: App,
 	activeFile: TFile | null,
 	projectRule: FrontmatterMatchRule,
+	projectFileRecognition: ProjectFileRecognitionOptions,
 ): CurrentProjectResolution {
 	if (!(activeFile instanceof TFile) || activeFile.extension !== 'md') {
 		return {kind: 'none'};
 	}
 
-	const activeFrontmatter = app.metadataCache.getFileCache(activeFile)?.frontmatter;
-	if (matchesFrontmatterRule(activeFrontmatter, projectRule)) {
+	if (isProjectFile(app, activeFile, projectRule, projectFileRecognition)) {
 		return {
 			kind: 'project',
 			candidate: toProjectCandidate(activeFile),
@@ -52,7 +56,7 @@ export function resolveCurrentProject(
 	}
 
 	const activeFolderPath = activeFile.parent?.path ?? '';
-	const folderMatches = getOpenProjectCandidates(app, projectRule)
+	const folderMatches = getOpenProjectCandidates(app, projectRule, projectFileRecognition)
 		.filter((candidate) => candidate.folderPath === activeFolderPath);
 	const onlyFolderMatch = folderMatches[0];
 
@@ -71,6 +75,25 @@ export function resolveCurrentProject(
 	}
 
 	return {kind: 'none'};
+}
+
+function isProjectFile(
+	app: App,
+	file: TFile,
+	projectRule: FrontmatterMatchRule,
+	projectFileRecognition: ProjectFileRecognitionOptions,
+): boolean {
+	const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
+	if (matchesFrontmatterRule(frontmatter, projectRule)) {
+		return true;
+	}
+
+	return projectFileRecognition.recognizeFilenameMatchesFolderAsProject && hasMatchingFolderAndFileName(file);
+}
+
+function hasMatchingFolderAndFileName(file: TFile): boolean {
+	const folderName = file.parent?.name?.trim() ?? '';
+	return folderName.length > 0 && file.basename === folderName;
 }
 
 function compareProjectCandidates(left: ProjectCandidate, right: ProjectCandidate): number {

@@ -28,6 +28,10 @@ export class ProjectRoutingStatusBar {
 			this.plugin.app,
 			this.plugin.app.workspace.getActiveFile(),
 			this.plugin.settings.projectRouting.projectRule,
+			{
+				recognizeFilenameMatchesFolderAsProject:
+					this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject,
+			},
 		);
 
 		switch (resolution.kind) {
