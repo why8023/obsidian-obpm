@@ -66,6 +66,39 @@ export interface SettingsLocalization {
 	maxFileNameLengthName: string;
 	maxFileNameLengthDesc: (min: number, max: number, defaultValue: number) => string;
 	maxFileNameLengthNotice: (min: number, max: number) => string;
+	projectRoutingHeading: string;
+	projectRoutingEnableName: string;
+	projectRoutingEnableDesc: string;
+	projectRoutingAutoMoveName: string;
+	projectRoutingAutoMoveDesc: string;
+	projectRoutingShowStatusBarName: string;
+	projectRoutingShowStatusBarDesc: string;
+	projectRoutingShowNoticeName: string;
+	projectRoutingShowNoticeDesc: string;
+	projectRoutingDebugLogName: string;
+	projectRoutingDebugLogDesc: string;
+	projectRoutingProjectRuleHeading: string;
+	projectRoutingProjectRuleDesc: string;
+	projectRoutingRuleKeyName: string;
+	projectRoutingRuleKeyDesc: string;
+	projectRoutingRuleKeyPlaceholder: string;
+	projectRoutingRuleMatchModeName: string;
+	projectRoutingRuleMatchModeDesc: string;
+	projectRoutingMatchModeKeyExistsLabel: string;
+	projectRoutingMatchModeKeyValueEqualsLabel: string;
+	projectRoutingRuleValueName: string;
+	projectRoutingRuleValueDesc: string;
+	projectRoutingRuleValuePlaceholder: string;
+	projectRoutingRoutableRulesHeading: string;
+	projectRoutingRoutableRulesDesc: string;
+	projectRoutingRoutableRuleLabel: (index: number) => string;
+	projectRoutingNoRoutableRules: string;
+	projectRoutingAddRuleName: string;
+	projectRoutingAddRuleDesc: string;
+	projectRoutingAddRuleButton: string;
+	projectRoutingRemoveRuleName: string;
+	projectRoutingRemoveRuleDesc: string;
+	projectRoutingRemoveRuleButton: string;
 	sameFolderNoteHeading: string;
 	enableSameFolderNoteName: string;
 	enableSameFolderNoteDesc: string;
@@ -138,6 +171,39 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	maxFileNameLengthName: 'Maximum file name length',
 	maxFileNameLengthDesc: (min, max, defaultValue) => `Limit the markdown file basename to ${min}-${max} characters. Default: ${defaultValue}.`,
 	maxFileNameLengthNotice: (min, max) => `Maximum file name length must be between ${min} and ${max}.`,
+	projectRoutingHeading: 'Project routing',
+	projectRoutingEnableName: 'Enable project routing',
+	projectRoutingEnableDesc: 'Wait for new markdown files to finish frontmatter parsing, then move matching files into the selected open project folder.',
+	projectRoutingAutoMoveName: 'Auto move when there is one candidate',
+	projectRoutingAutoMoveDesc: 'Move directly when exactly one open project matches. Turn this off to confirm even the single candidate.',
+	projectRoutingShowStatusBarName: 'Show current project in the status bar',
+	projectRoutingShowStatusBarDesc: 'Display the current file\'s associated project based on the open project files.',
+	projectRoutingShowNoticeName: 'Show notice after move',
+	projectRoutingShowNoticeDesc: 'Show a notice after a new file is moved into a project folder.',
+	projectRoutingDebugLogName: 'Debug log',
+	projectRoutingDebugLogDesc: 'Write detailed project-routing diagnostics to the developer console.',
+	projectRoutingProjectRuleHeading: 'Project file rule',
+	projectRoutingProjectRuleDesc: 'Open files whose frontmatter matches this rule are treated as project files.',
+	projectRoutingRuleKeyName: 'Frontmatter key',
+	projectRoutingRuleKeyDesc: 'Frontmatter key used by this rule.',
+	projectRoutingRuleKeyPlaceholder: 'Enter a frontmatter key',
+	projectRoutingRuleMatchModeName: 'Match mode',
+	projectRoutingRuleMatchModeDesc: 'Match by key existence or by an exact key/value pair.',
+	projectRoutingMatchModeKeyExistsLabel: 'Key exists',
+	projectRoutingMatchModeKeyValueEqualsLabel: 'Key equals value',
+	projectRoutingRuleValueName: 'Frontmatter value',
+	projectRoutingRuleValueDesc: 'Used only when the match mode is set to key equals value.',
+	projectRoutingRuleValuePlaceholder: 'Enter a frontmatter value',
+	projectRoutingRoutableRulesHeading: 'Routable file rules',
+	projectRoutingRoutableRulesDesc: 'Newly created markdown files are routed only when their frontmatter matches one of these rules.',
+	projectRoutingRoutableRuleLabel: (index) => `Routable rule ${index}`,
+	projectRoutingNoRoutableRules: 'No routable file rules are configured. New files will not be moved.',
+	projectRoutingAddRuleName: 'Add routable rule',
+	projectRoutingAddRuleDesc: 'Append another frontmatter rule for files that should enter the routing flow.',
+	projectRoutingAddRuleButton: 'Add rule',
+	projectRoutingRemoveRuleName: 'Remove this rule',
+	projectRoutingRemoveRuleDesc: 'Delete this routable rule from the list.',
+	projectRoutingRemoveRuleButton: 'Remove rule',
 	sameFolderNoteHeading: 'Create note in same folder',
 	enableSameFolderNoteName: 'Enable same-folder note command',
 	enableSameFolderNoteDesc: 'Add a file context-menu command that creates a new markdown note next to the selected file.',
@@ -210,6 +276,39 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	maxFileNameLengthName: '文件名最大长度',
 	maxFileNameLengthDesc: (min, max, defaultValue) => `将 Markdown 文件名限制在 ${min}-${max} 个字符之间。默认值：${defaultValue}。`,
 	maxFileNameLengthNotice: (min, max) => `文件名最大长度必须在 ${min} 到 ${max} 之间。`,
+	projectRoutingHeading: '项目归档路由',
+	projectRoutingEnableName: '启用项目归档路由',
+	projectRoutingEnableDesc: '等待新建 Markdown 文件完成 frontmatter 解析后，将命中规则的文件移动到所选的已打开项目目录。',
+	projectRoutingAutoMoveName: '单候选项目时自动移动',
+	projectRoutingAutoMoveDesc: '当且仅当只有一个已打开项目候选时，直接移动；关闭后即使只有一个候选也会先弹窗确认。',
+	projectRoutingShowStatusBarName: '在状态栏显示当前项目',
+	projectRoutingShowStatusBarDesc: '根据当前活动文件和已打开项目文件，在状态栏显示当前所属项目。',
+	projectRoutingShowNoticeName: '移动后显示提示',
+	projectRoutingShowNoticeDesc: '当新建文件被移动到项目目录后显示提示消息。',
+	projectRoutingDebugLogName: '调试日志',
+	projectRoutingDebugLogDesc: '将项目归档路由的详细调试信息输出到开发者控制台。',
+	projectRoutingProjectRuleHeading: '项目文件规则',
+	projectRoutingProjectRuleDesc: '已打开文件中，frontmatter 命中这条规则的文件会被视为项目文件。',
+	projectRoutingRuleKeyName: 'Frontmatter 键名',
+	projectRoutingRuleKeyDesc: '这条规则要匹配的 frontmatter 键名。',
+	projectRoutingRuleKeyPlaceholder: '输入 frontmatter 键名',
+	projectRoutingRuleMatchModeName: '匹配方式',
+	projectRoutingRuleMatchModeDesc: '选择只匹配键是否存在，或匹配精确的键值对。',
+	projectRoutingMatchModeKeyExistsLabel: '键存在',
+	projectRoutingMatchModeKeyValueEqualsLabel: '键值相等',
+	projectRoutingRuleValueName: 'Frontmatter 值',
+	projectRoutingRuleValueDesc: '仅当匹配方式为键值相等时使用。',
+	projectRoutingRuleValuePlaceholder: '输入 frontmatter 值',
+	projectRoutingRoutableRulesHeading: '待移动文件规则',
+	projectRoutingRoutableRulesDesc: '只有新建 Markdown 文件的 frontmatter 命中以下任一规则时，才会进入项目归档流程。',
+	projectRoutingRoutableRuleLabel: (index) => `待移动规则 ${index}`,
+	projectRoutingNoRoutableRules: '当前没有配置待移动文件规则，新建文件不会被自动移动。',
+	projectRoutingAddRuleName: '添加待移动规则',
+	projectRoutingAddRuleDesc: '再添加一条用于识别待移动文件的 frontmatter 规则。',
+	projectRoutingAddRuleButton: '添加规则',
+	projectRoutingRemoveRuleName: '删除这条规则',
+	projectRoutingRemoveRuleDesc: '从列表中移除这条待移动文件规则。',
+	projectRoutingRemoveRuleButton: '删除规则',
 	sameFolderNoteHeading: '同目录新建笔记',
 	enableSameFolderNoteName: '启用同目录新建命令',
 	enableSameFolderNoteDesc: '在文件右键菜单中增加一个命令，用来在所选文件同目录下新建 Markdown 笔记。',

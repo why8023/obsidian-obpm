@@ -7,6 +7,13 @@ import {
 	normalizeFileNameMaxLength,
 	normalizeInvalidCharacterReplacement,
 } from './features/file-name-sync/file-name-sync-utils';
+import {
+	createDefaultRoutableFileRule,
+	DEFAULT_PROJECT_ROUTING_PROJECT_RULE,
+	normalizeFrontmatterMatchMode,
+	normalizeProjectRoutingSettings,
+} from './features/project-routing/settings';
+import {ProjectRoutingSettings} from './features/project-routing/types';
 import {RefreshableFeatureId} from './save-settings-options';
 import {getSettingsLocalization} from './settings-localization';
 
@@ -95,6 +102,7 @@ export interface OBPMPluginSettings {
 	basesTopTabs: BasesTopTabsSettings;
 	relatedLinks: RelatedLinksSettings;
 	fileNameSync: FileNameSyncSettings;
+	projectRouting: ProjectRoutingSettings;
 	sameFolderNote: SameFolderNoteSettings;
 }
 
@@ -135,6 +143,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		invalidCharacterReplacement: '_',
 		maxFileNameLength: DEFAULT_FILE_NAME_MAX_LENGTH,
 	},
+	projectRouting: normalizeProjectRoutingSettings(undefined),
 	sameFolderNote: {
 		enabled: false,
 	},
@@ -205,6 +214,7 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 				DEFAULT_SETTINGS.fileNameSync.maxFileNameLength,
 			),
 		},
+		projectRouting: normalizeProjectRoutingSettings(settings?.projectRouting),
 		sameFolderNote: {
 			enabled: normalizeBoolean(settings?.sameFolderNote?.enabled, DEFAULT_SETTINGS.sameFolderNote.enabled),
 		},
@@ -394,6 +404,232 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		await this.plugin.saveSettings({
 			refreshFeatures: features.length > 0 ? features : false,
 		});
+	}
+
+	private renderProjectRoutingSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveProjectRoutingSettings = async () => this.saveSettingsFor('projectRouting');
+		const saveWithoutRefresh = async () => this.saveSettingsFor();
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingEnableName)
+			.setDesc(strings.projectRoutingEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.projectRouting.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.projectRouting.enabled = value;
+					await saveProjectRoutingSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingAutoMoveName)
+			.setDesc(strings.projectRoutingAutoMoveDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.projectRouting.autoMoveWhenSingleCandidate)
+				.onChange(async (value) => {
+					this.plugin.settings.projectRouting.autoMoveWhenSingleCandidate = value;
+					await saveProjectRoutingSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingShowStatusBarName)
+			.setDesc(strings.projectRoutingShowStatusBarDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.projectRouting.showStatusBar)
+				.onChange(async (value) => {
+					this.plugin.settings.projectRouting.showStatusBar = value;
+					await saveProjectRoutingSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingShowNoticeName)
+			.setDesc(strings.projectRoutingShowNoticeDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.projectRouting.showNoticeAfterMove)
+				.onChange(async (value) => {
+					this.plugin.settings.projectRouting.showNoticeAfterMove = value;
+					await saveProjectRoutingSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingDebugLogName)
+			.setDesc(strings.projectRoutingDebugLogDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.projectRouting.debugLog)
+				.onChange(async (value) => {
+					this.plugin.settings.projectRouting.debugLog = value;
+					await saveWithoutRefresh();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingProjectRuleHeading)
+			.setDesc(strings.projectRoutingProjectRuleDesc)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingRuleKeyName)
+			.setDesc(strings.projectRoutingRuleKeyDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.projectRoutingRuleKeyPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.projectRouting.projectRule.key,
+					normalize: (value) => value.trim() || DEFAULT_PROJECT_ROUTING_PROJECT_RULE.key,
+					onCommit: (value) => {
+						this.plugin.settings.projectRouting.projectRule.key = value;
+					},
+					refreshFeatures: ['projectRouting'],
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingRuleMatchModeName)
+			.setDesc(strings.projectRoutingRuleMatchModeDesc)
+			.addDropdown((dropdown) => dropdown
+				.addOption('key-exists', strings.projectRoutingMatchModeKeyExistsLabel)
+				.addOption('key-value-equals', strings.projectRoutingMatchModeKeyValueEqualsLabel)
+				.setValue(this.plugin.settings.projectRouting.projectRule.matchMode)
+				.onChange(async (value) => {
+					const nextMatchMode = normalizeFrontmatterMatchMode(
+						value,
+						this.plugin.settings.projectRouting.projectRule.matchMode,
+					);
+					this.plugin.settings.projectRouting.projectRule.matchMode = nextMatchMode;
+					if (nextMatchMode === 'key-value-equals' && !this.plugin.settings.projectRouting.projectRule.value) {
+						this.plugin.settings.projectRouting.projectRule.value = DEFAULT_PROJECT_ROUTING_PROJECT_RULE.value ?? '';
+					}
+
+					await saveProjectRoutingSettings();
+					this.display();
+				}));
+
+		if (this.plugin.settings.projectRouting.projectRule.matchMode === 'key-value-equals') {
+			new Setting(containerEl)
+				.setName(strings.projectRoutingRuleValueName)
+				.setDesc(strings.projectRoutingRuleValueDesc)
+				.addText((text) => {
+					text.setPlaceholder(strings.projectRoutingRuleValuePlaceholder);
+					return this.bindCommittedTextSetting(text, {
+						initialValue: this.plugin.settings.projectRouting.projectRule.value ?? '',
+						normalize: (value) => value.trim() || (DEFAULT_PROJECT_ROUTING_PROJECT_RULE.value ?? ''),
+						onCommit: (value) => {
+							this.plugin.settings.projectRouting.projectRule.value = value;
+						},
+						refreshFeatures: ['projectRouting'],
+					});
+				});
+		}
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingRoutableRulesHeading)
+			.setDesc(strings.projectRoutingRoutableRulesDesc)
+			.setHeading();
+
+		if (this.plugin.settings.projectRouting.routableFileRules.length === 0) {
+			containerEl.createEl('p', {
+				cls: 'setting-item-description',
+				text: strings.projectRoutingNoRoutableRules,
+			});
+		}
+
+		this.plugin.settings.projectRouting.routableFileRules.forEach((rule, index) => {
+			new Setting(containerEl)
+				.setName(strings.projectRoutingRoutableRuleLabel(index + 1))
+				.setHeading();
+
+			new Setting(containerEl)
+				.setName(strings.projectRoutingRuleKeyName)
+				.setDesc(strings.projectRoutingRuleKeyDesc)
+				.addText((text) => {
+					text.setPlaceholder(strings.projectRoutingRuleKeyPlaceholder);
+					return this.bindCommittedTextSetting(text, {
+						initialValue: rule.key,
+						normalize: (value) => value.trim() || rule.key,
+						onCommit: (value) => {
+							const currentRule = this.plugin.settings.projectRouting.routableFileRules[index] ?? rule;
+							this.plugin.settings.projectRouting.routableFileRules[index] = {
+								...currentRule,
+								key: value,
+							};
+						},
+						refreshFeatures: ['projectRouting'],
+					});
+				});
+
+			new Setting(containerEl)
+				.setName(strings.projectRoutingRuleMatchModeName)
+				.setDesc(strings.projectRoutingRuleMatchModeDesc)
+				.addDropdown((dropdown) => dropdown
+					.addOption('key-exists', strings.projectRoutingMatchModeKeyExistsLabel)
+					.addOption('key-value-equals', strings.projectRoutingMatchModeKeyValueEqualsLabel)
+					.setValue(rule.matchMode)
+					.onChange(async (value) => {
+						const nextMatchMode = normalizeFrontmatterMatchMode(value, rule.matchMode);
+						this.plugin.settings.projectRouting.routableFileRules[index] = nextMatchMode === 'key-value-equals'
+							? {
+								...rule,
+								matchMode: nextMatchMode,
+								value: rule.value ?? '',
+							}
+							: {
+								key: rule.key,
+								matchMode: nextMatchMode,
+							};
+
+						await saveProjectRoutingSettings();
+						this.display();
+					}));
+
+			if (rule.matchMode === 'key-value-equals') {
+				new Setting(containerEl)
+					.setName(strings.projectRoutingRuleValueName)
+					.setDesc(strings.projectRoutingRuleValueDesc)
+					.addText((text) => {
+						text.setPlaceholder(strings.projectRoutingRuleValuePlaceholder);
+						return this.bindCommittedTextSetting(text, {
+							initialValue: rule.value ?? '',
+							normalize: (value) => value.trim(),
+							onCommit: (value) => {
+								const currentRule = this.plugin.settings.projectRouting.routableFileRules[index] ?? rule;
+								this.plugin.settings.projectRouting.routableFileRules[index] = {
+									...currentRule,
+									value,
+								};
+							},
+							refreshFeatures: ['projectRouting'],
+						});
+					});
+			}
+
+			new Setting(containerEl)
+				.setName(strings.projectRoutingRemoveRuleName)
+				.setDesc(strings.projectRoutingRemoveRuleDesc)
+				.addButton((button) => button
+					.setWarning()
+					.setButtonText(strings.projectRoutingRemoveRuleButton)
+					.onClick(async () => {
+						this.plugin.settings.projectRouting.routableFileRules.splice(index, 1);
+						await saveProjectRoutingSettings();
+						this.display();
+					}));
+		});
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingAddRuleName)
+			.setDesc(strings.projectRoutingAddRuleDesc)
+			.addButton((button) => button
+				.setButtonText(strings.projectRoutingAddRuleButton)
+				.onClick(async () => {
+					this.plugin.settings.projectRouting.routableFileRules = [
+						...this.plugin.settings.projectRouting.routableFileRules,
+						createDefaultRoutableFileRule(),
+					];
+					await saveProjectRoutingSettings();
+					this.display();
+				}));
 	}
 
 	display(): void {
@@ -761,6 +997,8 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 				return text;
 			});
+
+		this.renderProjectRoutingSettingsSection(containerEl);
 
 		new Setting(containerEl)
 			.setName(strings.sameFolderNoteHeading)

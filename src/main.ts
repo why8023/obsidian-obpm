@@ -3,6 +3,7 @@ import {BasesFileRevealFeature} from './features/bases-file-reveal/bases-file-re
 import {BasesGroupFoldFeature} from './features/bases-group-fold/bases-group-fold-feature';
 import {BasesTopTabsFeature} from './features/bases-top-tabs/bases-top-tabs-feature';
 import {FileNameSyncFeature} from './features/file-name-sync/file-name-sync-feature';
+import {ProjectRoutingFeature} from './features/project-routing/project-routing-feature';
 import {RelatedLinksFeature} from './features/related-links/related-links-feature';
 import {SameFolderNoteFeature} from './features/same-folder-note/same-folder-note-feature';
 import {normalizeRelatedLinksState} from './features/related-links/related-links-state-store';
@@ -21,6 +22,7 @@ export default class OBPMPlugin extends Plugin {
 	private basesGroupFoldFeature: BasesGroupFoldFeature | null = null;
 	private basesTopTabsFeature: BasesTopTabsFeature | null = null;
 	private fileNameSyncFeature: FileNameSyncFeature | null = null;
+	private projectRoutingFeature: ProjectRoutingFeature | null = null;
 	private relatedLinksFeature: RelatedLinksFeature | null = null;
 
 	async onload() {
@@ -36,6 +38,8 @@ export default class OBPMPlugin extends Plugin {
 		this.addChild(this.relatedLinksFeature);
 		this.fileNameSyncFeature = new FileNameSyncFeature(this);
 		this.addChild(this.fileNameSyncFeature);
+		this.projectRoutingFeature = new ProjectRoutingFeature(this);
+		this.addChild(this.projectRoutingFeature);
 		this.addChild(new SameFolderNoteFeature(this));
 
 		this.addCommand({
@@ -126,6 +130,11 @@ export default class OBPMPlugin extends Plugin {
 				case 'fileNameSync':
 					if (this.fileNameSyncFeature) {
 						refreshTasks.push(this.fileNameSyncFeature.refresh());
+					}
+					break;
+				case 'projectRouting':
+					if (this.projectRoutingFeature) {
+						refreshTasks.push(this.projectRoutingFeature.refresh());
 					}
 					break;
 			}
