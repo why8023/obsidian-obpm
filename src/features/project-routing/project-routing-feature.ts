@@ -10,6 +10,7 @@ import {ProjectCandidate} from './types';
 
 const FEATURE_ID = 'project-routing';
 const MAX_PENDING_FILE_AGE_MS = 120000;
+const STARTUP_ROUTING_ACTIVATION_DELAY_MS = 1500;
 
 interface MoveFileToProjectFolderOptions {
 	alreadyInTargetNotice?: ((projectName: string) => string) | null;
@@ -47,6 +48,8 @@ export class ProjectRoutingFeature extends Component {
 	}, 100, true);
 	private readonly statusBar: ProjectRoutingStatusBar;
 	private flushTimer: number | null = null;
+	private routingActivationTimer: number | null = null;
+	private routingEventListenersRegistered = false;
 	private workQueue = Promise.resolve();
 
 	constructor(private readonly plugin: OBPMPlugin) {
@@ -72,22 +75,6 @@ export class ProjectRoutingFeature extends Component {
 			},
 		});
 
-		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
-			this.handleFileCreated(file);
-		}));
-
-		this.registerEvent(this.plugin.app.metadataCache.on('changed', (file) => {
-			this.handleMetadataChanged(file);
-		}));
-
-		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
-			this.handleFileRenamed(file, oldPath);
-		}));
-
-		this.registerEvent(this.plugin.app.vault.on('delete', (file) => {
-			this.handleFileDeleted(file);
-		}));
-
 		this.registerEvent(this.plugin.app.workspace.on('active-leaf-change', () => {
 			this.requestStatusBarRefresh();
 		}));
@@ -101,11 +88,13 @@ export class ProjectRoutingFeature extends Component {
 		}));
 
 		this.plugin.app.workspace.onLayoutReady(() => {
+			this.scheduleRoutingEventRegistration();
 			void this.refresh();
 		});
 	}
 
 	onunload() {
+		this.clearRoutingActivationTimer();
 		this.requestStatusBarRefresh.cancel();
 		this.clearFlushTimer();
 		this.pendingQueue.clear();
@@ -157,6 +146,15 @@ export class ProjectRoutingFeature extends Component {
 		this.flushTimer = null;
 	}
 
+	private clearRoutingActivationTimer(): void {
+		if (this.routingActivationTimer === null) {
+			return;
+		}
+
+		window.clearTimeout(this.routingActivationTimer);
+		this.routingActivationTimer = null;
+	}
+
 	private debugLog(message: string, details?: unknown): void {
 		this.plugin.debugFeatureLog(FEATURE_ID, this.plugin.settings.projectRouting.debugLog, message, details);
 	}
@@ -164,6 +162,33 @@ export class ProjectRoutingFeature extends Component {
 	private enqueue(task: () => Promise<void>): Promise<void> {
 		this.workQueue = this.workQueue.then(task, task);
 		return this.workQueue;
+	}
+
+	private ensureRoutingEventListenersRegistered(): void {
+		if (this.routingEventListenersRegistered) {
+			return;
+		}
+
+		this.routingEventListenersRegistered = true;
+		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
+			this.handleFileCreated(file);
+		}));
+
+		this.registerEvent(this.plugin.app.metadataCache.on('changed', (file) => {
+			this.handleMetadataChanged(file);
+		}));
+
+		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
+			this.handleFileRenamed(file, oldPath);
+		}));
+
+		this.registerEvent(this.plugin.app.vault.on('delete', (file) => {
+			this.handleFileDeleted(file);
+		}));
+
+		this.debugLog('Registered project-routing vault listeners after startup stabilization.', {
+			delayMs: STARTUP_ROUTING_ACTIVATION_DELAY_MS,
+		});
 	}
 
 	private async flushPendingWork(): Promise<void> {
@@ -470,6 +495,18 @@ export class ProjectRoutingFeature extends Component {
 			this.flushTimer = null;
 			void this.flushPendingWork();
 		}, delayMs);
+	}
+
+	private scheduleRoutingEventRegistration(): void {
+		if (this.routingEventListenersRegistered) {
+			return;
+		}
+
+		this.clearRoutingActivationTimer();
+		this.routingActivationTimer = window.setTimeout(() => {
+			this.routingActivationTimer = null;
+			this.ensureRoutingEventListenersRegistered();
+		}, STARTUP_ROUTING_ACTIVATION_DELAY_MS);
 	}
 
 	private scheduleNextFlush(): void {
