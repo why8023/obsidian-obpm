@@ -1,13 +1,13 @@
 import {FrontmatterMatchMode, FrontmatterMatchRule, ProjectRoutingSettings} from './types';
 
 export const DEFAULT_PROJECT_ROUTING_PROJECT_RULE: FrontmatterMatchRule = {
-	key: 'type',
+	key: 'obpm_type',
 	matchMode: 'key-value-equals',
 	value: 'project',
 };
 
 export const DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE: FrontmatterMatchRule = {
-	key: 'obar_session',
+	key: 'obar_session_id',
 	matchMode: 'key-exists',
 };
 
