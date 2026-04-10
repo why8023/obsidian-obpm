@@ -25,6 +25,9 @@ const DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS = 8;
 const MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS = 50;
 const MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS = 0;
 const DEFAULT_RELATED_LINKS_INBOX_HEADING = 'Inbox';
+const DEFAULT_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 5;
+const MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 30;
+const MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 0;
 
 interface CommittedTextSettingControl {
 	inputEl: HTMLInputElement;
@@ -60,6 +63,7 @@ export interface RelatedLinksSettings {
 	relationProperty: string;
 	displayProperty: string;
 	inboxHeading: string;
+	missingLinkGracePeriodSeconds: number;
 	verboseLogging: boolean;
 }
 
@@ -152,6 +156,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		relationProperty: 'obpm_related',
 		displayProperty: 'obpm_title',
 		inboxHeading: DEFAULT_RELATED_LINKS_INBOX_HEADING,
+		missingLinkGracePeriodSeconds: DEFAULT_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
 		verboseLogging: false,
 	},
 	fileNameSync: {
@@ -217,6 +222,10 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 				settings?.relatedLinks?.inboxHeading,
 				DEFAULT_SETTINGS.relatedLinks.inboxHeading,
 			),
+			missingLinkGracePeriodSeconds: normalizeRelatedLinksMissingLinkGracePeriodSeconds(
+				settings?.relatedLinks?.missingLinkGracePeriodSeconds,
+				DEFAULT_SETTINGS.relatedLinks.missingLinkGracePeriodSeconds,
+			),
 			verboseLogging: normalizeBoolean(settings?.relatedLinks?.verboseLogging, DEFAULT_SETTINGS.relatedLinks.verboseLogging),
 		},
 		fileNameSync: {
@@ -268,6 +277,29 @@ function normalizeBasesTopTabsMaxVisibleTabs(value: unknown, fallback: number): 
 		const parsedValue = Number.parseInt(value, 10);
 		if (Number.isInteger(parsedValue)) {
 			return clamp(parsedValue, MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS, MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS);
+		}
+	}
+
+	return fallback;
+}
+
+function normalizeRelatedLinksMissingLinkGracePeriodSeconds(value: unknown, fallback: number): number {
+	if (typeof value === 'number' && Number.isInteger(value)) {
+		return clamp(
+			value,
+			MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+			MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+		);
+	}
+
+	if (typeof value === 'string' && value.trim().length > 0) {
+		const parsedValue = Number.parseInt(value, 10);
+		if (Number.isInteger(parsedValue)) {
+			return clamp(
+				parsedValue,
+				MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+				MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+			);
 		}
 	}
 
@@ -997,6 +1029,44 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					},
 					refreshFeatures: ['relatedLinks'],
 				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.missingLinkGracePeriodName)
+			.setDesc(strings.missingLinkGracePeriodDesc(
+				MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+				MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+				DEFAULT_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+			))
+			.addText((text) => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = String(MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS);
+				text.inputEl.max = String(MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS);
+				text.inputEl.step = '1';
+				text.setValue(this.plugin.settings.relatedLinks.missingLinkGracePeriodSeconds.toString());
+
+				const applyValue = async () => {
+					const normalizedValue = normalizeRelatedLinksMissingLinkGracePeriodSeconds(
+						text.inputEl.value,
+						DEFAULT_SETTINGS.relatedLinks.missingLinkGracePeriodSeconds,
+					);
+					this.plugin.settings.relatedLinks.missingLinkGracePeriodSeconds = normalizedValue;
+					await saveRelatedLinksSettings();
+
+					if (text.inputEl.value !== normalizedValue.toString()) {
+						text.setValue(normalizedValue.toString());
+						new Notice(strings.missingLinkGracePeriodNotice(
+							MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+							MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+						));
+					}
+				};
+
+				text.inputEl.addEventListener('change', () => {
+					void applyValue();
+				});
+
+				return text;
 			});
 
 		new Setting(containerEl)

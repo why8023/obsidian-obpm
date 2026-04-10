@@ -8,13 +8,15 @@ interface TargetSyncOptions {
 	inboxHeading: string;
 	resolveManagedSourcePath: (link: ManagedInlineLink, targetFile: TFile) => string | null;
 	resolveSourceFile: (sourcePath: string) => TFile | null;
+	shouldDeferMissingLinkInsertion?: (link: DesiredTargetLink, targetFile: TFile) => boolean;
 	shouldDeferDestinationRewrite?: (targetFilePath: string, actualDestination: string, canonicalDestination: string) => boolean;
 	targetFile: TFile;
 }
 
 interface TargetSyncResult {
 	content: string;
-	presentManagedSourcePaths: Set<string>;
+	deferredMissingSourcePaths: Set<string>;
+	satisfiedDesiredSourcePaths: Set<string>;
 }
 
 interface MarkdownHeading {
@@ -29,19 +31,39 @@ interface SectionRange {
 	end: number;
 }
 
+interface ManagedLinkSyncResolution {
+	canonicalDestination: string | null;
+	desiredLink: DesiredTargetLink | null;
+	isInInboxSection: boolean;
+	managedLink: ManagedInlineLink;
+	sourceFile: TFile | null;
+	sourcePath: string | null;
+}
+
 const DEFAULT_INBOX_HEADING = 'Inbox';
 const HEADING_LINE_PATTERN = /^(?: {0,3})(#{1,6})[ \t]+(.*)$/gm;
 
 export function syncManagedLinksInContent(content: string, options: TargetSyncOptions): TargetSyncResult {
-	const presentManagedSourcePaths = new Set<string>();
+	const satisfiedDesiredSourcePaths = new Set<string>();
+	const deferredMissingSourcePaths = new Set<string>();
 	const managedLinks = extractManagedInlineLinks(content);
+	const normalizedInboxHeading = normalizeInboxHeading(options.inboxHeading);
+	const headings = parseMarkdownHeadings(content);
+	const inboxSection = findExistingInboxSection(content, headings, normalizedInboxHeading);
+	const managedLinkResolutions = managedLinks.map((managedLink) => resolveManagedLinkSyncResolution(
+		managedLink,
+		inboxSection,
+		options,
+	));
+	const preferredManagedLinksBySourcePath = buildPreferredManagedLinksBySourcePath(managedLinkResolutions);
 	let nextContent = '';
 	let lastIndex = 0;
 	let hasRemovedLinks = false;
 	let hasUpdatedLinks = false;
 
-	for (const managedLink of managedLinks) {
-		const sourcePath = options.resolveManagedSourcePath(managedLink, options.targetFile);
+	for (const managedLinkResolution of managedLinkResolutions) {
+		const {managedLink} = managedLinkResolution;
+		const sourcePath = managedLinkResolution.sourcePath;
 		if (!sourcePath) {
 			const removalRange = getManagedLinkRemovalRange(content, managedLink);
 			nextContent += content.slice(lastIndex, removalRange.start);
@@ -54,7 +76,7 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 			continue;
 		}
 
-		const desiredLink = options.desiredLinks.get(sourcePath);
+		const desiredLink = managedLinkResolution.desiredLink;
 		if (!desiredLink) {
 			const removalRange = getManagedLinkRemovalRange(content, managedLink);
 			nextContent += content.slice(lastIndex, removalRange.start);
@@ -67,19 +89,24 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 			continue;
 		}
 
-		if (presentManagedSourcePaths.has(sourcePath)) {
+		if (preferredManagedLinksBySourcePath.get(sourcePath) !== managedLinkResolution) {
 			const removalRange = getManagedLinkRemovalRange(content, managedLink);
 			nextContent += content.slice(lastIndex, removalRange.start);
 			lastIndex = removalRange.end;
 			hasRemovedLinks = true;
-			options.debugLog?.('Removed duplicate managed link while keeping the first occurrence.', {
-				sourcePath,
-				targetPath: options.targetFile.path,
-			});
+			options.debugLog?.(
+				managedLinkResolution.isInInboxSection
+					? 'Removed duplicate managed link while preferring a non-Inbox occurrence.'
+					: 'Removed duplicate managed link while keeping the preferred occurrence.',
+				{
+					sourcePath,
+					targetPath: options.targetFile.path,
+				},
+			);
 			continue;
 		}
 
-		const sourceFile = options.resolveSourceFile(sourcePath);
+		const sourceFile = managedLinkResolution.sourceFile;
 		if (!sourceFile) {
 			const removalRange = getManagedLinkRemovalRange(content, managedLink);
 			nextContent += content.slice(lastIndex, removalRange.start);
@@ -92,8 +119,8 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 			continue;
 		}
 
-		presentManagedSourcePaths.add(sourcePath);
-		const canonicalDestination = buildRelativeMarkdownDestination(sourceFile, options.targetFile);
+		satisfiedDesiredSourcePaths.add(sourcePath);
+		const canonicalDestination = managedLinkResolution.canonicalDestination ?? buildRelativeMarkdownDestination(sourceFile, options.targetFile);
 		if (options.shouldDeferDestinationRewrite?.(
 			options.targetFile.path,
 			managedLink.destination,
@@ -134,7 +161,7 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 	nextContent += managedLinks.length > 0 ? content.slice(lastIndex) : content;
 
 	const missingLinks = [...options.desiredLinks.values()]
-		.filter((link) => !presentManagedSourcePaths.has(link.sourcePath))
+		.filter((link) => !satisfiedDesiredSourcePaths.has(link.sourcePath))
 		.sort((left, right) => {
 			const displayComparison = left.displayText.localeCompare(right.displayText);
 			if (displayComparison !== 0) {
@@ -156,6 +183,16 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 			continue;
 		}
 
+		if (options.shouldDeferMissingLinkInsertion?.(missingLink, options.targetFile)) {
+			deferredMissingSourcePaths.add(missingLink.sourcePath);
+			options.debugLog?.('Deferred missing managed link while its grace period is still active.', {
+				inboxHeading: normalizedInboxHeading,
+				sourcePath: missingLink.sourcePath,
+				targetPath: options.targetFile.path,
+			});
+			continue;
+		}
+
 		const destination = buildRelativeMarkdownDestination(sourceFile, options.targetFile);
 		const linkLine = buildManagedMarkdownListItem(missingLink.displayText, destination);
 		finalContent = insertLinkLineIntoInboxSection(
@@ -163,10 +200,11 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 			linkLine,
 			options.inboxHeading,
 		);
+		satisfiedDesiredSourcePaths.add(missingLink.sourcePath);
 		options.debugLog?.('Appended missing managed link.', {
 			destination,
 			displayText: missingLink.displayText,
-			inboxHeading: normalizeInboxHeading(options.inboxHeading),
+			inboxHeading: normalizedInboxHeading,
 			sourcePath: missingLink.sourcePath,
 			targetPath: options.targetFile.path,
 		});
@@ -174,8 +212,73 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 
 	return {
 		content: finalContent,
-		presentManagedSourcePaths,
+		deferredMissingSourcePaths,
+		satisfiedDesiredSourcePaths,
 	};
+}
+
+function resolveManagedLinkSyncResolution(
+	managedLink: ManagedInlineLink,
+	inboxSection: SectionRange | null,
+	options: TargetSyncOptions,
+): ManagedLinkSyncResolution {
+	const sourcePath = options.resolveManagedSourcePath(managedLink, options.targetFile);
+	if (!sourcePath) {
+		return {
+			canonicalDestination: null,
+			desiredLink: null,
+			isInInboxSection: isManagedLinkInSection(managedLink, inboxSection),
+			managedLink,
+			sourceFile: null,
+			sourcePath: null,
+		};
+	}
+
+	const desiredLink = options.desiredLinks.get(sourcePath) ?? null;
+	const sourceFile = options.resolveSourceFile(sourcePath);
+
+	return {
+		canonicalDestination: sourceFile ? buildRelativeMarkdownDestination(sourceFile, options.targetFile) : null,
+		desiredLink,
+		isInInboxSection: isManagedLinkInSection(managedLink, inboxSection),
+		managedLink,
+		sourceFile,
+		sourcePath,
+	};
+}
+
+function buildPreferredManagedLinksBySourcePath(
+	managedLinkResolutions: ManagedLinkSyncResolution[],
+): Map<string, ManagedLinkSyncResolution> {
+	const preferredManagedLinksBySourcePath = new Map<string, ManagedLinkSyncResolution>();
+
+	for (const managedLinkResolution of managedLinkResolutions) {
+		if (
+			managedLinkResolution.sourcePath === null
+			|| managedLinkResolution.desiredLink === null
+			|| managedLinkResolution.sourceFile === null
+		) {
+			continue;
+		}
+
+		const currentPreferred = preferredManagedLinksBySourcePath.get(managedLinkResolution.sourcePath);
+		if (!currentPreferred || shouldPreferManagedLinkResolution(managedLinkResolution, currentPreferred)) {
+			preferredManagedLinksBySourcePath.set(managedLinkResolution.sourcePath, managedLinkResolution);
+		}
+	}
+
+	return preferredManagedLinksBySourcePath;
+}
+
+function shouldPreferManagedLinkResolution(
+	candidate: ManagedLinkSyncResolution,
+	currentPreferred: ManagedLinkSyncResolution,
+): boolean {
+	if (candidate.isInInboxSection !== currentPreferred.isInInboxSection) {
+		return !candidate.isInInboxSection;
+	}
+
+	return candidate.managedLink.start < currentPreferred.managedLink.start;
 }
 
 function buildManagedMarkdownListItem(displayText: string, destination: string): string {
@@ -212,6 +315,10 @@ function appendListLineToSection(sectionContent: string, linkLine: string): stri
 	return endsWithListItem(trimmedSectionContent)
 		? `${trimmedSectionContent}\n${linkLine}\n`
 		: `${trimmedSectionContent}\n\n${linkLine}\n`;
+}
+
+function isManagedLinkInSection(link: ManagedInlineLink, section: SectionRange | null): boolean {
+	return section !== null && link.start >= section.contentStart && link.start < section.end;
 }
 
 function endsWithListItem(content: string): boolean {

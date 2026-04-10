@@ -51,6 +51,9 @@ export interface SettingsLocalization {
 	inboxHeadingName: string;
 	inboxHeadingDesc: string;
 	inboxHeadingPlaceholder: string;
+	missingLinkGracePeriodName: string;
+	missingLinkGracePeriodDesc: (min: number, max: number, defaultValue: number) => string;
+	missingLinkGracePeriodNotice: (min: number, max: number) => string;
 	verboseLoggingName: string;
 	verboseLoggingDesc: string;
 	fileNameSyncHeading: string;
@@ -172,6 +175,10 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	inboxHeadingName: 'Inbox heading',
 	inboxHeadingDesc: 'Missing related links are inserted as list items under the first matching level-2 heading.',
 	inboxHeadingPlaceholder: 'Enter Inbox heading',
+	missingLinkGracePeriodName: 'Missing-link grace period',
+	missingLinkGracePeriodDesc: (min, max, defaultValue) =>
+		`Wait this many seconds before restoring a missing managed link. Range: ${min}-${max}. Default: ${defaultValue}.`,
+	missingLinkGracePeriodNotice: (min, max) => `Missing-link grace period must be between ${min} and ${max} seconds.`,
 	verboseLoggingName: 'Verbose logging',
 	verboseLoggingDesc: 'Write detailed related-links synchronization logs to the developer console.',
 	fileNameSyncHeading: 'File names from property',
@@ -293,6 +300,10 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	inboxHeadingName: 'Inbox 标题',
 	inboxHeadingDesc: '缺失的关联链接会以列表项形式插入到第一个匹配的二级标题下。',
 	inboxHeadingPlaceholder: '输入 Inbox 标题',
+	missingLinkGracePeriodName: '缺失链接宽限期',
+	missingLinkGracePeriodDesc: (min, max, defaultValue) =>
+		`当托管链接暂时消失时，等待这么多秒后再自动补回。范围：${min}-${max}。默认值：${defaultValue}。`,
+	missingLinkGracePeriodNotice: (min, max) => `缺失链接宽限期必须在 ${min} 到 ${max} 秒之间。`,
 	verboseLoggingName: '详细日志',
 	verboseLoggingDesc: '将关联链接同步的详细日志输出到开发者控制台。',
 	fileNameSyncHeading: '根据属性同步文件名',

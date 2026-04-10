@@ -41,10 +41,12 @@ interface VaultConfigReader {
 const DEFAULT_FLUSH_DELAY_MS = 300;
 
 export class RelatedLinksFeature extends Component {
+	private readonly missingLinkGraceDeadlineByTargetPath = new Map<string, Map<string, number>>();
 	private readonly pendingChangedFiles = new Map<string, PendingFileChange>();
 	private readonly pendingCreatedFiles = new Map<string, TFile>();
 	private readonly pendingDeletedFiles = new Map<string, PendingDeletedFile>();
 	private readonly pendingFollowUpTargetPaths = new Set<string>();
+	private readonly pendingGraceExpiredTargetPaths = new Set<string>();
 	private readonly pendingRenamedFiles = new Map<string, PendingRenamedFile>();
 	private readonly pendingOwnWrites = new Map<string, string>();
 	private readonly pendingObsidianRenameTargetPaths = new Set<string>();
@@ -54,6 +56,7 @@ export class RelatedLinksFeature extends Component {
 	private flushTimer: number | null = null;
 	private fullSyncQueued = false;
 	private hasInitialized = false;
+	private missingLinkGraceTimer: number | null = null;
 	private workQueue = Promise.resolve();
 
 	constructor(private readonly plugin: OBPMPlugin) {
@@ -91,6 +94,10 @@ export class RelatedLinksFeature extends Component {
 		if (this.flushTimer !== null) {
 			window.clearTimeout(this.flushTimer);
 		}
+
+		if (this.missingLinkGraceTimer !== null) {
+			window.clearTimeout(this.missingLinkGraceTimer);
+		}
 	}
 
 	async refresh(): Promise<void> {
@@ -98,6 +105,7 @@ export class RelatedLinksFeature extends Component {
 		this.pendingCreatedFiles.clear();
 		this.pendingDeletedFiles.clear();
 		this.pendingFollowUpTargetPaths.clear();
+		this.pendingGraceExpiredTargetPaths.clear();
 		this.pendingRenamedFiles.clear();
 		this.pendingObsidianRenameTargetPaths.clear();
 		this.fullSyncQueued = false;
@@ -107,9 +115,11 @@ export class RelatedLinksFeature extends Component {
 		if (!this.isEnabled()) {
 			this.pendingOwnWrites.clear();
 			this.pendingFollowUpTargetPaths.clear();
+			this.pendingGraceExpiredTargetPaths.clear();
 			this.pendingObsidianRenameTargetPaths.clear();
 			this.renamedSourcePaths.clear();
 			this.sourceContributionsByPath.clear();
+			this.clearAllMissingLinkGraceState();
 			this.hasInitialized = false;
 			this.plugin.debugLog('Refresh skipped because related links are disabled.');
 			return;
@@ -185,6 +195,7 @@ export class RelatedLinksFeature extends Component {
 			return;
 		}
 
+		this.clearMissingLinkGraceForTargetPath(file.path);
 		this.pendingDeletedFiles.set(file.path, {file, prevCache});
 		this.plugin.debugLog('Queued file deletion.', {
 			filePath: file.path,
@@ -198,6 +209,7 @@ export class RelatedLinksFeature extends Component {
 			return;
 		}
 
+		this.moveMissingLinkGraceTargetPath(oldPath, file.path);
 		const wasManagedTarget = this.isTrackedManagedTarget(oldPath);
 		const deferToObsidianLinkUpdates = this.shouldDeferToObsidianLinkUpdates();
 		if (deferToObsidianLinkUpdates) {
@@ -234,6 +246,7 @@ export class RelatedLinksFeature extends Component {
 			this.pendingCreatedFiles.clear();
 			this.pendingDeletedFiles.clear();
 			this.pendingFollowUpTargetPaths.clear();
+			this.pendingGraceExpiredTargetPaths.clear();
 			this.pendingRenamedFiles.clear();
 			this.pendingObsidianRenameTargetPaths.clear();
 			this.fullSyncQueued = false;
@@ -245,11 +258,13 @@ export class RelatedLinksFeature extends Component {
 		const pendingCreatedFiles = [...this.pendingCreatedFiles.values()];
 		const pendingDeletedFiles = [...this.pendingDeletedFiles.values()];
 		const pendingFollowUpTargetPaths = [...this.pendingFollowUpTargetPaths];
+		const pendingGraceExpiredTargetPaths = [...this.pendingGraceExpiredTargetPaths];
 		const pendingRenamedFiles = [...this.pendingRenamedFiles.values()];
 		this.pendingChangedFiles.clear();
 		this.pendingCreatedFiles.clear();
 		this.pendingDeletedFiles.clear();
 		this.pendingFollowUpTargetPaths.clear();
+		this.pendingGraceExpiredTargetPaths.clear();
 		this.pendingRenamedFiles.clear();
 		const externalChanges: PendingFileChange[] = [];
 
@@ -258,6 +273,7 @@ export class RelatedLinksFeature extends Component {
 			|| pendingCreatedFiles.length > 0
 			|| pendingDeletedFiles.length > 0
 			|| pendingFollowUpTargetPaths.length > 0
+			|| pendingGraceExpiredTargetPaths.length > 0
 			|| pendingRenamedFiles.length > 0;
 		for (const change of pendingChanges) {
 			if (!this.shouldIgnoreOwnWrite(change)) {
@@ -277,6 +293,7 @@ export class RelatedLinksFeature extends Component {
 			deletedFileCount: pendingDeletedFiles.length,
 			externalChangeCount: externalChanges.length,
 			followUpTargetCount: pendingFollowUpTargetPaths.length,
+			graceExpiredTargetCount: pendingGraceExpiredTargetPaths.length,
 			fullSyncQueued: this.fullSyncQueued,
 			hasInitialized: this.hasInitialized,
 			pendingChangeCount: pendingChanges.length,
@@ -293,6 +310,7 @@ export class RelatedLinksFeature extends Component {
 			createdFiles: pendingCreatedFiles,
 			deletedFiles: pendingDeletedFiles,
 			followUpTargetPaths: pendingFollowUpTargetPaths,
+			graceExpiredTargetPaths: pendingGraceExpiredTargetPaths,
 			renamedFiles: pendingRenamedFiles,
 		}, {notifyOnError: shouldNotifyOnError});
 	}
@@ -339,6 +357,7 @@ export class RelatedLinksFeature extends Component {
 		createdFiles: TFile[];
 		deletedFiles: PendingDeletedFile[];
 		followUpTargetPaths: string[];
+		graceExpiredTargetPaths: string[];
 		renamedFiles: PendingRenamedFile[];
 	}, options: FullSyncOptions = {}): Promise<void> {
 		if (
@@ -346,6 +365,7 @@ export class RelatedLinksFeature extends Component {
 			&& work.createdFiles.length === 0
 			&& work.deletedFiles.length === 0
 			&& work.followUpTargetPaths.length === 0
+			&& work.graceExpiredTargetPaths.length === 0
 			&& work.renamedFiles.length === 0
 		) {
 			this.plugin.debugLog('Incremental sync skipped because there was no queued incremental work.');
@@ -357,6 +377,7 @@ export class RelatedLinksFeature extends Component {
 			createCount: work.createdFiles.length,
 			deleteCount: work.deletedFiles.length,
 			followUpTargetCount: work.followUpTargetPaths.length,
+			graceExpiredTargetCount: work.graceExpiredTargetPaths.length,
 			notifyOnError: options.notifyOnError ?? true,
 			renameCount: work.renamedFiles.length,
 		});
@@ -375,9 +396,13 @@ export class RelatedLinksFeature extends Component {
 		createdFiles: TFile[];
 		deletedFiles: PendingDeletedFile[];
 		followUpTargetPaths: string[];
+		graceExpiredTargetPaths: string[];
 		renamedFiles: PendingRenamedFile[];
 	}) {
-		const affectedTargetPaths = new Set<string>(work.followUpTargetPaths);
+		const affectedTargetPaths = new Set<string>([
+			...work.followUpTargetPaths,
+			...work.graceExpiredTargetPaths,
+		]);
 		const sourcePathsToRefresh = new Set<string>();
 		const handledChangedPaths = new Set<string>();
 		const changedFilePaths = new Set(work.changedFiles.map((change) => change.file.path));
@@ -534,6 +559,7 @@ export class RelatedLinksFeature extends Component {
 		for (const targetPath of [...affectedTargetPaths].sort((left, right) => left.localeCompare(right))) {
 			const targetFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
 			if (!(targetFile instanceof TFile)) {
+				this.clearMissingLinkGraceForTargetPath(targetPath);
 				this.plugin.debugLog('Skipped incremental target sync because target file no longer exists.', {
 					targetPath,
 				});
@@ -547,7 +573,7 @@ export class RelatedLinksFeature extends Component {
 	}
 
 	private async syncTargetFile(targetFile: TFile, desiredLinks: Map<string, DesiredTargetLink>) {
-		const currentContent = await this.plugin.app.vault.cachedRead(targetFile);
+		const currentContent = await this.plugin.app.vault.read(targetFile);
 		this.plugin.debugLog('Syncing target file.', {
 			desiredLinkCount: desiredLinks.size,
 			targetPath: targetFile.path,
@@ -563,11 +589,18 @@ export class RelatedLinksFeature extends Component {
 				const sourceFile = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
 				return sourceFile instanceof TFile ? sourceFile : null;
 			},
+			shouldDeferMissingLinkInsertion: (link, currentTargetFile) =>
+				this.shouldDeferMissingLinkInsertion(currentTargetFile.path, link.sourcePath),
 			shouldDeferDestinationRewrite: (targetFilePath, actualDestination, canonicalDestination) =>
 				this.shouldDeferManagedRenameRewrite(targetFilePath, actualDestination, canonicalDestination),
 			targetFile,
 		});
 
+		this.reconcileMissingLinkGraceState(
+			targetFile.path,
+			desiredLinks,
+			processedContent.satisfiedDesiredSourcePaths,
+		);
 		await this.writeFileIfChanged(targetFile, currentContent, processedContent.content);
 	}
 
@@ -743,6 +776,202 @@ export class RelatedLinksFeature extends Component {
 		}
 
 		return false;
+	}
+
+	private shouldDeferMissingLinkInsertion(targetPath: string, sourcePath: string): boolean {
+		const gracePeriodMs = this.getMissingLinkGracePeriodMs();
+		if (gracePeriodMs <= 0) {
+			this.clearMissingLinkGraceEntry(targetPath, sourcePath);
+			return false;
+		}
+
+		const targetGraceDeadlines = this.getOrCreateMissingLinkGraceDeadlines(targetPath);
+		const now = Date.now();
+		const cappedExpiry = now + gracePeriodMs;
+		const existingExpiry = targetGraceDeadlines.get(sourcePath);
+		if (existingExpiry !== undefined) {
+			const nextExpiry = Math.min(existingExpiry, cappedExpiry);
+			targetGraceDeadlines.set(sourcePath, nextExpiry);
+			this.scheduleMissingLinkGraceTimer();
+
+			if (nextExpiry <= now) {
+				this.plugin.debugLog('Missing managed link grace period already expired.', {
+					expiresAt: nextExpiry,
+					sourcePath,
+					targetPath,
+				});
+				return false;
+			}
+
+			this.plugin.debugLog('Deferred missing managed link while grace period is active.', {
+				expiresAt: nextExpiry,
+				sourcePath,
+				targetPath,
+			});
+			return true;
+		}
+
+		const expiresAt = cappedExpiry;
+		targetGraceDeadlines.set(sourcePath, expiresAt);
+		this.scheduleMissingLinkGraceTimer();
+		this.plugin.debugLog('Started missing managed link grace period.', {
+			expiresAt,
+			gracePeriodMs,
+			sourcePath,
+			targetPath,
+		});
+		return true;
+	}
+
+	private reconcileMissingLinkGraceState(
+		targetPath: string,
+		desiredLinks: Map<string, DesiredTargetLink>,
+		satisfiedDesiredSourcePaths: Set<string>,
+	) {
+		this.pendingGraceExpiredTargetPaths.delete(targetPath);
+		const targetGraceDeadlines = this.missingLinkGraceDeadlineByTargetPath.get(targetPath);
+		if (!targetGraceDeadlines) {
+			return;
+		}
+
+		const desiredSourcePaths = new Set(desiredLinks.keys());
+		for (const sourcePath of [...targetGraceDeadlines.keys()]) {
+			if (!desiredSourcePaths.has(sourcePath) || satisfiedDesiredSourcePaths.has(sourcePath)) {
+				targetGraceDeadlines.delete(sourcePath);
+			}
+		}
+
+		if (targetGraceDeadlines.size === 0) {
+			this.missingLinkGraceDeadlineByTargetPath.delete(targetPath);
+		}
+
+		this.scheduleMissingLinkGraceTimer();
+	}
+
+	private getMissingLinkGracePeriodMs(): number {
+		return this.plugin.settings.relatedLinks.missingLinkGracePeriodSeconds * 1000;
+	}
+
+	private getOrCreateMissingLinkGraceDeadlines(targetPath: string): Map<string, number> {
+		let targetGraceDeadlines = this.missingLinkGraceDeadlineByTargetPath.get(targetPath);
+		if (!targetGraceDeadlines) {
+			targetGraceDeadlines = new Map<string, number>();
+			this.missingLinkGraceDeadlineByTargetPath.set(targetPath, targetGraceDeadlines);
+		}
+
+		return targetGraceDeadlines;
+	}
+
+	private moveMissingLinkGraceTargetPath(oldPath: string, nextPath: string) {
+		if (oldPath === nextPath) {
+			return;
+		}
+
+		const targetGraceDeadlines = this.missingLinkGraceDeadlineByTargetPath.get(oldPath);
+		if (!targetGraceDeadlines) {
+			return;
+		}
+
+		this.missingLinkGraceDeadlineByTargetPath.delete(oldPath);
+		const nextTargetGraceDeadlines = this.getOrCreateMissingLinkGraceDeadlines(nextPath);
+		for (const [sourcePath, expiresAt] of targetGraceDeadlines.entries()) {
+			nextTargetGraceDeadlines.set(sourcePath, expiresAt);
+		}
+
+		if (this.pendingGraceExpiredTargetPaths.delete(oldPath)) {
+			this.pendingGraceExpiredTargetPaths.add(nextPath);
+		}
+
+		this.scheduleMissingLinkGraceTimer();
+	}
+
+	private clearAllMissingLinkGraceState() {
+		this.missingLinkGraceDeadlineByTargetPath.clear();
+		this.pendingGraceExpiredTargetPaths.clear();
+
+		if (this.missingLinkGraceTimer !== null) {
+			window.clearTimeout(this.missingLinkGraceTimer);
+			this.missingLinkGraceTimer = null;
+		}
+	}
+
+	private clearMissingLinkGraceEntry(targetPath: string, sourcePath: string) {
+		const targetGraceDeadlines = this.missingLinkGraceDeadlineByTargetPath.get(targetPath);
+		if (!targetGraceDeadlines) {
+			return;
+		}
+
+		targetGraceDeadlines.delete(sourcePath);
+		if (targetGraceDeadlines.size === 0) {
+			this.missingLinkGraceDeadlineByTargetPath.delete(targetPath);
+			this.pendingGraceExpiredTargetPaths.delete(targetPath);
+		}
+
+		this.scheduleMissingLinkGraceTimer();
+	}
+
+	private clearMissingLinkGraceForTargetPath(targetPath: string) {
+		if (!this.missingLinkGraceDeadlineByTargetPath.delete(targetPath) && !this.pendingGraceExpiredTargetPaths.has(targetPath)) {
+			return;
+		}
+
+		this.pendingGraceExpiredTargetPaths.delete(targetPath);
+		this.scheduleMissingLinkGraceTimer();
+	}
+
+	private scheduleMissingLinkGraceTimer() {
+		if (this.missingLinkGraceTimer !== null) {
+			window.clearTimeout(this.missingLinkGraceTimer);
+			this.missingLinkGraceTimer = null;
+		}
+
+		let nextExpiry: number | null = null;
+		for (const [targetPath, targetGraceDeadlines] of this.missingLinkGraceDeadlineByTargetPath.entries()) {
+			if (this.pendingGraceExpiredTargetPaths.has(targetPath)) {
+				continue;
+			}
+
+			for (const expiresAt of targetGraceDeadlines.values()) {
+				if (nextExpiry === null || expiresAt < nextExpiry) {
+					nextExpiry = expiresAt;
+				}
+			}
+		}
+
+		if (nextExpiry === null) {
+			return;
+		}
+
+		this.missingLinkGraceTimer = window.setTimeout(() => {
+			this.missingLinkGraceTimer = null;
+			this.queueExpiredMissingLinkGraceTargets();
+		}, Math.max(0, nextExpiry - Date.now()));
+	}
+
+	private queueExpiredMissingLinkGraceTargets() {
+		const now = Date.now();
+		const expiredTargetPaths: string[] = [];
+
+		for (const [targetPath, targetGraceDeadlines] of this.missingLinkGraceDeadlineByTargetPath.entries()) {
+			for (const expiresAt of targetGraceDeadlines.values()) {
+				if (expiresAt > now) {
+					continue;
+				}
+
+				this.pendingGraceExpiredTargetPaths.add(targetPath);
+				expiredTargetPaths.push(targetPath);
+				break;
+			}
+		}
+
+		if (expiredTargetPaths.length > 0) {
+			this.plugin.debugLog('Queued target sync because missing-link grace periods expired.', {
+				targetPaths: expiredTargetPaths,
+			});
+			this.scheduleFlush(0);
+		}
+
+		this.scheduleMissingLinkGraceTimer();
 	}
 
 	private async persistTrackedState() {
