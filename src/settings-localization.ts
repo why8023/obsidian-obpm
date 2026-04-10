@@ -69,6 +69,48 @@ export interface SettingsLocalization {
 	maxFileNameLengthName: string;
 	maxFileNameLengthDesc: (min: number, max: number, defaultValue: number) => string;
 	maxFileNameLengthNotice: (min: number, max: number) => string;
+	frontmatterAutomationHeading: string;
+	frontmatterAutomationEnableName: string;
+	frontmatterAutomationEnableDesc: string;
+	frontmatterAutomationTimeFormatName: string;
+	frontmatterAutomationTimeFormatDesc: string;
+	frontmatterAutomationTimeFormatPlaceholder: string;
+	frontmatterAutomationRulesHeading: string;
+	frontmatterAutomationRulesDesc: string;
+	frontmatterAutomationRuleLabel: (index: number) => string;
+	frontmatterAutomationNoRules: string;
+	frontmatterAutomationAddRuleName: string;
+	frontmatterAutomationAddRuleDesc: string;
+	frontmatterAutomationAddRuleButton: string;
+	frontmatterAutomationRemoveRuleName: string;
+	frontmatterAutomationRemoveRuleDesc: string;
+	frontmatterAutomationRemoveRuleButton: string;
+	frontmatterAutomationRuleEnabledName: string;
+	frontmatterAutomationRuleEnabledDesc: string;
+	frontmatterAutomationTriggerFieldName: string;
+	frontmatterAutomationTriggerFieldDesc: string;
+	frontmatterAutomationTriggerFieldPlaceholder: string;
+	frontmatterAutomationTriggerOperatorName: string;
+	frontmatterAutomationTriggerOperatorDesc: string;
+	frontmatterAutomationTriggerOperatorContainsLabel: string;
+	frontmatterAutomationTriggerOperatorEqualsLabel: string;
+	frontmatterAutomationTriggerValueName: string;
+	frontmatterAutomationTriggerValueDesc: string;
+	frontmatterAutomationTriggerValuePlaceholder: string;
+	frontmatterAutomationActionTypeName: string;
+	frontmatterAutomationActionTypeDesc: string;
+	frontmatterAutomationActionTypeCurrentTimeLabel: string;
+	frontmatterAutomationActionTypeStaticValueLabel: string;
+	frontmatterAutomationTargetFieldName: string;
+	frontmatterAutomationTargetFieldDesc: string;
+	frontmatterAutomationTargetFieldPlaceholder: string;
+	frontmatterAutomationStaticValueName: string;
+	frontmatterAutomationStaticValueDesc: string;
+	frontmatterAutomationStaticValuePlaceholder: string;
+	frontmatterAutomationWriteModeName: string;
+	frontmatterAutomationWriteModeDesc: string;
+	frontmatterAutomationWriteModeAlwaysLabel: string;
+	frontmatterAutomationWriteModeWhenEmptyLabel: string;
 	projectRoutingHeading: string;
 	projectRoutingEnableName: string;
 	projectRoutingEnableDesc: string;
@@ -197,6 +239,48 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	maxFileNameLengthName: 'Maximum file name length',
 	maxFileNameLengthDesc: (min, max, defaultValue) => `Limit the markdown file basename to ${min}-${max} characters. Default: ${defaultValue}.`,
 	maxFileNameLengthNotice: (min, max) => `Maximum file name length must be between ${min} and ${max}.`,
+	frontmatterAutomationHeading: 'Frontmatter automation',
+	frontmatterAutomationEnableName: 'Enable Frontmatter automation',
+	frontmatterAutomationEnableDesc: 'Watch parsed frontmatter changes and update the same file when a rule matches.',
+	frontmatterAutomationTimeFormatName: 'Time format',
+	frontmatterAutomationTimeFormatDesc: 'Format used by the set-current-time action. Supported tokens: YYYY, MM, DD, HH, mm, ss.',
+	frontmatterAutomationTimeFormatPlaceholder: 'YYYY-MM-DDTHH:mm:ss',
+	frontmatterAutomationRulesHeading: 'Automation rules',
+	frontmatterAutomationRulesDesc: 'A rule runs only when its trigger field changes into the configured value.',
+	frontmatterAutomationRuleLabel: (index) => `Automation rule ${index}`,
+	frontmatterAutomationNoRules: 'No frontmatter automation rules are configured.',
+	frontmatterAutomationAddRuleName: 'Add automation rule',
+	frontmatterAutomationAddRuleDesc: 'Append another frontmatter automation rule.',
+	frontmatterAutomationAddRuleButton: 'Add rule',
+	frontmatterAutomationRemoveRuleName: 'Remove automation rule',
+	frontmatterAutomationRemoveRuleDesc: 'Delete this frontmatter automation rule from the list.',
+	frontmatterAutomationRemoveRuleButton: 'Remove rule',
+	frontmatterAutomationRuleEnabledName: 'Rule enabled',
+	frontmatterAutomationRuleEnabledDesc: 'Turn this rule on or off without deleting it.',
+	frontmatterAutomationTriggerFieldName: 'Trigger field',
+	frontmatterAutomationTriggerFieldDesc: 'Frontmatter field that is observed for state changes.',
+	frontmatterAutomationTriggerFieldPlaceholder: 'Enter trigger field',
+	frontmatterAutomationTriggerOperatorName: 'Trigger operator',
+	frontmatterAutomationTriggerOperatorDesc: 'How the trigger field is matched. Contains works well for values like [[done]].',
+	frontmatterAutomationTriggerOperatorContainsLabel: 'Contains',
+	frontmatterAutomationTriggerOperatorEqualsLabel: 'Equals',
+	frontmatterAutomationTriggerValueName: 'Trigger value',
+	frontmatterAutomationTriggerValueDesc: 'The rule runs only when the trigger field changes into this exact value.',
+	frontmatterAutomationTriggerValuePlaceholder: 'Enter trigger value',
+	frontmatterAutomationActionTypeName: 'Action type',
+	frontmatterAutomationActionTypeDesc: 'Choose whether the rule writes the current time or a fixed value.',
+	frontmatterAutomationActionTypeCurrentTimeLabel: 'Set current time',
+	frontmatterAutomationActionTypeStaticValueLabel: 'Set static value',
+	frontmatterAutomationTargetFieldName: 'Target field',
+	frontmatterAutomationTargetFieldDesc: 'Frontmatter field that will be written when the rule triggers.',
+	frontmatterAutomationTargetFieldPlaceholder: 'Enter target field',
+	frontmatterAutomationStaticValueName: 'Static value',
+	frontmatterAutomationStaticValueDesc: 'Value written when the action type is set to static value.',
+	frontmatterAutomationStaticValuePlaceholder: 'Enter static value',
+	frontmatterAutomationWriteModeName: 'Write mode',
+	frontmatterAutomationWriteModeDesc: 'Always overwrite the target field, or only write when it is empty.',
+	frontmatterAutomationWriteModeAlwaysLabel: 'Always',
+	frontmatterAutomationWriteModeWhenEmptyLabel: 'When empty',
 	projectRoutingHeading: 'Project routing',
 	projectRoutingEnableName: 'Enable project routing',
 	projectRoutingEnableDesc: 'Wait for new markdown files to finish frontmatter parsing, then move matching files into the selected open project folder.',
@@ -325,6 +409,48 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	maxFileNameLengthName: '文件名最大长度',
 	maxFileNameLengthDesc: (min, max, defaultValue) => `将 Markdown 文件名限制在 ${min}-${max} 个字符之间。默认值：${defaultValue}。`,
 	maxFileNameLengthNotice: (min, max) => `文件名最大长度必须在 ${min} 到 ${max} 之间。`,
+	frontmatterAutomationHeading: 'Frontmatter 自动联动',
+	frontmatterAutomationEnableName: '启用 Frontmatter 自动联动',
+	frontmatterAutomationEnableDesc: '监听已解析的 frontmatter 变化，并在规则命中时自动回写当前文件。',
+	frontmatterAutomationTimeFormatName: '时间格式',
+	frontmatterAutomationTimeFormatDesc: '用于“写入当前时间”动作。支持的占位符：YYYY、MM、DD、HH、mm、ss。',
+	frontmatterAutomationTimeFormatPlaceholder: 'YYYY-MM-DDTHH:mm:ss',
+	frontmatterAutomationRulesHeading: '自动化规则',
+	frontmatterAutomationRulesDesc: '只有当触发字段变化为指定值时，规则才会执行。',
+	frontmatterAutomationRuleLabel: (index) => `自动化规则 ${index}`,
+	frontmatterAutomationNoRules: '当前没有配置 Frontmatter 自动联动规则。',
+	frontmatterAutomationAddRuleName: '添加自动化规则',
+	frontmatterAutomationAddRuleDesc: '再添加一条 Frontmatter 自动联动规则。',
+	frontmatterAutomationAddRuleButton: '添加规则',
+	frontmatterAutomationRemoveRuleName: '删除自动化规则',
+	frontmatterAutomationRemoveRuleDesc: '从列表中移除这条 Frontmatter 自动联动规则。',
+	frontmatterAutomationRemoveRuleButton: '删除规则',
+	frontmatterAutomationRuleEnabledName: '启用这条规则',
+	frontmatterAutomationRuleEnabledDesc: '无需删除即可临时关闭这条规则。',
+	frontmatterAutomationTriggerFieldName: '触发字段',
+	frontmatterAutomationTriggerFieldDesc: '用于监听状态变化的 frontmatter 字段名。',
+	frontmatterAutomationTriggerFieldPlaceholder: '输入触发字段',
+	frontmatterAutomationTriggerOperatorName: '触发条件',
+	frontmatterAutomationTriggerOperatorDesc: '指定如何匹配触发字段。对于 `[[done]]` 这类值，更适合使用“包含”。',
+	frontmatterAutomationTriggerOperatorContainsLabel: '包含',
+	frontmatterAutomationTriggerOperatorEqualsLabel: '等于',
+	frontmatterAutomationTriggerValueName: '触发值',
+	frontmatterAutomationTriggerValueDesc: '只有当触发字段变化为这个精确值时才执行规则。',
+	frontmatterAutomationTriggerValuePlaceholder: '输入触发值',
+	frontmatterAutomationActionTypeName: '动作类型',
+	frontmatterAutomationActionTypeDesc: '选择写入当前时间，或写入固定值。',
+	frontmatterAutomationActionTypeCurrentTimeLabel: '写入当前时间',
+	frontmatterAutomationActionTypeStaticValueLabel: '写入固定值',
+	frontmatterAutomationTargetFieldName: '目标字段',
+	frontmatterAutomationTargetFieldDesc: '规则命中后要写入的 frontmatter 字段名。',
+	frontmatterAutomationTargetFieldPlaceholder: '输入目标字段',
+	frontmatterAutomationStaticValueName: '固定值',
+	frontmatterAutomationStaticValueDesc: '当动作类型为“写入固定值”时使用。',
+	frontmatterAutomationStaticValuePlaceholder: '输入固定值',
+	frontmatterAutomationWriteModeName: '写入策略',
+	frontmatterAutomationWriteModeDesc: '始终覆盖目标字段，或仅在目标字段为空时写入。',
+	frontmatterAutomationWriteModeAlwaysLabel: '总是写入',
+	frontmatterAutomationWriteModeWhenEmptyLabel: '仅为空时写入',
 	projectRoutingHeading: '项目归档路由',
 	projectRoutingEnableName: '启用项目归档路由',
 	projectRoutingEnableDesc: '等待新建 Markdown 文件完成 frontmatter 解析后，将命中规则的文件移动到所选的已打开项目目录。',

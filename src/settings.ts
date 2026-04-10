@@ -8,6 +8,16 @@ import {
 	normalizeInvalidCharacterReplacement,
 } from './features/file-name-sync/file-name-sync-utils';
 import {
+	createDefaultFrontmatterAutomationRule,
+	normalizeFrontmatterAutomationSettings,
+} from './features/frontmatter-automation/frontmatter-automation-settings';
+import {
+	FrontmatterAutomationActionType,
+	FrontmatterAutomationSettings,
+	FrontmatterAutomationTriggerOperator,
+	FrontmatterAutomationWriteMode,
+} from './features/frontmatter-automation/frontmatter-automation-types';
+import {
 	createDefaultCurrentFileCommandRule,
 	createDefaultRoutableFileRule,
 	DEFAULT_PROJECT_ROUTING_PROJECT_RULE,
@@ -114,6 +124,17 @@ export interface FileNameSyncSettings {
 	maxFileNameLength: number;
 }
 
+interface FrontmatterAutomationRuleListSectionOptions {
+	addRuleButton: string;
+	addRuleDesc: string;
+	addRuleName: string;
+	noRulesText: string;
+	removeRuleButton: string;
+	removeRuleDesc: string;
+	removeRuleName: string;
+	ruleLabel: (index: number) => string;
+}
+
 export interface SameFolderNoteSettings {
 	enabled: boolean;
 }
@@ -124,6 +145,7 @@ export interface OBPMPluginSettings {
 	basesTopTabs: BasesTopTabsSettings;
 	relatedLinks: RelatedLinksSettings;
 	fileNameSync: FileNameSyncSettings;
+	frontmatterAutomation: FrontmatterAutomationSettings;
 	projectRouting: ProjectRoutingSettings;
 	sameFolderNote: SameFolderNoteSettings;
 }
@@ -166,6 +188,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		invalidCharacterReplacement: '_',
 		maxFileNameLength: DEFAULT_FILE_NAME_MAX_LENGTH,
 	},
+	frontmatterAutomation: normalizeFrontmatterAutomationSettings(undefined),
 	projectRouting: normalizeProjectRoutingSettings(undefined),
 	sameFolderNote: {
 		enabled: false,
@@ -241,6 +264,7 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 				DEFAULT_SETTINGS.fileNameSync.maxFileNameLength,
 			),
 		},
+		frontmatterAutomation: normalizeFrontmatterAutomationSettings(settings?.frontmatterAutomation),
 		projectRouting: normalizeProjectRoutingSettings(settings?.projectRouting),
 		sameFolderNote: {
 			enabled: normalizeBoolean(settings?.sameFolderNote?.enabled, DEFAULT_SETTINGS.sameFolderNote.enabled),
@@ -778,6 +802,167 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		});
 	}
 
+	private renderFrontmatterAutomationRuleListSection(
+		containerEl: HTMLElement,
+		options: FrontmatterAutomationRuleListSectionOptions,
+	): void {
+		const strings = getSettingsLocalization();
+		const saveFrontmatterAutomationSettings = async () => this.saveSettingsFor('frontmatterAutomation');
+		const rules = this.plugin.settings.frontmatterAutomation.rules;
+
+		new Setting(containerEl)
+			.setName(strings.frontmatterAutomationRulesHeading)
+			.setDesc(strings.frontmatterAutomationRulesDesc)
+			.setHeading();
+
+		if (rules.length === 0) {
+			containerEl.createEl('p', {
+				cls: 'setting-item-description',
+				text: options.noRulesText,
+			});
+		}
+
+		rules.forEach((rule, index) => {
+			new Setting(containerEl)
+				.setName(options.ruleLabel(index + 1))
+				.setDesc(rule.id)
+				.addExtraButton((button) => button
+					.setIcon('trash')
+					.setTooltip(options.removeRuleButton)
+					.onClick(async () => {
+						this.plugin.settings.frontmatterAutomation.rules =
+							this.plugin.settings.frontmatterAutomation.rules.filter((existingRule) => existingRule.id !== rule.id);
+						await saveFrontmatterAutomationSettings();
+						this.display();
+					}));
+
+			new Setting(containerEl)
+				.setName(strings.frontmatterAutomationRuleEnabledName)
+				.setDesc(strings.frontmatterAutomationRuleEnabledDesc)
+				.addToggle((toggle) => toggle
+					.setValue(rule.enabled)
+					.onChange(async (value) => {
+						rule.enabled = value;
+						await saveFrontmatterAutomationSettings();
+					}));
+
+			new Setting(containerEl)
+				.setName(strings.frontmatterAutomationTriggerFieldName)
+				.setDesc(strings.frontmatterAutomationTriggerFieldDesc)
+				.addText((text) => {
+					text.setPlaceholder(strings.frontmatterAutomationTriggerFieldPlaceholder);
+					return this.bindCommittedTextSetting(text, {
+						initialValue: rule.triggerField,
+						normalize: (value) => value.trim(),
+						onCommit: (value) => {
+							rule.triggerField = value;
+						},
+						refreshFeatures: ['frontmatterAutomation'],
+					});
+				});
+
+			new Setting(containerEl)
+				.setName(strings.frontmatterAutomationTriggerOperatorName)
+				.setDesc(strings.frontmatterAutomationTriggerOperatorDesc)
+				.addDropdown((dropdown) => dropdown
+					.addOption('contains', strings.frontmatterAutomationTriggerOperatorContainsLabel)
+					.addOption('equals', strings.frontmatterAutomationTriggerOperatorEqualsLabel)
+					.setValue(rule.triggerOperator)
+					.onChange(async (value) => {
+						rule.triggerOperator = normalizeFrontmatterAutomationTriggerOperator(value, rule.triggerOperator);
+						await saveFrontmatterAutomationSettings();
+					}));
+
+			new Setting(containerEl)
+				.setName(strings.frontmatterAutomationTriggerValueName)
+				.setDesc(strings.frontmatterAutomationTriggerValueDesc)
+				.addText((text) => {
+					text.setPlaceholder(strings.frontmatterAutomationTriggerValuePlaceholder);
+					return this.bindCommittedTextSetting(text, {
+						initialValue: rule.triggerValue,
+						normalize: (value) => value.trim(),
+						onCommit: (value) => {
+							rule.triggerValue = value;
+						},
+						refreshFeatures: ['frontmatterAutomation'],
+					});
+				});
+
+			new Setting(containerEl)
+				.setName(strings.frontmatterAutomationActionTypeName)
+				.setDesc(strings.frontmatterAutomationActionTypeDesc)
+				.addDropdown((dropdown) => dropdown
+					.addOption('set_current_time', strings.frontmatterAutomationActionTypeCurrentTimeLabel)
+					.addOption('set_static_value', strings.frontmatterAutomationActionTypeStaticValueLabel)
+					.setValue(rule.actionType)
+					.onChange(async (value) => {
+						rule.actionType = normalizeFrontmatterAutomationActionType(value, rule.actionType);
+						await saveFrontmatterAutomationSettings();
+						this.display();
+					}));
+
+			new Setting(containerEl)
+				.setName(strings.frontmatterAutomationTargetFieldName)
+				.setDesc(strings.frontmatterAutomationTargetFieldDesc)
+				.addText((text) => {
+					text.setPlaceholder(strings.frontmatterAutomationTargetFieldPlaceholder);
+					return this.bindCommittedTextSetting(text, {
+						initialValue: rule.targetField,
+						normalize: (value) => value.trim(),
+						onCommit: (value) => {
+							rule.targetField = value;
+						},
+						refreshFeatures: ['frontmatterAutomation'],
+					});
+				});
+
+			if (rule.actionType === 'set_static_value') {
+				new Setting(containerEl)
+					.setName(strings.frontmatterAutomationStaticValueName)
+					.setDesc(strings.frontmatterAutomationStaticValueDesc)
+					.addText((text) => {
+						text.setPlaceholder(strings.frontmatterAutomationStaticValuePlaceholder);
+						return this.bindCommittedTextSetting(text, {
+							initialValue: rule.staticValue ?? '',
+							normalize: (value) => value.trim(),
+							onCommit: (value) => {
+								rule.staticValue = value;
+							},
+							refreshFeatures: ['frontmatterAutomation'],
+						});
+					});
+			}
+
+			new Setting(containerEl)
+				.setName(strings.frontmatterAutomationWriteModeName)
+				.setDesc(strings.frontmatterAutomationWriteModeDesc)
+				.addDropdown((dropdown) => dropdown
+					.addOption('always', strings.frontmatterAutomationWriteModeAlwaysLabel)
+					.addOption('when-empty', strings.frontmatterAutomationWriteModeWhenEmptyLabel)
+					.setValue(rule.writeMode)
+					.onChange(async (value) => {
+						rule.writeMode = normalizeFrontmatterAutomationWriteMode(value, rule.writeMode);
+						await saveFrontmatterAutomationSettings();
+					}));
+		});
+
+		new Setting(containerEl)
+			.setName(options.addRuleName)
+			.setDesc(options.addRuleDesc)
+			.addButton((button) => button
+				.setButtonText(options.addRuleButton)
+				.onClick(async () => {
+					this.plugin.settings.frontmatterAutomation.rules = [
+						...this.plugin.settings.frontmatterAutomation.rules,
+						createDefaultFrontmatterAutomationRule({
+							id: `frontmatter-automation-rule-${Date.now()}`,
+						}),
+					];
+					await saveFrontmatterAutomationSettings();
+					this.display();
+				}));
+	}
+
 	display(): void {
 		const {containerEl} = this;
 		const strings = getSettingsLocalization();
@@ -786,6 +971,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		const saveBasesTopTabsSettings = async () => this.saveSettingsFor('basesTopTabs');
 		const saveRelatedLinksSettings = async () => this.saveSettingsFor('relatedLinks');
 		const saveFileNameSyncSettings = async () => this.saveSettingsFor('fileNameSync');
+		const saveFrontmatterAutomationSettings = async () => this.saveSettingsFor('frontmatterAutomation');
 		const saveWithoutRefresh = async () => this.saveSettingsFor();
 
 		containerEl.empty();
@@ -1182,6 +1368,49 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				return text;
 			});
 
+		new Setting(containerEl)
+			.setName(strings.frontmatterAutomationHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.frontmatterAutomationEnableName)
+			.setDesc(strings.frontmatterAutomationEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.frontmatterAutomation.enableFrontmatterAutomation)
+				.onChange(async (value) => {
+					this.plugin.settings.frontmatterAutomation.enableFrontmatterAutomation = value;
+					await saveFrontmatterAutomationSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.frontmatterAutomationTimeFormatName)
+			.setDesc(strings.frontmatterAutomationTimeFormatDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.frontmatterAutomationTimeFormatPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.frontmatterAutomation.timeFormat,
+					normalize: (value) =>
+						value.trim().length > 0
+							? value.trim()
+							: DEFAULT_SETTINGS.frontmatterAutomation.timeFormat,
+					onCommit: (value) => {
+						this.plugin.settings.frontmatterAutomation.timeFormat = value;
+					},
+					refreshFeatures: ['frontmatterAutomation'],
+				});
+			});
+
+		this.renderFrontmatterAutomationRuleListSection(containerEl, {
+			addRuleButton: strings.frontmatterAutomationAddRuleButton,
+			addRuleDesc: strings.frontmatterAutomationAddRuleDesc,
+			addRuleName: strings.frontmatterAutomationAddRuleName,
+			noRulesText: strings.frontmatterAutomationNoRules,
+			removeRuleButton: strings.frontmatterAutomationRemoveRuleButton,
+			removeRuleDesc: strings.frontmatterAutomationRemoveRuleDesc,
+			removeRuleName: strings.frontmatterAutomationRemoveRuleName,
+			ruleLabel: strings.frontmatterAutomationRuleLabel,
+		});
+
 		this.renderProjectRoutingSettingsSection(containerEl);
 
 		new Setting(containerEl)
@@ -1198,4 +1427,25 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					await saveWithoutRefresh();
 				}));
 	}
+}
+
+function normalizeFrontmatterAutomationActionType(
+	value: string,
+	fallback: FrontmatterAutomationActionType,
+): FrontmatterAutomationActionType {
+	return value === 'set_static_value' ? 'set_static_value' : value === 'set_current_time' ? 'set_current_time' : fallback;
+}
+
+function normalizeFrontmatterAutomationTriggerOperator(
+	value: string,
+	fallback: FrontmatterAutomationTriggerOperator,
+): FrontmatterAutomationTriggerOperator {
+	return value === 'contains' ? 'contains' : value === 'equals' ? 'equals' : fallback;
+}
+
+function normalizeFrontmatterAutomationWriteMode(
+	value: string,
+	fallback: FrontmatterAutomationWriteMode,
+): FrontmatterAutomationWriteMode {
+	return value === 'when-empty' ? 'when-empty' : value === 'always' ? 'always' : fallback;
 }

@@ -4,7 +4,8 @@ export type RefreshableFeatureId =
 	| 'basesTopTabs'
 	| 'relatedLinks'
 	| 'fileNameSync'
-	| 'projectRouting';
+	| 'projectRouting'
+	| 'frontmatterAutomation';
 
 export interface SaveSettingsOptions {
 	refreshFeatures?: false | readonly RefreshableFeatureId[];
