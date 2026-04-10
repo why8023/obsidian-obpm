@@ -1,9 +1,10 @@
-import {App, TFile, WorkspaceLeaf} from 'obsidian';
+import {App, TFile, WorkspaceLeaf, normalizePath} from 'obsidian';
 import {matchesFrontmatterRule} from './matcher';
 import {CurrentProjectResolution, FrontmatterMatchRule, ProjectCandidate} from './types';
 
 interface ProjectFileRecognitionOptions {
 	recognizeFilenameMatchesFolderAsProject: boolean;
+	projectSubfolderPath?: string;
 }
 
 interface CandidateOptions {
@@ -57,7 +58,7 @@ export function resolveCurrentProject(
 
 	const activeFolderPath = activeFile.parent?.path ?? '';
 	const folderMatches = getOpenProjectCandidates(app, projectRule, projectFileRecognition)
-		.filter((candidate) => candidate.folderPath === activeFolderPath);
+		.filter((candidate) => getProjectAssociationFolderPath(candidate.folderPath, projectFileRecognition) === activeFolderPath);
 	const onlyFolderMatch = folderMatches[0];
 
 	if (folderMatches.length === 1 && onlyFolderMatch) {
@@ -94,6 +95,32 @@ function isProjectFile(
 function hasMatchingFolderAndFileName(file: TFile): boolean {
 	const folderName = file.parent?.name?.trim() ?? '';
 	return folderName.length > 0 && file.basename === folderName;
+}
+
+function getProjectAssociationFolderPath(
+	projectFolderPath: string,
+	projectFileRecognition: ProjectFileRecognitionOptions,
+): string {
+	const subfolderPath = normalizeProjectAssociationSubfolderPath(projectFileRecognition.projectSubfolderPath);
+	return subfolderPath.length > 0
+		? joinPath(projectFolderPath, subfolderPath)
+		: projectFolderPath;
+}
+
+function joinPath(folderPath: string, childPath: string): string {
+	return folderPath.length > 0 ? normalizePath(`${folderPath}/${childPath}`) : childPath;
+}
+
+function normalizeProjectAssociationSubfolderPath(value: string | undefined): string {
+	if (typeof value !== 'string') {
+		return '';
+	}
+
+	return value
+		.split(/[\\/]+/)
+		.map((segment) => segment.trim())
+		.filter((segment) => segment.length > 0 && segment !== '.' && segment !== '..')
+		.join('/');
 }
 
 function compareProjectCandidates(left: ProjectCandidate, right: ProjectCandidate): number {

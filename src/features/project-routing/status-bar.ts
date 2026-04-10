@@ -29,6 +29,7 @@ export class ProjectRoutingStatusBar {
 			this.plugin.app.workspace.getActiveFile(),
 			this.plugin.settings.projectRouting.projectRule,
 			{
+				projectSubfolderPath: this.plugin.settings.projectRouting.projectSubfolderPath,
 				recognizeFilenameMatchesFolderAsProject:
 					this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject,
 			},

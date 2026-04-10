@@ -12,6 +12,7 @@ import {
 	createDefaultRoutableFileRule,
 	DEFAULT_PROJECT_ROUTING_PROJECT_RULE,
 	normalizeFrontmatterMatchMode,
+	normalizeProjectSubfolderPath,
 	normalizeProjectRoutingSettings,
 } from './features/project-routing/settings';
 import {FrontmatterMatchRule, ProjectRoutingSettings} from './features/project-routing/types';
@@ -643,6 +644,24 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			.setName(strings.projectRoutingProjectRuleHeading)
 			.setDesc(strings.projectRoutingProjectRuleDesc)
 			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingSubfolderPathName)
+			.setDesc(strings.projectRoutingSubfolderPathDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.projectRoutingSubfolderPathPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.projectRouting.projectSubfolderPath,
+					normalize: (value) => normalizeProjectSubfolderPath(
+						value,
+						this.plugin.settings.projectRouting.projectSubfolderPath,
+					),
+					onCommit: (value) => {
+						this.plugin.settings.projectRouting.projectSubfolderPath = value;
+					},
+					refreshFeatures: ['projectRouting'],
+				});
+			});
 
 		new Setting(containerEl)
 			.setName(strings.projectRoutingRecognizeFilenameMatchesFolderNameName)

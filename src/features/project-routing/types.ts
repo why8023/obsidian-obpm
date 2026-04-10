@@ -17,6 +17,7 @@ export interface ProjectRoutingSettings {
 	currentFileCommand: CurrentFileCommandSettings;
 	enabled: boolean;
 	projectRule: FrontmatterMatchRule;
+	projectSubfolderPath: string;
 	recognizeFilenameMatchesFolderAsProject: boolean;
 	routableFileRules: FrontmatterMatchRule[];
 	autoMoveWhenSingleCandidate: boolean;

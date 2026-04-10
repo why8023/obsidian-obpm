@@ -28,6 +28,7 @@ export const DEFAULT_PROJECT_ROUTING_SETTINGS: ProjectRoutingSettings = {
 	},
 	enabled: false,
 	projectRule: cloneMatchRule(DEFAULT_PROJECT_ROUTING_PROJECT_RULE),
+	projectSubfolderPath: 'raw',
 	recognizeFilenameMatchesFolderAsProject: false,
 	routableFileRules: [cloneMatchRule(DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE)],
 	autoMoveWhenSingleCandidate: true,
@@ -51,6 +52,10 @@ export function normalizeProjectRoutingSettings(
 		currentFileCommand: normalizeCurrentFileCommandSettings(settings?.currentFileCommand),
 		enabled: normalizeBoolean(settings?.enabled, DEFAULT_PROJECT_ROUTING_SETTINGS.enabled),
 		projectRule: normalizeRequiredMatchRule(settings?.projectRule, DEFAULT_PROJECT_ROUTING_PROJECT_RULE),
+		projectSubfolderPath: normalizeProjectSubfolderPath(
+			settings?.projectSubfolderPath,
+			DEFAULT_PROJECT_ROUTING_SETTINGS.projectSubfolderPath,
+		),
 		recognizeFilenameMatchesFolderAsProject: normalizeBoolean(
 			settings?.recognizeFilenameMatchesFolderAsProject,
 			DEFAULT_PROJECT_ROUTING_SETTINGS.recognizeFilenameMatchesFolderAsProject,
@@ -77,6 +82,18 @@ export function normalizeFrontmatterMatchMode(
 	fallback: FrontmatterMatchMode = 'key-exists',
 ): FrontmatterMatchMode {
 	return value === 'key-value-equals' || value === 'key-exists' ? value : fallback;
+}
+
+export function normalizeProjectSubfolderPath(value: unknown, fallback = 'raw'): string {
+	if (typeof value !== 'string') {
+		return fallback;
+	}
+
+	const normalizedSegments = value
+		.split(/[\\/]+/)
+		.map((segment) => segment.trim())
+		.filter((segment) => segment.length > 0 && segment !== '.' && segment !== '..');
+	return normalizedSegments.join('/');
 }
 
 function normalizeCurrentFileCommandSettings(

@@ -82,6 +82,9 @@ export interface SettingsLocalization {
 	projectRoutingDebugLogDesc: string;
 	projectRoutingProjectRuleHeading: string;
 	projectRoutingProjectRuleDesc: string;
+	projectRoutingSubfolderPathName: string;
+	projectRoutingSubfolderPathDesc: string;
+	projectRoutingSubfolderPathPlaceholder: string;
 	projectRoutingRecognizeFilenameMatchesFolderNameName: string;
 	projectRoutingRecognizeFilenameMatchesFolderNameDesc: string;
 	projectRoutingRuleKeyName: string;
@@ -207,6 +210,9 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectRoutingDebugLogDesc: 'Write detailed project-routing diagnostics to the developer console.',
 	projectRoutingProjectRuleHeading: 'Project file rule',
 	projectRoutingProjectRuleDesc: 'Open files whose frontmatter matches this rule are treated as project files.',
+	projectRoutingSubfolderPathName: 'Project subfolder path',
+	projectRoutingSubfolderPathDesc: 'Move files into this child folder under the selected project folder. Leave it empty to move directly into the project folder. Missing folders are created automatically.',
+	projectRoutingSubfolderPathPlaceholder: 'raw (leave empty for project folder)',
 	projectRoutingRecognizeFilenameMatchesFolderNameName: 'Also recognize file name = folder name',
 	projectRoutingRecognizeFilenameMatchesFolderNameDesc: 'When enabled, an open markdown file is also treated as a project file if its file name exactly matches its parent folder name. This is combined with the frontmatter rule above.',
 	projectRoutingRuleKeyName: 'Frontmatter key',
@@ -332,6 +338,9 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectRoutingDebugLogDesc: '将项目归档路由的详细调试信息输出到开发者控制台。',
 	projectRoutingProjectRuleHeading: '项目文件规则',
 	projectRoutingProjectRuleDesc: '已打开文件中，frontmatter 命中这条规则的文件会被视为项目文件。',
+	projectRoutingSubfolderPathName: '项目子目录路径',
+	projectRoutingSubfolderPathDesc: '把文件移动到所选项目目录下的这个子目录中。留空时会直接移动到项目目录本身。若目录不存在，会自动创建。',
+	projectRoutingSubfolderPathPlaceholder: 'raw（留空则使用项目目录）',
 	projectRoutingRecognizeFilenameMatchesFolderNameName: '同时识别“文件名等于目录名”',
 	projectRoutingRecognizeFilenameMatchesFolderNameDesc: '开启后，如果某个已打开 Markdown 文件的文件名与其所在目录名完全一致，也会被视为项目文件。这条规则会与上面的 frontmatter 规则取并集。',
 	projectRoutingRuleKeyName: 'Frontmatter 键名',

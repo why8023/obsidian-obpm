@@ -1,4 +1,4 @@
-import {Component, Notice, TAbstractFile, TFile, debounce, normalizePath} from 'obsidian';
+import {Component, Notice, TAbstractFile, TFile, TFolder, debounce, normalizePath} from 'obsidian';
 import OBPMPlugin from '../../main';
 import {getProjectRoutingLocalization} from './localization';
 import {matchesAnyFrontmatterRule} from './matcher';
@@ -137,6 +137,28 @@ export class ProjectRoutingFeature extends Component {
 		return initialPath;
 	}
 
+	private async ensureFolderExists(folderPath: string): Promise<void> {
+		if (!folderPath) {
+			return;
+		}
+
+		const existingEntry = this.plugin.app.vault.getAbstractFileByPath(folderPath);
+		if (existingEntry) {
+			if (existingEntry instanceof TFolder) {
+				return;
+			}
+
+			throw new Error(`Cannot create project-routing folder because a file already exists at ${folderPath}.`);
+		}
+
+		const parentFolderPath = getParentFolderPath(folderPath);
+		if (parentFolderPath && !this.plugin.app.vault.getAbstractFileByPath(parentFolderPath)) {
+			await this.ensureFolderExists(parentFolderPath);
+		}
+
+		await this.plugin.app.vault.createFolder(folderPath);
+	}
+
 	private clearFlushTimer(): void {
 		if (this.flushTimer === null) {
 			return;
@@ -162,6 +184,11 @@ export class ProjectRoutingFeature extends Component {
 	private enqueue(task: () => Promise<void>): Promise<void> {
 		this.workQueue = this.workQueue.then(task, task);
 		return this.workQueue;
+	}
+
+	private getProjectTargetFolderPath(projectFolderPath: string): string {
+		const subfolderPath = this.plugin.settings.projectRouting.projectSubfolderPath;
+		return subfolderPath.length > 0 ? joinPath(projectFolderPath, subfolderPath) : projectFolderPath;
 	}
 
 	private ensureRoutingEventListenersRegistered(): void {
@@ -459,7 +486,9 @@ export class ProjectRoutingFeature extends Component {
 				return {kind: 'canceled'};
 			}
 
-			const targetPath = this.buildTargetPath(file, targetProject.folderPath);
+			const targetFolderPath = this.getProjectTargetFolderPath(targetProject.folderPath);
+			await this.ensureFolderExists(targetFolderPath);
+			const targetPath = this.buildTargetPath(file, targetFolderPath);
 			if (targetPath === sourcePath) {
 				if (options.alreadyInTargetNotice) {
 					new Notice(options.alreadyInTargetNotice(targetProject.name));
@@ -521,4 +550,10 @@ export class ProjectRoutingFeature extends Component {
 
 function joinPath(folderPath: string, fileName: string): string {
 	return folderPath.length > 0 ? normalizePath(`${folderPath}/${fileName}`) : fileName;
+}
+
+function getParentFolderPath(path: string): string {
+	const normalizedPath = normalizePath(path);
+	const lastSlashIndex = normalizedPath.lastIndexOf('/');
+	return lastSlashIndex >= 0 ? normalizedPath.slice(0, lastSlashIndex) : '';
 }
