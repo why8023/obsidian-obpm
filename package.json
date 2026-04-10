@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-obpm",
-	"version": "0.0.15",
+	"version": "0.0.16",
 	"description": "OBPM plugin for Obsidian.",
 	"main": "main.js",
 	"type": "module",
