@@ -315,6 +315,17 @@
 		0 10px 24px color-mix(in srgb, var(--background-modifier-box-shadow) 12%, transparent);
 }
 
+.obpm-settings-root .obpm-settings-page-heading.setting-item {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+}
+
+.obpm-settings-root .obpm-settings-page-heading.setting-item .setting-item-info {
+	padding: 0;
+}
+
 .obpm-settings-root .obpm-settings-page-title {
 	margin: 0;
 	font-size: var(--h2-size);

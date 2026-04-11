@@ -523,10 +523,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 		const pageEl = containerEl.createDiv({cls: 'obpm-settings-page'});
 		const heroEl = pageEl.createDiv({cls: 'obpm-settings-hero'});
-		heroEl.createEl('h2', {
-			cls: 'obpm-settings-page-title',
-			text: strings.settingsPageTitle,
-		});
+		const titleSetting = new Setting(heroEl)
+			.setName(strings.settingsPageTitle)
+			.setHeading();
+		titleSetting.settingEl.addClass('obpm-settings-page-heading');
 		heroEl.createEl('p', {
 			cls: 'obpm-settings-page-description',
 			text: strings.settingsPageDesc,
