@@ -27,7 +27,7 @@ import {
 } from './features/project-routing/settings';
 import {FrontmatterMatchRule, ProjectRoutingSettings} from './features/project-routing/types';
 import {RefreshableFeatureId} from './save-settings-options';
-import {getSettingsLocalization} from './settings-localization';
+import {getSettingsLocalization, SettingsLocalization} from './settings-localization';
 
 export type BasesTopTabsPlacement = 'above-toolbar' | 'inside-toolbar';
 export type BasesTopTabsOrientation = 'horizontal' | 'vertical';
@@ -133,6 +133,14 @@ interface FrontmatterAutomationRuleListSectionOptions {
 	removeRuleDesc: string;
 	removeRuleName: string;
 	ruleLabel: (index: number) => string;
+}
+
+type SettingsPageTabId = 'bases' | 'metadata' | 'automation' | 'workflow';
+
+interface SettingsPageTabDefinition {
+	description: string;
+	id: SettingsPageTabId;
+	label: string;
 }
 
 export interface SameFolderNoteSettings {
@@ -428,10 +436,36 @@ function clamp(value: number, min: number, max: number): number {
 
 export class OBPMPluginSettingTab extends PluginSettingTab {
 	plugin: OBPMPlugin;
+	private activeTab: SettingsPageTabId = 'bases';
 
 	constructor(app: App, plugin: OBPMPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+	}
+
+	private getSettingsPageTabs(strings: SettingsLocalization): readonly SettingsPageTabDefinition[] {
+		return [
+			{
+				description: strings.settingsTabBasesDesc,
+				id: 'bases',
+				label: strings.settingsTabBases,
+			},
+			{
+				description: strings.settingsTabMetadataDesc,
+				id: 'metadata',
+				label: strings.settingsTabMetadata,
+			},
+			{
+				description: strings.settingsTabAutomationDesc,
+				id: 'automation',
+				label: strings.settingsTabAutomation,
+			},
+			{
+				description: strings.settingsTabWorkflowDesc,
+				id: 'workflow',
+				label: strings.settingsTabWorkflow,
+			},
+		];
 	}
 
 	private bindCommittedTextSetting(
@@ -478,6 +512,590 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		await this.plugin.saveSettings({
 			refreshFeatures: features.length > 0 ? features : false,
 		});
+	}
+
+	private renderSettingsPageChrome(containerEl: HTMLElement, strings: SettingsLocalization): HTMLElement {
+		containerEl.addClass('obpm-settings-root');
+
+		const tabs = this.getSettingsPageTabs(strings);
+		const activeTab = tabs.find((tab) => tab.id === this.activeTab) ?? tabs[0]!;
+		this.activeTab = activeTab.id;
+
+		const pageEl = containerEl.createDiv({cls: 'obpm-settings-page'});
+		const heroEl = pageEl.createDiv({cls: 'obpm-settings-hero'});
+		heroEl.createEl('h2', {
+			cls: 'obpm-settings-page-title',
+			text: strings.settingsPageTitle,
+		});
+		heroEl.createEl('p', {
+			cls: 'obpm-settings-page-description',
+			text: strings.settingsPageDesc,
+		});
+
+		const tabsEl = pageEl.createDiv({cls: 'obpm-settings-tabs-nav'});
+		tabsEl.setAttr('role', 'tablist');
+
+		tabs.forEach((tab) => {
+			const buttonEl = tabsEl.createEl('button', {
+				cls: 'obpm-settings-tab-button',
+				text: tab.label,
+			});
+			buttonEl.type = 'button';
+			buttonEl.setAttr('role', 'tab');
+			buttonEl.setAttr('aria-selected', String(tab.id === activeTab.id));
+
+			if (tab.id === activeTab.id) {
+				buttonEl.addClass('is-active');
+			}
+
+			buttonEl.addEventListener('click', () => {
+				if (this.activeTab === tab.id) {
+					return;
+				}
+
+				this.activeTab = tab.id;
+				this.display();
+			});
+		});
+
+		pageEl.createEl('p', {
+			cls: 'obpm-settings-tab-description',
+			text: activeTab.description,
+		});
+
+		return pageEl.createDiv({cls: 'obpm-settings-tab-content'});
+	}
+
+	private renderSettingsPanel(
+		containerEl: HTMLElement,
+		renderContent: (panelBodyEl: HTMLElement) => void,
+	): void {
+		const panelEl = containerEl.createDiv({cls: 'obpm-settings-panel'});
+		const panelBodyEl = panelEl.createDiv({cls: 'obpm-settings-panel-body'});
+		renderContent(panelBodyEl);
+	}
+
+	private renderActiveTab(containerEl: HTMLElement): void {
+		switch (this.activeTab) {
+			case 'bases':
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderBasesFileRevealSettingsSection(panelBodyEl);
+				});
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderBasesGroupFoldSettingsSection(panelBodyEl);
+				});
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderBasesTopTabsSettingsSection(panelBodyEl);
+				});
+				break;
+			case 'metadata':
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderRelatedLinksSettingsSection(panelBodyEl);
+				});
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderFileNameSyncSettingsSection(panelBodyEl);
+				});
+				break;
+			case 'automation':
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderFrontmatterAutomationSettingsSection(panelBodyEl);
+				});
+				break;
+			case 'workflow':
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderProjectRoutingSettingsSection(panelBodyEl);
+				});
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderSameFolderNoteSettingsSection(panelBodyEl);
+				});
+				break;
+		}
+	}
+
+	private renderBasesFileRevealSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveBasesFileRevealSettings = async () => this.saveSettingsFor('basesFileReveal');
+
+		new Setting(containerEl)
+			.setName(strings.basesFileRevealHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.basesFileRevealEnableName)
+			.setDesc(strings.basesFileRevealEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesFileReveal.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.basesFileReveal.enabled = value;
+					await saveBasesFileRevealSettings();
+				}));
+	}
+
+	private renderBasesGroupFoldSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveBasesGroupFoldSettings = async () => this.saveSettingsFor('basesGroupFold');
+		const saveWithoutRefresh = async () => this.saveSettingsFor();
+
+		new Setting(containerEl)
+			.setName(strings.basesGroupFoldHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.basesGroupFoldEnableName)
+			.setDesc(strings.basesGroupFoldEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesGroupFold.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.basesGroupFold.enabled = value;
+					await saveBasesGroupFoldSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesGroupFoldRememberStateName)
+			.setDesc(strings.basesGroupFoldRememberStateDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesGroupFold.rememberState)
+				.onChange(async (value) => {
+					this.plugin.settings.basesGroupFold.rememberState = value;
+					await saveWithoutRefresh();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesGroupFoldDebugModeName)
+			.setDesc(strings.basesGroupFoldDebugModeDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesGroupFold.debugMode)
+				.onChange(async (value) => {
+					this.plugin.settings.basesGroupFold.debugMode = value;
+					await saveWithoutRefresh();
+				}));
+	}
+
+	private renderBasesTopTabsSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveBasesTopTabsSettings = async () => this.saveSettingsFor('basesTopTabs');
+		const saveWithoutRefresh = async () => this.saveSettingsFor();
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsEnableName)
+			.setDesc(strings.basesTopTabsEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.enabled = value;
+					await saveBasesTopTabsSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsShowIconsName)
+			.setDesc(strings.basesTopTabsShowIconsDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.showIcons)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.showIcons = value;
+					await saveBasesTopTabsSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsHideWhenSingleViewName)
+			.setDesc(strings.basesTopTabsHideWhenSingleViewDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.hideWhenSingleView)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.hideWhenSingleView = value;
+					await saveBasesTopTabsSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsPlacementName)
+			.setDesc(strings.basesTopTabsPlacementDesc)
+			.addDropdown((dropdown) => dropdown
+				.addOption('above-toolbar', strings.basesTopTabsPlacementAboveToolbarLabel)
+				.addOption('inside-toolbar', strings.basesTopTabsPlacementInsideToolbarLabel)
+				.setValue(this.plugin.settings.basesTopTabs.placement)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.placement = normalizeBasesTopTabsPlacement(
+						value,
+						DEFAULT_SETTINGS.basesTopTabs.placement,
+					);
+					await saveBasesTopTabsSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsOrientationName)
+			.setDesc(strings.basesTopTabsOrientationDesc)
+			.addDropdown((dropdown) => dropdown
+				.addOption('horizontal', strings.basesTopTabsOrientationHorizontalLabel)
+				.addOption('vertical', strings.basesTopTabsOrientationVerticalLabel)
+				.setValue(this.plugin.settings.basesTopTabs.orientation)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.orientation = normalizeBasesTopTabsOrientation(
+						value,
+						DEFAULT_SETTINGS.basesTopTabs.orientation,
+					);
+					await saveBasesTopTabsSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsScrollableName)
+			.setDesc(strings.basesTopTabsScrollableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.scrollable)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.scrollable = value;
+					await saveBasesTopTabsSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsShowViewCountName)
+			.setDesc(strings.basesTopTabsShowViewCountDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.showViewCount)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.showViewCount = value;
+					await saveBasesTopTabsSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsMaxVisibleTabsName)
+			.setDesc(strings.basesTopTabsMaxVisibleTabsDesc(
+				MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+				MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+				DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+			))
+			.addText((text) => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = String(MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS);
+				text.inputEl.max = String(MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS);
+				text.inputEl.step = '1';
+				text.setValue(this.plugin.settings.basesTopTabs.maxVisibleTabs.toString());
+
+				const applyValue = async () => {
+					const normalizedValue = normalizeBasesTopTabsMaxVisibleTabs(
+						text.inputEl.value,
+						DEFAULT_SETTINGS.basesTopTabs.maxVisibleTabs,
+					);
+					this.plugin.settings.basesTopTabs.maxVisibleTabs = normalizedValue;
+					await saveBasesTopTabsSettings();
+
+					if (text.inputEl.value !== normalizedValue.toString()) {
+						text.setValue(normalizedValue.toString());
+						new Notice(strings.basesTopTabsMaxVisibleTabsNotice(
+							MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+							MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS,
+						));
+					}
+				};
+
+				text.inputEl.addEventListener('change', () => {
+					void applyValue();
+				});
+
+				return text;
+			});
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsRememberLastViewName)
+			.setDesc(strings.basesTopTabsRememberLastViewDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.rememberLastView)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.rememberLastView = value;
+					await saveWithoutRefresh();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsAutoRefreshName)
+			.setDesc(strings.basesTopTabsAutoRefreshDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.autoRefresh)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.autoRefresh = value;
+					await saveWithoutRefresh();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsDebugModeName)
+			.setDesc(strings.basesTopTabsDebugModeDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.basesTopTabs.debugMode)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.debugMode = value;
+					await saveWithoutRefresh();
+				}));
+	}
+
+	private renderRelatedLinksSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveRelatedLinksSettings = async () => this.saveSettingsFor('relatedLinks');
+		const saveWithoutRefresh = async () => this.saveSettingsFor();
+
+		new Setting(containerEl)
+			.setName(strings.relatedLinksHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.enableRelatedLinksName)
+			.setDesc(strings.enableRelatedLinksDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.relatedLinks.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.relatedLinks.enabled = value;
+					await saveRelatedLinksSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.relationPropertyName)
+			.setDesc(strings.relationPropertyDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.relationPropertyPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.relatedLinks.relationProperty,
+					normalize: (value) => value.trim(),
+					onCommit: (value) => {
+						this.plugin.settings.relatedLinks.relationProperty = value;
+					},
+					refreshFeatures: ['relatedLinks'],
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.displayPropertyName)
+			.setDesc(strings.displayPropertyDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.displayPropertyPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.relatedLinks.displayProperty,
+					normalize: (value) => value.trim(),
+					onCommit: (value) => {
+						this.plugin.settings.relatedLinks.displayProperty = value;
+					},
+					refreshFeatures: ['relatedLinks'],
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.inboxHeadingName)
+			.setDesc(strings.inboxHeadingDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.inboxHeadingPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.relatedLinks.inboxHeading,
+					normalize: (value) => normalizeRequiredText(value, DEFAULT_SETTINGS.relatedLinks.inboxHeading),
+					onCommit: (value) => {
+						this.plugin.settings.relatedLinks.inboxHeading = value;
+					},
+					refreshFeatures: ['relatedLinks'],
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.missingLinkGracePeriodName)
+			.setDesc(strings.missingLinkGracePeriodDesc(
+				MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+				MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+				DEFAULT_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+			))
+			.addText((text) => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = String(MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS);
+				text.inputEl.max = String(MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS);
+				text.inputEl.step = '1';
+				text.setValue(this.plugin.settings.relatedLinks.missingLinkGracePeriodSeconds.toString());
+
+				const applyValue = async () => {
+					const normalizedValue = normalizeRelatedLinksMissingLinkGracePeriodSeconds(
+						text.inputEl.value,
+						DEFAULT_SETTINGS.relatedLinks.missingLinkGracePeriodSeconds,
+					);
+					this.plugin.settings.relatedLinks.missingLinkGracePeriodSeconds = normalizedValue;
+					await saveRelatedLinksSettings();
+
+					if (text.inputEl.value !== normalizedValue.toString()) {
+						text.setValue(normalizedValue.toString());
+						new Notice(strings.missingLinkGracePeriodNotice(
+							MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+							MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+						));
+					}
+				};
+
+				text.inputEl.addEventListener('change', () => {
+					void applyValue();
+				});
+
+				return text;
+			});
+
+		new Setting(containerEl)
+			.setName(strings.verboseLoggingName)
+			.setDesc(strings.verboseLoggingDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.relatedLinks.verboseLogging)
+				.onChange(async (value) => {
+					this.plugin.settings.relatedLinks.verboseLogging = value;
+					await saveWithoutRefresh();
+				}));
+	}
+
+	private renderFileNameSyncSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveFileNameSyncSettings = async () => this.saveSettingsFor('fileNameSync');
+
+		new Setting(containerEl)
+			.setName(strings.fileNameSyncHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.enableFileNameSyncName)
+			.setDesc(strings.enableFileNameSyncDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.fileNameSync.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.fileNameSync.enabled = value;
+					await saveFileNameSyncSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.fileNamePropertyName)
+			.setDesc(strings.fileNamePropertyDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.fileNamePropertyPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.fileNameSync.propertyName,
+					normalize: (value) => value.trim(),
+					onCommit: (value) => {
+						this.plugin.settings.fileNameSync.propertyName = value;
+					},
+					refreshFeatures: ['fileNameSync'],
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.invalidCharacterReplacementName)
+			.setDesc(strings.invalidCharacterReplacementDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.invalidCharacterReplacementPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.fileNameSync.invalidCharacterReplacement,
+					normalize: (value) =>
+						normalizeInvalidCharacterReplacement(value, DEFAULT_SETTINGS.fileNameSync.invalidCharacterReplacement),
+					notice: strings.invalidCharacterReplacementNotice,
+					onCommit: (value) => {
+						this.plugin.settings.fileNameSync.invalidCharacterReplacement = value;
+					},
+					refreshFeatures: ['fileNameSync'],
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.maxFileNameLengthName)
+			.setDesc(strings.maxFileNameLengthDesc(
+				MIN_FILE_NAME_MAX_LENGTH,
+				MAX_FILE_NAME_MAX_LENGTH,
+				DEFAULT_FILE_NAME_MAX_LENGTH,
+			))
+			.addText((text) => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = String(MIN_FILE_NAME_MAX_LENGTH);
+				text.inputEl.max = String(MAX_FILE_NAME_MAX_LENGTH);
+				text.inputEl.step = '1';
+				text.setValue(this.plugin.settings.fileNameSync.maxFileNameLength.toString());
+
+				const applyValue = async () => {
+					const normalizedValue = normalizeFileNameMaxLength(
+						text.inputEl.value,
+						DEFAULT_SETTINGS.fileNameSync.maxFileNameLength,
+					);
+					this.plugin.settings.fileNameSync.maxFileNameLength = normalizedValue;
+					await saveFileNameSyncSettings();
+
+					if (text.inputEl.value !== normalizedValue.toString()) {
+						text.setValue(normalizedValue.toString());
+						new Notice(strings.maxFileNameLengthNotice(
+							MIN_FILE_NAME_MAX_LENGTH,
+							MAX_FILE_NAME_MAX_LENGTH,
+						));
+					}
+				};
+
+				text.inputEl.addEventListener('change', () => {
+					void applyValue();
+				});
+
+				return text;
+			});
+	}
+
+	private renderFrontmatterAutomationSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveFrontmatterAutomationSettings = async () => this.saveSettingsFor('frontmatterAutomation');
+
+		new Setting(containerEl)
+			.setName(strings.frontmatterAutomationHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.frontmatterAutomationEnableName)
+			.setDesc(strings.frontmatterAutomationEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.frontmatterAutomation.enableFrontmatterAutomation)
+				.onChange(async (value) => {
+					this.plugin.settings.frontmatterAutomation.enableFrontmatterAutomation = value;
+					await saveFrontmatterAutomationSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.frontmatterAutomationTimeFormatName)
+			.setDesc(strings.frontmatterAutomationTimeFormatDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.frontmatterAutomationTimeFormatPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.frontmatterAutomation.timeFormat,
+					normalize: (value) =>
+						value.trim().length > 0
+							? value.trim()
+							: DEFAULT_SETTINGS.frontmatterAutomation.timeFormat,
+					onCommit: (value) => {
+						this.plugin.settings.frontmatterAutomation.timeFormat = value;
+					},
+					refreshFeatures: ['frontmatterAutomation'],
+				});
+			});
+
+		this.renderFrontmatterAutomationRuleListSection(containerEl, {
+			addRuleButton: strings.frontmatterAutomationAddRuleButton,
+			addRuleDesc: strings.frontmatterAutomationAddRuleDesc,
+			addRuleName: strings.frontmatterAutomationAddRuleName,
+			noRulesText: strings.frontmatterAutomationNoRules,
+			removeRuleButton: strings.frontmatterAutomationRemoveRuleButton,
+			removeRuleDesc: strings.frontmatterAutomationRemoveRuleDesc,
+			removeRuleName: strings.frontmatterAutomationRemoveRuleName,
+			ruleLabel: strings.frontmatterAutomationRuleLabel,
+		});
+	}
+
+	private renderSameFolderNoteSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveWithoutRefresh = async () => this.saveSettingsFor();
+
+		new Setting(containerEl)
+			.setName(strings.sameFolderNoteHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.enableSameFolderNoteName)
+			.setDesc(strings.enableSameFolderNoteDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.sameFolderNote.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.sameFolderNote.enabled = value;
+					await saveWithoutRefresh();
+				}));
 	}
 
 	private renderProjectRoutingRuleListSection(
@@ -966,466 +1584,9 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 	display(): void {
 		const {containerEl} = this;
 		const strings = getSettingsLocalization();
-		const saveBasesFileRevealSettings = async () => this.saveSettingsFor('basesFileReveal');
-		const saveBasesGroupFoldSettings = async () => this.saveSettingsFor('basesGroupFold');
-		const saveBasesTopTabsSettings = async () => this.saveSettingsFor('basesTopTabs');
-		const saveRelatedLinksSettings = async () => this.saveSettingsFor('relatedLinks');
-		const saveFileNameSyncSettings = async () => this.saveSettingsFor('fileNameSync');
-		const saveFrontmatterAutomationSettings = async () => this.saveSettingsFor('frontmatterAutomation');
-		const saveWithoutRefresh = async () => this.saveSettingsFor();
-
 		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName(strings.basesFileRevealHeading)
-			.setHeading();
-
-		new Setting(containerEl)
-			.setName(strings.basesFileRevealEnableName)
-			.setDesc(strings.basesFileRevealEnableDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesFileReveal.enabled)
-				.onChange(async (value) => {
-					this.plugin.settings.basesFileReveal.enabled = value;
-					await saveBasesFileRevealSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesGroupFoldHeading)
-			.setHeading();
-
-		new Setting(containerEl)
-			.setName(strings.basesGroupFoldEnableName)
-			.setDesc(strings.basesGroupFoldEnableDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesGroupFold.enabled)
-				.onChange(async (value) => {
-					this.plugin.settings.basesGroupFold.enabled = value;
-					await saveBasesGroupFoldSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesGroupFoldRememberStateName)
-			.setDesc(strings.basesGroupFoldRememberStateDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesGroupFold.rememberState)
-				.onChange(async (value) => {
-					this.plugin.settings.basesGroupFold.rememberState = value;
-					await saveWithoutRefresh();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesGroupFoldDebugModeName)
-			.setDesc(strings.basesGroupFoldDebugModeDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesGroupFold.debugMode)
-				.onChange(async (value) => {
-					this.plugin.settings.basesGroupFold.debugMode = value;
-					await saveWithoutRefresh();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsHeading)
-			.setHeading();
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsEnableName)
-			.setDesc(strings.basesTopTabsEnableDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesTopTabs.enabled)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.enabled = value;
-					await saveBasesTopTabsSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsShowIconsName)
-			.setDesc(strings.basesTopTabsShowIconsDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesTopTabs.showIcons)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.showIcons = value;
-					await saveBasesTopTabsSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsHideWhenSingleViewName)
-			.setDesc(strings.basesTopTabsHideWhenSingleViewDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesTopTabs.hideWhenSingleView)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.hideWhenSingleView = value;
-					await saveBasesTopTabsSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsPlacementName)
-			.setDesc(strings.basesTopTabsPlacementDesc)
-			.addDropdown((dropdown) => dropdown
-				.addOption('above-toolbar', strings.basesTopTabsPlacementAboveToolbarLabel)
-				.addOption('inside-toolbar', strings.basesTopTabsPlacementInsideToolbarLabel)
-				.setValue(this.plugin.settings.basesTopTabs.placement)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.placement = normalizeBasesTopTabsPlacement(
-						value,
-						DEFAULT_SETTINGS.basesTopTabs.placement,
-					);
-					await saveBasesTopTabsSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsOrientationName)
-			.setDesc(strings.basesTopTabsOrientationDesc)
-			.addDropdown((dropdown) => dropdown
-				.addOption('horizontal', strings.basesTopTabsOrientationHorizontalLabel)
-				.addOption('vertical', strings.basesTopTabsOrientationVerticalLabel)
-				.setValue(this.plugin.settings.basesTopTabs.orientation)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.orientation = normalizeBasesTopTabsOrientation(
-						value,
-						DEFAULT_SETTINGS.basesTopTabs.orientation,
-					);
-					await saveBasesTopTabsSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsScrollableName)
-			.setDesc(strings.basesTopTabsScrollableDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesTopTabs.scrollable)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.scrollable = value;
-					await saveBasesTopTabsSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsShowViewCountName)
-			.setDesc(strings.basesTopTabsShowViewCountDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesTopTabs.showViewCount)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.showViewCount = value;
-					await saveBasesTopTabsSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsMaxVisibleTabsName)
-			.setDesc(strings.basesTopTabsMaxVisibleTabsDesc(
-				MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS,
-				MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS,
-				DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS,
-			))
-			.addText((text) => {
-				text.inputEl.type = 'number';
-				text.inputEl.min = String(MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS);
-				text.inputEl.max = String(MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS);
-				text.inputEl.step = '1';
-				text.setValue(this.plugin.settings.basesTopTabs.maxVisibleTabs.toString());
-
-				const applyValue = async () => {
-					const normalizedValue = normalizeBasesTopTabsMaxVisibleTabs(
-						text.inputEl.value,
-						DEFAULT_SETTINGS.basesTopTabs.maxVisibleTabs,
-					);
-					this.plugin.settings.basesTopTabs.maxVisibleTabs = normalizedValue;
-					await saveBasesTopTabsSettings();
-
-					if (text.inputEl.value !== normalizedValue.toString()) {
-						text.setValue(normalizedValue.toString());
-						new Notice(strings.basesTopTabsMaxVisibleTabsNotice(
-							MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS,
-							MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS,
-						));
-					}
-				};
-
-				text.inputEl.addEventListener('change', () => {
-					void applyValue();
-				});
-
-				return text;
-			});
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsRememberLastViewName)
-			.setDesc(strings.basesTopTabsRememberLastViewDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesTopTabs.rememberLastView)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.rememberLastView = value;
-					await saveWithoutRefresh();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsAutoRefreshName)
-			.setDesc(strings.basesTopTabsAutoRefreshDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesTopTabs.autoRefresh)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.autoRefresh = value;
-					await saveWithoutRefresh();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsDebugModeName)
-			.setDesc(strings.basesTopTabsDebugModeDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.basesTopTabs.debugMode)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.debugMode = value;
-					await saveWithoutRefresh();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.relatedLinksHeading)
-			.setHeading();
-
-		new Setting(containerEl)
-			.setName(strings.enableRelatedLinksName)
-			.setDesc(strings.enableRelatedLinksDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.relatedLinks.enabled)
-				.onChange(async (value) => {
-					this.plugin.settings.relatedLinks.enabled = value;
-					await saveRelatedLinksSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.relationPropertyName)
-			.setDesc(strings.relationPropertyDesc)
-			.addText((text) => {
-				text.setPlaceholder(strings.relationPropertyPlaceholder);
-				return this.bindCommittedTextSetting(text, {
-					initialValue: this.plugin.settings.relatedLinks.relationProperty,
-					normalize: (value) => value.trim(),
-					onCommit: (value) => {
-						this.plugin.settings.relatedLinks.relationProperty = value;
-					},
-					refreshFeatures: ['relatedLinks'],
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(strings.displayPropertyName)
-			.setDesc(strings.displayPropertyDesc)
-			.addText((text) => {
-				text.setPlaceholder(strings.displayPropertyPlaceholder);
-				return this.bindCommittedTextSetting(text, {
-					initialValue: this.plugin.settings.relatedLinks.displayProperty,
-					normalize: (value) => value.trim(),
-					onCommit: (value) => {
-						this.plugin.settings.relatedLinks.displayProperty = value;
-					},
-					refreshFeatures: ['relatedLinks'],
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(strings.inboxHeadingName)
-			.setDesc(strings.inboxHeadingDesc)
-			.addText((text) => {
-				text.setPlaceholder(strings.inboxHeadingPlaceholder);
-				return this.bindCommittedTextSetting(text, {
-					initialValue: this.plugin.settings.relatedLinks.inboxHeading,
-					normalize: (value) =>
-						normalizeRequiredText(value, DEFAULT_SETTINGS.relatedLinks.inboxHeading),
-					onCommit: (value) => {
-						this.plugin.settings.relatedLinks.inboxHeading = value;
-					},
-					refreshFeatures: ['relatedLinks'],
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(strings.missingLinkGracePeriodName)
-			.setDesc(strings.missingLinkGracePeriodDesc(
-				MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
-				MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
-				DEFAULT_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
-			))
-			.addText((text) => {
-				text.inputEl.type = 'number';
-				text.inputEl.min = String(MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS);
-				text.inputEl.max = String(MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS);
-				text.inputEl.step = '1';
-				text.setValue(this.plugin.settings.relatedLinks.missingLinkGracePeriodSeconds.toString());
-
-				const applyValue = async () => {
-					const normalizedValue = normalizeRelatedLinksMissingLinkGracePeriodSeconds(
-						text.inputEl.value,
-						DEFAULT_SETTINGS.relatedLinks.missingLinkGracePeriodSeconds,
-					);
-					this.plugin.settings.relatedLinks.missingLinkGracePeriodSeconds = normalizedValue;
-					await saveRelatedLinksSettings();
-
-					if (text.inputEl.value !== normalizedValue.toString()) {
-						text.setValue(normalizedValue.toString());
-						new Notice(strings.missingLinkGracePeriodNotice(
-							MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
-							MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
-						));
-					}
-				};
-
-				text.inputEl.addEventListener('change', () => {
-					void applyValue();
-				});
-
-				return text;
-			});
-
-		new Setting(containerEl)
-			.setName(strings.verboseLoggingName)
-			.setDesc(strings.verboseLoggingDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.relatedLinks.verboseLogging)
-				.onChange(async (value) => {
-					this.plugin.settings.relatedLinks.verboseLogging = value;
-					await saveWithoutRefresh();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.fileNameSyncHeading)
-			.setHeading();
-
-		new Setting(containerEl)
-			.setName(strings.enableFileNameSyncName)
-			.setDesc(strings.enableFileNameSyncDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.fileNameSync.enabled)
-				.onChange(async (value) => {
-					this.plugin.settings.fileNameSync.enabled = value;
-					await saveFileNameSyncSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.fileNamePropertyName)
-			.setDesc(strings.fileNamePropertyDesc)
-			.addText((text) => {
-				text.setPlaceholder(strings.fileNamePropertyPlaceholder);
-				return this.bindCommittedTextSetting(text, {
-					initialValue: this.plugin.settings.fileNameSync.propertyName,
-					normalize: (value) => value.trim(),
-					onCommit: (value) => {
-						this.plugin.settings.fileNameSync.propertyName = value;
-					},
-					refreshFeatures: ['fileNameSync'],
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(strings.invalidCharacterReplacementName)
-			.setDesc(strings.invalidCharacterReplacementDesc)
-			.addText((text) => {
-				text.setPlaceholder(strings.invalidCharacterReplacementPlaceholder);
-				return this.bindCommittedTextSetting(text, {
-					initialValue: this.plugin.settings.fileNameSync.invalidCharacterReplacement,
-					normalize: (value) =>
-						normalizeInvalidCharacterReplacement(value, DEFAULT_SETTINGS.fileNameSync.invalidCharacterReplacement),
-					notice: strings.invalidCharacterReplacementNotice,
-					onCommit: (value) => {
-						this.plugin.settings.fileNameSync.invalidCharacterReplacement = value;
-					},
-					refreshFeatures: ['fileNameSync'],
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(strings.maxFileNameLengthName)
-			.setDesc(strings.maxFileNameLengthDesc(
-				MIN_FILE_NAME_MAX_LENGTH,
-				MAX_FILE_NAME_MAX_LENGTH,
-				DEFAULT_FILE_NAME_MAX_LENGTH,
-			))
-			.addText((text) => {
-				text.inputEl.type = 'number';
-				text.inputEl.min = String(MIN_FILE_NAME_MAX_LENGTH);
-				text.inputEl.max = String(MAX_FILE_NAME_MAX_LENGTH);
-				text.inputEl.step = '1';
-				text.setValue(this.plugin.settings.fileNameSync.maxFileNameLength.toString());
-
-				const applyValue = async () => {
-					const normalizedValue = normalizeFileNameMaxLength(
-						text.inputEl.value,
-						DEFAULT_SETTINGS.fileNameSync.maxFileNameLength,
-					);
-					this.plugin.settings.fileNameSync.maxFileNameLength = normalizedValue;
-					await saveFileNameSyncSettings();
-
-					if (text.inputEl.value !== normalizedValue.toString()) {
-						text.setValue(normalizedValue.toString());
-						new Notice(strings.maxFileNameLengthNotice(
-							MIN_FILE_NAME_MAX_LENGTH,
-							MAX_FILE_NAME_MAX_LENGTH,
-						));
-					}
-				};
-
-				text.inputEl.addEventListener('change', () => {
-					void applyValue();
-				});
-
-				return text;
-			});
-
-		new Setting(containerEl)
-			.setName(strings.frontmatterAutomationHeading)
-			.setHeading();
-
-		new Setting(containerEl)
-			.setName(strings.frontmatterAutomationEnableName)
-			.setDesc(strings.frontmatterAutomationEnableDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.frontmatterAutomation.enableFrontmatterAutomation)
-				.onChange(async (value) => {
-					this.plugin.settings.frontmatterAutomation.enableFrontmatterAutomation = value;
-					await saveFrontmatterAutomationSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.frontmatterAutomationTimeFormatName)
-			.setDesc(strings.frontmatterAutomationTimeFormatDesc)
-			.addText((text) => {
-				text.setPlaceholder(strings.frontmatterAutomationTimeFormatPlaceholder);
-				return this.bindCommittedTextSetting(text, {
-					initialValue: this.plugin.settings.frontmatterAutomation.timeFormat,
-					normalize: (value) =>
-						value.trim().length > 0
-							? value.trim()
-							: DEFAULT_SETTINGS.frontmatterAutomation.timeFormat,
-					onCommit: (value) => {
-						this.plugin.settings.frontmatterAutomation.timeFormat = value;
-					},
-					refreshFeatures: ['frontmatterAutomation'],
-				});
-			});
-
-		this.renderFrontmatterAutomationRuleListSection(containerEl, {
-			addRuleButton: strings.frontmatterAutomationAddRuleButton,
-			addRuleDesc: strings.frontmatterAutomationAddRuleDesc,
-			addRuleName: strings.frontmatterAutomationAddRuleName,
-			noRulesText: strings.frontmatterAutomationNoRules,
-			removeRuleButton: strings.frontmatterAutomationRemoveRuleButton,
-			removeRuleDesc: strings.frontmatterAutomationRemoveRuleDesc,
-			removeRuleName: strings.frontmatterAutomationRemoveRuleName,
-			ruleLabel: strings.frontmatterAutomationRuleLabel,
-		});
-
-		this.renderProjectRoutingSettingsSection(containerEl);
-
-		new Setting(containerEl)
-			.setName(strings.sameFolderNoteHeading)
-			.setHeading();
-
-		new Setting(containerEl)
-			.setName(strings.enableSameFolderNoteName)
-			.setDesc(strings.enableSameFolderNoteDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.sameFolderNote.enabled)
-				.onChange(async (value) => {
-					this.plugin.settings.sameFolderNote.enabled = value;
-					await saveWithoutRefresh();
-				}));
+		const contentEl = this.renderSettingsPageChrome(containerEl, strings);
+		this.renderActiveTab(contentEl);
 	}
 }
 

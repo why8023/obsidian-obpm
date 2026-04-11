@@ -1,6 +1,16 @@
 import {getLanguage} from 'obsidian';
 
 export interface SettingsLocalization {
+	settingsPageTitle: string;
+	settingsPageDesc: string;
+	settingsTabBases: string;
+	settingsTabBasesDesc: string;
+	settingsTabMetadata: string;
+	settingsTabMetadataDesc: string;
+	settingsTabAutomation: string;
+	settingsTabAutomationDesc: string;
+	settingsTabWorkflow: string;
+	settingsTabWorkflowDesc: string;
 	basesFileRevealEnableDesc: string;
 	basesFileRevealEnableName: string;
 	basesFileRevealHeading: string;
@@ -169,6 +179,16 @@ export interface SettingsLocalization {
 }
 
 const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
+	settingsPageTitle: 'OBPM settings',
+	settingsPageDesc: 'Browse OBPM features by scenario. Tabs reduce scrolling, and each card keeps related options together.',
+	settingsTabBases: 'Bases',
+	settingsTabBasesDesc: 'Enhancements for native Bases views, including file reveal, group folding, and persistent top tabs.',
+	settingsTabMetadata: 'Metadata',
+	settingsTabMetadataDesc: 'Keep frontmatter-derived links and filenames tidy with metadata-focused behaviors.',
+	settingsTabAutomation: 'Automation',
+	settingsTabAutomationDesc: 'Define rules that watch frontmatter changes and write values back into the current file.',
+	settingsTabWorkflow: 'Workflow',
+	settingsTabWorkflowDesc: 'Commands and routing flows that help move files into the right place faster.',
 	basesFileRevealEnableDesc: 'Hold Alt and click a row or file link in a native Bases table view to reveal that file in the file explorer.',
 	basesFileRevealEnableName: 'Enable Bases Alt-click reveal',
 	basesFileRevealHeading: 'Bases file reveal',
@@ -339,6 +359,16 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 };
 
 const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
+	settingsPageTitle: 'OBPM 设置',
+	settingsPageDesc: '按使用场景浏览 OBPM 功能。通过标签分组减少滚动距离，也让相关选项保持在同一块里。',
+	settingsTabBases: 'Bases',
+	settingsTabBasesDesc: '集中管理原生 Bases 视图相关增强，包括文件定位、分组折叠和顶部 Tabs。',
+	settingsTabMetadata: '元数据',
+	settingsTabMetadataDesc: '集中处理 frontmatter 派生的链接、显示文本和文件名同步等元数据行为。',
+	settingsTabAutomation: '自动化',
+	settingsTabAutomationDesc: '配置监听 frontmatter 变化并自动回写当前文件的规则。',
+	settingsTabWorkflow: '工作流',
+	settingsTabWorkflowDesc: '放置移动文件、项目归档和同目录新建等更偏流程效率的能力。',
 	basesFileRevealEnableDesc: '在原生 Bases 的表格视图中按住 Alt 再点击某一行或文件链接，即可在左侧文件列表里定位该文件。',
 	basesFileRevealEnableName: '启用 Bases Alt+点击定位文件',
 	basesFileRevealHeading: 'Bases 文件定位',
