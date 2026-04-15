@@ -1,9 +1,15 @@
-import {App, CachedMetadata, FrontMatterCache, normalizePath, TFile} from 'obsidian';
+import {App, CachedMetadata, FrontMatterCache, normalizePath, parseYaml, TFile} from 'obsidian';
 import {DesiredLinksByTarget, DesiredTargetLink, SourceContribution} from './types';
 
 export interface SourceIndex {
 	desiredLinksByTarget: DesiredLinksByTarget;
 	sourceContributionsByPath: Map<string, SourceContribution>;
+}
+
+interface SourceIndexContentFallbackOptions {
+	fallbackSourcePaths: ReadonlySet<string>;
+	onFallbackError?: (file: TFile, error: unknown) => void;
+	readFile?: (file: TFile) => Promise<string>;
 }
 
 export function buildFullSourceIndex(
@@ -20,6 +26,45 @@ export function buildFullSourceIndex(
 			relationProperty,
 			displayProperty,
 			app.metadataCache.getFileCache(file),
+		);
+		if (!contribution) {
+			continue;
+		}
+
+		sourceContributionsByPath.set(contribution.sourcePath, contribution);
+	}
+
+	return {
+		desiredLinksByTarget: buildDesiredLinksByTarget(sourceContributionsByPath.values()),
+		sourceContributionsByPath,
+	};
+}
+
+export async function buildFullSourceIndexWithContentFallback(
+	app: App,
+	relationProperty: string,
+	displayProperty: string,
+	options: SourceIndexContentFallbackOptions,
+): Promise<SourceIndex> {
+	const sourceContributionsByPath = new Map<string, SourceContribution>();
+	const readFile = options.readFile ?? ((file: TFile) => app.vault.cachedRead(file));
+
+	for (const file of app.vault.getMarkdownFiles()) {
+		let cache = app.metadataCache.getFileCache(file);
+		if (!cache && options.fallbackSourcePaths.has(file.path)) {
+			try {
+				cache = buildCachedMetadataFromContent(await readFile(file));
+			} catch (error) {
+				options.onFallbackError?.(file, error);
+			}
+		}
+
+		const contribution = buildSourceContribution(
+			app,
+			file,
+			relationProperty,
+			displayProperty,
+			cache,
 		);
 		if (!contribution) {
 			continue;
@@ -176,7 +221,41 @@ function resolveRelationTargetFile(app: App, linkpath: string, sourceFilePath: s
 		}
 	}
 
-	return null;
+	return resolveUniqueBasenameTargetFile(app, linkpath);
+}
+
+function buildCachedMetadataFromContent(content: string): CachedMetadata | null {
+	const frontmatter = extractFrontmatterBlock(content);
+	if (!frontmatter?.trim()) {
+		return null;
+	}
+
+	const parsedFrontmatter = parseYaml(frontmatter) as unknown;
+	if (!isObjectRecord(parsedFrontmatter)) {
+		return null;
+	}
+
+	return {
+		frontmatter: parsedFrontmatter as FrontMatterCache,
+	};
+}
+
+function extractFrontmatterBlock(content: string): string | null {
+	const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
+	return match?.[1] ?? null;
+}
+
+function resolveUniqueBasenameTargetFile(app: App, linkpath: string): TFile | null {
+	const normalizedLinkpath = linkpath.replace(/\\/g, '/').trim();
+	if (!normalizedLinkpath || normalizedLinkpath.includes('/')) {
+		return null;
+	}
+
+	const normalizedBasename = normalizedLinkpath.replace(/\.md$/i, '');
+	const matches = app.vault.getMarkdownFiles()
+		.filter((file) => file.basename === normalizedBasename);
+
+	return matches.length === 1 ? matches[0] ?? null : null;
 }
 
 function buildLinkpathCandidates(linkpath: string, sourceFilePath: string): string[] {
@@ -219,4 +298,8 @@ function buildLinkpathCandidates(linkpath: string, sourceFilePath: string): stri
 function getParentDirectory(path: string): string {
 	const lastSlashIndex = path.lastIndexOf('/');
 	return lastSlashIndex >= 0 ? path.slice(0, lastSlashIndex) : '';
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

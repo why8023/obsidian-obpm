@@ -9,7 +9,13 @@ import {
 	resolveMarkdownDestinationCandidates,
 } from './managed-link-protocol';
 import {buildRelatedLinksState} from './related-links-state-store';
-import {buildDesiredLinksByTarget, buildFullSourceIndex, buildSourceContribution} from './source-index';
+import {
+	buildDesiredLinksByTarget,
+	buildFullSourceIndex,
+	buildFullSourceIndexWithContentFallback,
+	buildSourceContribution,
+	SourceIndex,
+} from './source-index';
 import {syncManagedLinksInContent} from './target-sync';
 import {DesiredLinksByTarget, DesiredTargetLink, RelatedLinksState, SourceContribution} from './types';
 
@@ -39,6 +45,7 @@ interface VaultConfigReader {
 }
 
 const DEFAULT_FLUSH_DELAY_MS = 300;
+const UNSAFE_FULL_SYNC_RETRY_DELAY_MS = 5000;
 
 export class RelatedLinksFeature extends Component {
 	private readonly missingLinkGraceDeadlineByTargetPath = new Map<string, Map<string, number>>();
@@ -56,6 +63,7 @@ export class RelatedLinksFeature extends Component {
 	private flushTimer: number | null = null;
 	private fullSyncQueued = false;
 	private hasInitialized = false;
+	private pendingFullSyncAfterMetadataResolved = false;
 	private missingLinkGraceTimer: number | null = null;
 	private workQueue = Promise.resolve();
 
@@ -71,6 +79,10 @@ export class RelatedLinksFeature extends Component {
 
 		this.registerEvent(this.plugin.app.metadataCache.on('deleted', (file, prevCache) => {
 			this.queueDeletedFile(file, prevCache);
+		}));
+
+		this.registerEvent(this.plugin.app.metadataCache.on('resolved', () => {
+			this.handleMetadataResolved();
 		}));
 
 		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
@@ -109,6 +121,7 @@ export class RelatedLinksFeature extends Component {
 		this.pendingRenamedFiles.clear();
 		this.pendingObsidianRenameTargetPaths.clear();
 		this.fullSyncQueued = false;
+		this.pendingFullSyncAfterMetadataResolved = false;
 		this.currentState = this.plugin.getRelatedLinksState();
 		this.plugin.debugLog('Refresh requested.');
 
@@ -119,6 +132,7 @@ export class RelatedLinksFeature extends Component {
 			this.pendingObsidianRenameTargetPaths.clear();
 			this.renamedSourcePaths.clear();
 			this.sourceContributionsByPath.clear();
+			this.pendingFullSyncAfterMetadataResolved = false;
 			this.clearAllMissingLinkGraceState();
 			this.hasInitialized = false;
 			this.plugin.debugLog('Refresh skipped because related links are disabled.');
@@ -140,9 +154,13 @@ export class RelatedLinksFeature extends Component {
 		});
 		await this.enqueue(async () => {
 			try {
-				await this.syncAllRelatedLinks();
-				this.hasInitialized = true;
-				this.plugin.debugLog('Full sync completed successfully.');
+				const completed = await this.syncAllRelatedLinks();
+				if (completed) {
+					this.hasInitialized = true;
+					this.plugin.debugLog('Full sync completed successfully.');
+				} else {
+					this.plugin.debugLog('Full sync was deferred until metadata cache is ready.');
+				}
 			} catch (error) {
 				this.handleError(error, options.notifyOnError ?? true);
 			}
@@ -240,6 +258,22 @@ export class RelatedLinksFeature extends Component {
 		}, delayMs);
 	}
 
+	private handleMetadataResolved() {
+		if (!this.isEnabled()) {
+			this.pendingFullSyncAfterMetadataResolved = false;
+			return;
+		}
+
+		if (!this.pendingFullSyncAfterMetadataResolved) {
+			return;
+		}
+
+		this.pendingFullSyncAfterMetadataResolved = false;
+		this.fullSyncQueued = true;
+		this.plugin.debugLog('Metadata cache resolved; queued deferred related-links full sync.');
+		this.scheduleFlush(0);
+	}
+
 	private async flushPendingWork() {
 		if (!this.isEnabled()) {
 			this.pendingChangedFiles.clear();
@@ -249,6 +283,7 @@ export class RelatedLinksFeature extends Component {
 			this.pendingGraceExpiredTargetPaths.clear();
 			this.pendingRenamedFiles.clear();
 			this.pendingObsidianRenameTargetPaths.clear();
+			this.pendingFullSyncAfterMetadataResolved = false;
 			this.fullSyncQueued = false;
 			this.plugin.debugLog('Pending work cleared because related links are disabled.');
 			return;
@@ -315,12 +350,76 @@ export class RelatedLinksFeature extends Component {
 		}, {notifyOnError: shouldNotifyOnError});
 	}
 
-	private async syncAllRelatedLinks() {
+	private getMissingCachedHistoricalSourcePaths(sourceIndex: SourceIndex): string[] {
+		const missingSourcePaths: string[] = [];
+
+		for (const sourcePath of Object.keys(this.currentState.sourceTargetsByPath)) {
+			if (sourceIndex.sourceContributionsByPath.has(sourcePath)) {
+				continue;
+			}
+
+			const sourceFile = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
+			if (!(sourceFile instanceof TFile)) {
+				continue;
+			}
+
+			if (this.plugin.app.metadataCache.getFileCache(sourceFile) === null) {
+				missingSourcePaths.push(sourcePath);
+			}
+		}
+
+		return missingSourcePaths.sort((left, right) => left.localeCompare(right));
+	}
+
+	private deferFullSyncUntilMetadataResolved(details: {
+		missingSourceCount: number;
+		sampleMissingSources: string[];
+		sourceCount: number;
+	}) {
+		this.pendingFullSyncAfterMetadataResolved = true;
+		this.fullSyncQueued = true;
+		this.plugin.debugLog('Deferred related-links full sync because historical source metadata is unavailable.', {
+			...details,
+			retryDelayMs: UNSAFE_FULL_SYNC_RETRY_DELAY_MS,
+		});
+		this.scheduleFlush(UNSAFE_FULL_SYNC_RETRY_DELAY_MS);
+	}
+
+	private async syncAllRelatedLinks(): Promise<boolean> {
 		this.pendingObsidianRenameTargetPaths.clear();
 		this.renamedSourcePaths.clear();
 		const relationProperty = this.plugin.settings.relatedLinks.relationProperty.trim();
 		const displayProperty = this.plugin.settings.relatedLinks.displayProperty.trim();
-		const sourceIndex = buildFullSourceIndex(this.plugin.app, relationProperty, displayProperty);
+		let sourceIndex = buildFullSourceIndex(this.plugin.app, relationProperty, displayProperty);
+		let missingCachedHistoricalSourcePaths = this.getMissingCachedHistoricalSourcePaths(sourceIndex);
+		if (missingCachedHistoricalSourcePaths.length > 0) {
+			sourceIndex = await buildFullSourceIndexWithContentFallback(this.plugin.app, relationProperty, displayProperty, {
+				fallbackSourcePaths: new Set(missingCachedHistoricalSourcePaths),
+				onFallbackError: (file, error) => {
+					this.plugin.debugLog('Failed to read source file while rebuilding related-links index from content.', {
+						error,
+						filePath: file.path,
+					});
+				},
+			});
+			const recoveredSourceCount = missingCachedHistoricalSourcePaths
+				.filter((sourcePath) => sourceIndex.sourceContributionsByPath.has(sourcePath))
+				.length;
+			this.plugin.debugLog('Rebuilt related-links source index with content fallback for missing metadata cache entries.', {
+				fallbackSourceCount: missingCachedHistoricalSourcePaths.length,
+				recoveredSourceCount,
+				sourceCount: sourceIndex.sourceContributionsByPath.size,
+			});
+			missingCachedHistoricalSourcePaths = this.getMissingCachedHistoricalSourcePaths(sourceIndex);
+			if (missingCachedHistoricalSourcePaths.length > 0) {
+				this.deferFullSyncUntilMetadataResolved({
+					missingSourceCount: missingCachedHistoricalSourcePaths.length,
+					sampleMissingSources: missingCachedHistoricalSourcePaths.slice(0, 10),
+					sourceCount: sourceIndex.sourceContributionsByPath.size,
+				});
+				return false;
+			}
+		}
 
 		this.sourceContributionsByPath.clear();
 		for (const contribution of sourceIndex.sourceContributionsByPath.values()) {
@@ -350,6 +449,7 @@ export class RelatedLinksFeature extends Component {
 		}
 
 		await this.persistTrackedState();
+		return true;
 	}
 
 	private async runIncrementalSync(work: {
