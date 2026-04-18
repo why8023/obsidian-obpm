@@ -61,6 +61,8 @@ export interface SettingsLocalization {
 	inboxHeadingName: string;
 	inboxHeadingDesc: string;
 	inboxHeadingPlaceholder: string;
+	includeInheritedRelatedLinksName: string;
+	includeInheritedRelatedLinksDesc: string;
 	missingLinkGracePeriodName: string;
 	missingLinkGracePeriodDesc: (min: number, max: number, defaultValue: number) => string;
 	missingLinkGracePeriodNotice: (min: number, max: number) => string;
@@ -240,6 +242,8 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	inboxHeadingName: 'Inbox heading',
 	inboxHeadingDesc: 'Missing related links are inserted as list items under the first matching level-2 heading.',
 	inboxHeadingPlaceholder: 'Enter Inbox heading',
+	includeInheritedRelatedLinksName: 'Include inherited related links',
+	includeInheritedRelatedLinksDesc: 'Nest upstream sources under their source note when rebuilding managed related-link lists.',
 	missingLinkGracePeriodName: 'Missing-link grace period',
 	missingLinkGracePeriodDesc: (min, max, defaultValue) =>
 		`Wait this many seconds before restoring a missing managed link. Range: ${min}-${max}. Default: ${defaultValue}.`,
@@ -420,6 +424,8 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	inboxHeadingName: 'Inbox 标题',
 	inboxHeadingDesc: '缺失的关联链接会以列表项形式插入到第一个匹配的二级标题下。',
 	inboxHeadingPlaceholder: '输入 Inbox 标题',
+	includeInheritedRelatedLinksName: '包含继承关联链接',
+	includeInheritedRelatedLinksDesc: '重建托管关联链接列表时，将上游来源按源笔记层级嵌套插入。',
 	missingLinkGracePeriodName: '缺失链接宽限期',
 	missingLinkGracePeriodDesc: (min, max, defaultValue) =>
 		`当托管链接暂时消失时，等待这么多秒后再自动补回。范围：${min}-${max}。默认值：${defaultValue}。`,

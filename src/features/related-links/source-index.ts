@@ -1,5 +1,5 @@
 import {App, CachedMetadata, FrontMatterCache, normalizePath, parseYaml, TFile} from 'obsidian';
-import {DesiredLinksByTarget, DesiredTargetLink, SourceContribution} from './types';
+import {DesiredLinksByTarget, DesiredLinkTreesByTarget, DesiredTargetLink, DesiredTargetLinkNode, SourceContribution} from './types';
 
 export interface SourceIndex {
 	desiredLinksByTarget: DesiredLinksByTarget;
@@ -100,6 +100,48 @@ export function buildDesiredLinksByTarget(contributions: Iterable<SourceContribu
 	return desiredLinksByTarget;
 }
 
+export function buildDesiredLinkTreesByTarget(
+	contributions: Iterable<SourceContribution>,
+	rootTargetPaths?: ReadonlySet<string>,
+): DesiredLinkTreesByTarget {
+	const contributionsBySourcePath = new Map<string, SourceContribution>();
+	const sourcePathsByTargetPath = new Map<string, Set<string>>();
+
+	for (const contribution of contributions) {
+		contributionsBySourcePath.set(contribution.sourcePath, contribution);
+
+		for (const targetPath of contribution.targetPaths) {
+			let sourcePaths = sourcePathsByTargetPath.get(targetPath);
+			if (!sourcePaths) {
+				sourcePaths = new Set<string>();
+				sourcePathsByTargetPath.set(targetPath, sourcePaths);
+			}
+
+			sourcePaths.add(contribution.sourcePath);
+		}
+	}
+
+	const targetPaths = rootTargetPaths
+		? [...rootTargetPaths].filter((targetPath) => sourcePathsByTargetPath.has(targetPath))
+		: [...sourcePathsByTargetPath.keys()];
+	const desiredLinkTreesByTarget: DesiredLinkTreesByTarget = new Map();
+
+	for (const targetPath of targetPaths.sort((left, right) => left.localeCompare(right))) {
+		const rootPath = new Set<string>([targetPath]);
+		const children = buildDesiredLinkTreeChildren(
+			targetPath,
+			rootPath,
+			contributionsBySourcePath,
+			sourcePathsByTargetPath,
+		);
+		if (children.length > 0) {
+			desiredLinkTreesByTarget.set(targetPath, children);
+		}
+	}
+
+	return desiredLinkTreesByTarget;
+}
+
 export function buildSourceContribution(
 	app: App,
 	file: TFile,
@@ -135,6 +177,54 @@ export function buildSourceContribution(
 		sourcePath: file.path,
 		targetPaths: [...targetPaths].sort((left, right) => left.localeCompare(right)),
 	};
+}
+
+function buildDesiredLinkTreeChildren(
+	targetPath: string,
+	currentPath: ReadonlySet<string>,
+	contributionsBySourcePath: ReadonlyMap<string, SourceContribution>,
+	sourcePathsByTargetPath: ReadonlyMap<string, ReadonlySet<string>>,
+): DesiredTargetLinkNode[] {
+	const sourcePaths = sourcePathsByTargetPath.get(targetPath);
+	if (!sourcePaths) {
+		return [];
+	}
+
+	const children: DesiredTargetLinkNode[] = [];
+	for (const sourcePath of sourcePaths) {
+		if (currentPath.has(sourcePath)) {
+			continue;
+		}
+
+		const contribution = contributionsBySourcePath.get(sourcePath);
+		if (!contribution) {
+			continue;
+		}
+
+		const nextPath = new Set(currentPath);
+		nextPath.add(sourcePath);
+		children.push({
+			displayText: contribution.displayText,
+			sourcePath: contribution.sourcePath,
+			children: buildDesiredLinkTreeChildren(
+				contribution.sourcePath,
+				nextPath,
+				contributionsBySourcePath,
+				sourcePathsByTargetPath,
+			),
+		});
+	}
+
+	return children.sort(compareDesiredTargetLinkNodes);
+}
+
+function compareDesiredTargetLinkNodes(left: DesiredTargetLinkNode, right: DesiredTargetLinkNode): number {
+	const displayComparison = left.displayText.localeCompare(right.displayText);
+	if (displayComparison !== 0) {
+		return displayComparison;
+	}
+
+	return left.sourcePath.localeCompare(right.sourcePath);
 }
 
 export function getDisplayText(file: TFile, frontmatter: FrontMatterCache | undefined, displayProperty: string): string {

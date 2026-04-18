@@ -9,7 +9,12 @@ export interface DesiredTargetLink {
 	sourcePath: string;
 }
 
+export interface DesiredTargetLinkNode extends DesiredTargetLink {
+	children: DesiredTargetLinkNode[];
+}
+
 export type DesiredLinksByTarget = Map<string, Map<string, DesiredTargetLink>>;
+export type DesiredLinkTreesByTarget = Map<string, DesiredTargetLinkNode[]>;
 
 export const RELATED_LINKS_STATE_VERSION = 1;
 

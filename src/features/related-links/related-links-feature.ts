@@ -11,13 +11,14 @@ import {
 import {buildRelatedLinksState} from './related-links-state-store';
 import {
 	buildDesiredLinksByTarget,
+	buildDesiredLinkTreesByTarget,
 	buildFullSourceIndex,
 	buildFullSourceIndexWithContentFallback,
 	buildSourceContribution,
 	SourceIndex,
 } from './source-index';
-import {syncManagedLinksInContent} from './target-sync';
-import {DesiredLinksByTarget, DesiredTargetLink, RelatedLinksState, SourceContribution} from './types';
+import {syncManagedLinksInContent, syncManagedLinkTreeInContent} from './target-sync';
+import {DesiredLinksByTarget, DesiredTargetLink, DesiredTargetLinkNode, RelatedLinksState, SourceContribution} from './types';
 
 interface FullSyncOptions {
 	notifyOnError?: boolean;
@@ -432,9 +433,13 @@ export class RelatedLinksFeature extends Component {
 		]);
 		this.plugin.debugLog('Built full related-links source index.', {
 			historicalTargetCount: this.currentState.managedTargets.length,
+			includeInheritedLinks: this.shouldIncludeInheritedLinks(),
 			sourceCount: this.sourceContributionsByPath.size,
 			targetCount: targetPathsToSync.size,
 		});
+		const desiredLinkTreesByTarget = this.shouldIncludeInheritedLinks()
+			? buildDesiredLinkTreesByTarget(sourceIndex.sourceContributionsByPath.values())
+			: new Map<string, DesiredTargetLinkNode[]>();
 
 		for (const targetPath of [...targetPathsToSync].sort((left, right) => left.localeCompare(right))) {
 			const targetFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
@@ -445,6 +450,7 @@ export class RelatedLinksFeature extends Component {
 			await this.syncTargetFile(
 				targetFile,
 				sourceIndex.desiredLinksByTarget.get(targetPath) ?? new Map<string, DesiredTargetLink>(),
+				desiredLinkTreesByTarget.get(targetPath) ?? [],
 			);
 		}
 
@@ -644,6 +650,8 @@ export class RelatedLinksFeature extends Component {
 			this.addContributionTargets(affectedTargetPaths, refreshedContribution.nextContribution);
 		}
 
+		this.expandAffectedTargetPathsForInheritedLinks(affectedTargetPaths);
+
 		if (affectedTargetPaths.size === 0) {
 			this.plugin.debugLog('Incremental sync found no affected target files.');
 			await this.persistTrackedState();
@@ -651,11 +659,15 @@ export class RelatedLinksFeature extends Component {
 		}
 
 		this.plugin.debugLog('Incremental sync will update affected target files.', {
+			includeInheritedLinks: this.shouldIncludeInheritedLinks(),
 			targetCount: affectedTargetPaths.size,
 			targetPaths: [...affectedTargetPaths],
 		});
 
 		const desiredLinksByTarget = this.buildDesiredLinksByTargetPaths([...affectedTargetPaths]);
+		const desiredLinkTreesByTarget = this.shouldIncludeInheritedLinks()
+			? buildDesiredLinkTreesByTarget(this.sourceContributionsByPath.values(), affectedTargetPaths)
+			: new Map<string, DesiredTargetLinkNode[]>();
 		for (const targetPath of [...affectedTargetPaths].sort((left, right) => left.localeCompare(right))) {
 			const targetFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
 			if (!(targetFile instanceof TFile)) {
@@ -666,39 +678,62 @@ export class RelatedLinksFeature extends Component {
 				continue;
 			}
 
-			await this.syncTargetFile(targetFile, desiredLinksByTarget.get(targetPath) ?? new Map<string, DesiredTargetLink>());
+			await this.syncTargetFile(
+				targetFile,
+				desiredLinksByTarget.get(targetPath) ?? new Map<string, DesiredTargetLink>(),
+				desiredLinkTreesByTarget.get(targetPath) ?? [],
+			);
 		}
 
 		await this.persistTrackedState();
 	}
 
-	private async syncTargetFile(targetFile: TFile, desiredLinks: Map<string, DesiredTargetLink>) {
+	private async syncTargetFile(
+		targetFile: TFile,
+		desiredLinks: Map<string, DesiredTargetLink>,
+		desiredLinkTree: DesiredTargetLinkNode[] = [],
+	) {
 		const currentContent = await this.plugin.app.vault.read(targetFile);
 		this.plugin.debugLog('Syncing target file.', {
 			desiredLinkCount: desiredLinks.size,
+			desiredLinkTreeCount: desiredLinkTree.length,
+			includeInheritedLinks: this.shouldIncludeInheritedLinks(),
 			targetPath: targetFile.path,
 		});
-		const processedContent = syncManagedLinksInContent(currentContent, {
-			debugLog: (message, details) => {
-				this.plugin.debugLog(message, details);
-			},
-			desiredLinks,
-			inboxHeading: this.plugin.settings.relatedLinks.inboxHeading,
-			resolveManagedSourcePath: (link) => this.resolveManagedSourcePath(link, targetFile),
-			resolveSourceFile: (sourcePath) => {
-				const sourceFile = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
-				return sourceFile instanceof TFile ? sourceFile : null;
-			},
-			shouldDeferMissingLinkInsertion: (link, currentTargetFile) =>
-				this.shouldDeferMissingLinkInsertion(currentTargetFile.path, link.sourcePath),
-			shouldDeferDestinationRewrite: (targetFilePath, actualDestination, canonicalDestination) =>
-				this.shouldDeferManagedRenameRewrite(targetFilePath, actualDestination, canonicalDestination),
-			targetFile,
-		});
+		const processedContent = this.shouldIncludeInheritedLinks()
+			? syncManagedLinkTreeInContent(currentContent, {
+				debugLog: (message, details) => {
+					this.plugin.debugLog(message, details);
+				},
+				desiredLinkTree,
+				inboxHeading: this.plugin.settings.relatedLinks.inboxHeading,
+				resolveManagedSourcePath: (link) => this.resolveManagedSourcePath(link, targetFile),
+				resolveSourceFile: (sourcePath) => this.resolveSourceFile(sourcePath),
+				shouldDeferMissingLinkInsertion: (link, currentTargetFile) =>
+					this.shouldDeferMissingLinkInsertion(currentTargetFile.path, link.sourcePath),
+				targetFile,
+			})
+			: syncManagedLinksInContent(currentContent, {
+				debugLog: (message, details) => {
+					this.plugin.debugLog(message, details);
+				},
+				desiredLinks,
+				inboxHeading: this.plugin.settings.relatedLinks.inboxHeading,
+				resolveManagedSourcePath: (link) => this.resolveManagedSourcePath(link, targetFile),
+				resolveSourceFile: (sourcePath) => this.resolveSourceFile(sourcePath),
+				shouldDeferMissingLinkInsertion: (link, currentTargetFile) =>
+					this.shouldDeferMissingLinkInsertion(currentTargetFile.path, link.sourcePath),
+				shouldDeferDestinationRewrite: (targetFilePath, actualDestination, canonicalDestination) =>
+					this.shouldDeferManagedRenameRewrite(targetFilePath, actualDestination, canonicalDestination),
+				targetFile,
+			});
+		const desiredLinksForGraceState = this.shouldIncludeInheritedLinks()
+			? this.buildDesiredLinksFromTree(desiredLinkTree)
+			: desiredLinks;
 
 		this.reconcileMissingLinkGraceState(
 			targetFile.path,
-			desiredLinks,
+			desiredLinksForGraceState,
 			processedContent.satisfiedDesiredSourcePaths,
 		);
 		await this.writeFileIfChanged(targetFile, currentContent, processedContent.content);
@@ -738,6 +773,34 @@ export class RelatedLinksFeature extends Component {
 	private addContributionTargets(targetPaths: Set<string>, contribution: SourceContribution | null) {
 		for (const targetPath of contribution?.targetPaths ?? []) {
 			targetPaths.add(targetPath);
+		}
+	}
+
+	private expandAffectedTargetPathsForInheritedLinks(targetPaths: Set<string>) {
+		if (!this.shouldIncludeInheritedLinks()) {
+			return;
+		}
+
+		const pendingTargetPaths = [...targetPaths];
+		for (let index = 0; index < pendingTargetPaths.length; index += 1) {
+			const targetPath = pendingTargetPaths[index];
+			if (!targetPath) {
+				continue;
+			}
+
+			const contribution = this.sourceContributionsByPath.get(targetPath);
+			if (!contribution) {
+				continue;
+			}
+
+			for (const inheritedTargetPath of contribution.targetPaths) {
+				if (targetPaths.has(inheritedTargetPath)) {
+					continue;
+				}
+
+				targetPaths.add(inheritedTargetPath);
+				pendingTargetPaths.push(inheritedTargetPath);
+			}
 		}
 	}
 
@@ -799,6 +862,33 @@ export class RelatedLinksFeature extends Component {
 		}
 
 		return buildDesiredLinksByTarget(filteredContributions);
+	}
+
+	private buildDesiredLinksFromTree(nodes: DesiredTargetLinkNode[]): Map<string, DesiredTargetLink> {
+		const desiredLinks = new Map<string, DesiredTargetLink>();
+		const collectNode = (node: DesiredTargetLinkNode) => {
+			if (!desiredLinks.has(node.sourcePath)) {
+				desiredLinks.set(node.sourcePath, {
+					displayText: node.displayText,
+					sourcePath: node.sourcePath,
+				});
+			}
+
+			for (const child of node.children) {
+				collectNode(child);
+			}
+		};
+
+		for (const node of nodes) {
+			collectNode(node);
+		}
+
+		return desiredLinks;
+	}
+
+	private resolveSourceFile(sourcePath: string): TFile | null {
+		const sourceFile = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
+		return sourceFile instanceof TFile ? sourceFile : null;
 	}
 
 	private resolveManagedSourcePath(link: ManagedInlineLink, targetFile: TFile): string | null {
@@ -1255,6 +1345,10 @@ export class RelatedLinksFeature extends Component {
 
 	private isEnabled(): boolean {
 		return this.plugin.settings.relatedLinks.enabled;
+	}
+
+	private shouldIncludeInheritedLinks(): boolean {
+		return this.plugin.settings.relatedLinks.includeInheritedLinks;
 	}
 
 	private isMarkdownFile(file: TAbstractFile): file is TFile {

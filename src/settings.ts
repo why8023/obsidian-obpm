@@ -74,6 +74,7 @@ export interface RelatedLinksSettings {
 	relationProperty: string;
 	displayProperty: string;
 	inboxHeading: string;
+	includeInheritedLinks: boolean;
 	missingLinkGracePeriodSeconds: number;
 	verboseLogging: boolean;
 }
@@ -187,6 +188,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		relationProperty: 'obpm_related',
 		displayProperty: 'obpm_title',
 		inboxHeading: DEFAULT_RELATED_LINKS_INBOX_HEADING,
+		includeInheritedLinks: false,
 		missingLinkGracePeriodSeconds: DEFAULT_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
 		verboseLogging: false,
 	},
@@ -253,6 +255,10 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 			inboxHeading: normalizeRequiredText(
 				settings?.relatedLinks?.inboxHeading,
 				DEFAULT_SETTINGS.relatedLinks.inboxHeading,
+			),
+			includeInheritedLinks: normalizeBoolean(
+				settings?.relatedLinks?.includeInheritedLinks,
+				DEFAULT_SETTINGS.relatedLinks.includeInheritedLinks,
 			),
 			missingLinkGracePeriodSeconds: normalizeRelatedLinksMissingLinkGracePeriodSeconds(
 				settings?.relatedLinks?.missingLinkGracePeriodSeconds,
@@ -892,6 +898,16 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					refreshFeatures: ['relatedLinks'],
 				});
 			});
+
+		new Setting(containerEl)
+			.setName(strings.includeInheritedRelatedLinksName)
+			.setDesc(strings.includeInheritedRelatedLinksDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.relatedLinks.includeInheritedLinks)
+				.onChange(async (value) => {
+					this.plugin.settings.relatedLinks.includeInheritedLinks = value;
+					await saveRelatedLinksSettings();
+				}));
 
 		new Setting(containerEl)
 			.setName(strings.missingLinkGracePeriodName)
