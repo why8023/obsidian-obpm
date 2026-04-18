@@ -82,16 +82,27 @@ interface PreservedManagedTreeContent {
 	sameLineSuffix: string;
 }
 
+interface ManagedTreeBlockRange {
+	contentEnd: number;
+	contentStart: number;
+	end: number;
+	start: number;
+}
+
 const DEFAULT_INBOX_HEADING = 'Inbox';
 const HEADING_LINE_PATTERN = /^(?: {0,3})(#{1,6})[ \t]+(.*)$/gm;
 const MANAGED_TREE_INDENT = '    ';
 const MANAGED_TREE_INDENT_WIDTH = 4;
 const MANAGED_TREE_PATH_SEPARATOR = '\0';
+const RELATED_LINKS_BLOCK_START_MARKER = '<!-- obpm-related-links -->';
+const RELATED_LINKS_BLOCK_END_MARKER = '<!-- /obpm-related-links -->';
 
 export function syncManagedLinksInContent(content: string, options: TargetSyncOptions): TargetSyncResult {
 	const satisfiedDesiredSourcePaths = new Set<string>();
 	const deferredMissingSourcePaths = new Set<string>();
-	const managedLinks = extractManagedInlineLinks(content);
+	const ignoredManagedTreeBlockRanges = findExistingManagedTreeBlockRanges(content);
+	const managedLinks = extractManagedInlineLinks(content)
+		.filter((managedLink) => !isIndexInContentRanges(managedLink.start, ignoredManagedTreeBlockRanges));
 	const normalizedInboxHeading = normalizeInboxHeading(options.inboxHeading);
 	const headings = parseMarkdownHeadings(content);
 	const inboxSection = findExistingInboxSection(content, headings, normalizedInboxHeading);
@@ -265,10 +276,15 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 export function syncManagedLinkTreeInContent(content: string, options: TargetTreeSyncOptions): TargetSyncResult {
 	const satisfiedDesiredSourcePaths = new Set<string>();
 	const deferredMissingSourcePaths = new Set<string>();
-	const existingTreeState = collectExistingManagedTreeState(content, options);
-	let finalContent = existingTreeState.removalRanges.length > 0
-		? normalizeContentAfterRemoval(removeContentRanges(content, existingTreeState.removalRanges))
-		: content;
+	const existingBlock = findExistingManagedTreeBlock(content);
+	const existingTreeState = existingBlock?.status === 'complete'
+		? collectExistingManagedTreeState(
+			content.slice(existingBlock.range.contentStart, existingBlock.range.contentEnd),
+			options,
+		)
+		: existingBlock?.status === 'incomplete'
+			? createEmptyManagedTreeState()
+			: collectExistingManagedTreeState(content, options);
 	const linkBlock = buildManagedMarkdownTreeBlock(options.desiredLinkTree, {
 		deferredMissingSourcePaths,
 		existingManagedSourcePaths: existingTreeState.existingManagedSourcePaths,
@@ -279,11 +295,23 @@ export function syncManagedLinkTreeInContent(content: string, options: TargetTre
 		satisfiedDesiredSourcePaths,
 		targetFile: options.targetFile,
 	});
+	const managedBlock = linkBlock.length > 0 ? wrapManagedTreeBlock(linkBlock) : '';
+	if (existingBlock?.status === 'complete') {
+		return {
+			content: content.slice(0, existingBlock.range.start) + managedBlock + content.slice(existingBlock.range.end),
+			deferredMissingSourcePaths,
+			satisfiedDesiredSourcePaths,
+		};
+	}
 
-	if (linkBlock.length > 0) {
+	let finalContent = existingTreeState.removalRanges.length > 0
+		? normalizeContentAfterRemoval(removeContentRanges(content, existingTreeState.removalRanges))
+		: content;
+
+	if (managedBlock.length > 0) {
 		finalContent = insertLinkBlockIntoInboxSection(
 			finalContent,
-			linkBlock,
+			managedBlock,
 			options.inboxHeading,
 		);
 	}
@@ -526,6 +554,83 @@ function collectExistingManagedTreeState(
 		preservedContentByPathKey,
 		removalRanges,
 	};
+}
+
+function createEmptyManagedTreeState(): {
+	existingManagedSourcePaths: Set<string>;
+	preservedContentByPathKey: Map<string, PreservedManagedTreeContent>;
+	removalRanges: {end: number; start: number}[];
+} {
+	return {
+		existingManagedSourcePaths: new Set<string>(),
+		preservedContentByPathKey: new Map<string, PreservedManagedTreeContent>(),
+		removalRanges: [],
+	};
+}
+
+function findExistingManagedTreeBlock(content: string):
+	| {range: ManagedTreeBlockRange; status: 'complete'}
+	| {status: 'incomplete'}
+	| null {
+	const lines = parseLines(content);
+	let startLine: LineInfo | null = null;
+	let sawIncompleteMarker = false;
+
+	for (const line of lines) {
+		if (isRelatedLinksBlockStartMarker(line.text)) {
+			if (!startLine) {
+				startLine = line;
+			} else {
+				sawIncompleteMarker = true;
+			}
+			continue;
+		}
+
+		if (!isRelatedLinksBlockEndMarker(line.text)) {
+			continue;
+		}
+
+		if (!startLine) {
+			sawIncompleteMarker = true;
+			continue;
+		}
+
+		return {
+			range: {
+				contentEnd: line.start,
+				contentStart: startLine.endWithBreak,
+				end: line.endWithBreak,
+				start: startLine.start,
+			},
+			status: 'complete',
+		};
+	}
+
+	return startLine || sawIncompleteMarker ? {status: 'incomplete'} : null;
+}
+
+function findExistingManagedTreeBlockRanges(content: string): {end: number; start: number}[] {
+	const ranges: {end: number; start: number}[] = [];
+	let searchStart = 0;
+
+	while (searchStart < content.length) {
+		const nextBlock = findExistingManagedTreeBlock(content.slice(searchStart));
+		if (nextBlock?.status !== 'complete') {
+			break;
+		}
+
+		ranges.push({
+			end: searchStart + nextBlock.range.end,
+			start: searchStart + nextBlock.range.start,
+		});
+		searchStart += nextBlock.range.end;
+	}
+
+	return ranges;
+}
+
+function wrapManagedTreeBlock(linkBlock: string): string {
+	return `${RELATED_LINKS_BLOCK_START_MARKER}\n${linkBlock}${RELATED_LINKS_BLOCK_END_MARKER}\n`;
 }
 
 function assignManagedTreeParents(managedItems: ExistingManagedTreeItem[]) {
@@ -998,6 +1103,10 @@ function mergeContentRanges(ranges: {end: number; start: number}[]): {end: numbe
 	return mergedRanges;
 }
 
+function isIndexInContentRanges(index: number, ranges: {end: number; start: number}[]): boolean {
+	return ranges.some((range) => index >= range.start && index < range.end);
+}
+
 function reindentPreservedBlock(block: string, previousParentIndentWidth: number, nextParentIndentWidth: number): string {
 	if (!block) {
 		return '';
@@ -1056,6 +1165,14 @@ function isBlankLine(line: string): boolean {
 
 function isMarkdownHeadingLine(line: string): boolean {
 	return /^(?: {0,3})#{1,6}[ \t]+/.test(line);
+}
+
+function isRelatedLinksBlockStartMarker(line: string): boolean {
+	return /^<!--\s*obpm-related-links\s*-->\s*$/.test(line.trim());
+}
+
+function isRelatedLinksBlockEndMarker(line: string): boolean {
+	return /^<!--\s*\/obpm-related-links\s*-->\s*$/.test(line.trim());
 }
 
 function countLeadingWhitespaceWidth(line: string): number {
