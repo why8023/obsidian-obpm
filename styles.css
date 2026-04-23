@@ -498,3 +498,28 @@
 		width: 100%;
 	}
 }
+
+.obpm-file-content-move-source {
+	position: relative;
+}
+
+.obpm-file-content-move-drag-proxy {
+	position: absolute;
+	z-index: 20;
+	inset: 0;
+	display: none;
+	cursor: grab;
+	background: transparent;
+}
+
+body.obpm-file-content-move-mod-active .obpm-file-content-move-source > .obpm-file-content-move-drag-proxy {
+	display: block;
+}
+
+body.obpm-file-content-move-mod-active .obpm-file-content-move-source {
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 70%, transparent);
+}
+
+.obpm-file-content-move-drag-proxy:active {
+	cursor: grabbing;
+}

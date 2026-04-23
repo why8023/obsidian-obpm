@@ -129,7 +129,7 @@ export interface FileNameSyncSettings {
 export interface FileContentMoveSettings {
 	enableFileExplorer: boolean;
 	enabled: boolean;
-	modifierKey: FileContentMoveModifierKey;
+	modifierKeys: FileContentMoveModifierKey[];
 	stripSingleH1: boolean;
 }
 
@@ -195,7 +195,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 	fileContentMove: {
 		enableFileExplorer: true,
 		enabled: false,
-		modifierKey: 'alt',
+		modifierKeys: ['mod', 'alt'],
 		stripSingleH1: true,
 	},
 	relatedLinks: {
@@ -269,9 +269,9 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 				DEFAULT_SETTINGS.fileContentMove.enableFileExplorer,
 			),
 			enabled: normalizeBoolean(settings?.fileContentMove?.enabled, DEFAULT_SETTINGS.fileContentMove.enabled),
-			modifierKey: normalizeFileContentMoveModifierKey(
-				settings?.fileContentMove?.modifierKey,
-				DEFAULT_SETTINGS.fileContentMove.modifierKey,
+			modifierKeys: normalizeFileContentMoveModifierKeys(
+				settings?.fileContentMove?.modifierKeys,
+				DEFAULT_SETTINGS.fileContentMove.modifierKeys,
 			),
 			stripSingleH1: normalizeBoolean(
 				settings?.fileContentMove?.stripSingleH1,
@@ -329,17 +329,24 @@ function normalizeRequiredText(value: unknown, fallback: string): string {
 	return normalized.length > 0 ? normalized : fallback;
 }
 
-function normalizeFileContentMoveModifierKey(
+function normalizeFileContentMoveModifierKeys(
 	value: unknown,
-	fallback: FileContentMoveModifierKey,
-): FileContentMoveModifierKey {
+	fallback: readonly FileContentMoveModifierKey[],
+): FileContentMoveModifierKey[] {
+	if (!Array.isArray(value)) {
+		return [...fallback];
+	}
+
+	const normalizedKeys = [...new Set(value.filter(isFileContentMoveModifierKey))];
+	return normalizedKeys.length > 0 ? normalizedKeys : [...fallback];
+}
+
+function isFileContentMoveModifierKey(value: unknown): value is FileContentMoveModifierKey {
 	return value === 'alt'
 		|| value === 'ctrl'
 		|| value === 'meta'
 		|| value === 'mod'
-		|| value === 'shift'
-		? value
-		: fallback;
+		|| value === 'shift';
 }
 
 function normalizeBasesTopTabsPlacement(value: unknown, fallback: BasesTopTabsPlacement): BasesTopTabsPlacement {
@@ -1180,22 +1187,35 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName(strings.fileContentMoveModifierKeyName)
-			.setDesc(strings.fileContentMoveModifierKeyDesc)
-			.addDropdown((dropdown) => dropdown
-				.addOption('alt', strings.fileContentMoveModifierAltLabel)
-				.addOption('mod', strings.fileContentMoveModifierModLabel)
-				.addOption('ctrl', strings.fileContentMoveModifierCtrlLabel)
-				.addOption('meta', strings.fileContentMoveModifierMetaLabel)
-				.addOption('shift', strings.fileContentMoveModifierShiftLabel)
-				.setValue(this.plugin.settings.fileContentMove.modifierKey)
-				.onChange(async (value) => {
-					this.plugin.settings.fileContentMove.modifierKey = normalizeFileContentMoveModifierKey(
-						value,
-						this.plugin.settings.fileContentMove.modifierKey,
-					);
-					await saveWithoutRefresh();
-				}));
+			.setName(strings.fileContentMoveModifierKeysName)
+			.setDesc(strings.fileContentMoveModifierKeysDesc)
+			.setHeading();
+
+		const modifierKeyOptions: {key: FileContentMoveModifierKey; label: string}[] = [
+			{key: 'mod', label: strings.fileContentMoveModifierModLabel},
+			{key: 'alt', label: strings.fileContentMoveModifierAltLabel},
+			{key: 'ctrl', label: strings.fileContentMoveModifierCtrlLabel},
+			{key: 'meta', label: strings.fileContentMoveModifierMetaLabel},
+			{key: 'shift', label: strings.fileContentMoveModifierShiftLabel},
+		];
+		for (const option of modifierKeyOptions) {
+			new Setting(containerEl)
+				.setName(option.label)
+				.addToggle((toggle) => toggle
+					.setValue(this.plugin.settings.fileContentMove.modifierKeys.includes(option.key))
+					.onChange(async (value) => {
+						const currentKeys = this.plugin.settings.fileContentMove.modifierKeys;
+						const nextKeys = value
+							? [...new Set([...currentKeys, option.key])]
+							: currentKeys.filter((key) => key !== option.key);
+						this.plugin.settings.fileContentMove.modifierKeys = normalizeFileContentMoveModifierKeys(
+							nextKeys,
+							DEFAULT_SETTINGS.fileContentMove.modifierKeys,
+						);
+						await saveWithoutRefresh();
+						this.display();
+					}));
+		}
 
 		new Setting(containerEl)
 			.setName(strings.fileContentMoveStripSingleH1Name)

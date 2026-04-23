@@ -56,8 +56,8 @@ export interface SettingsLocalization {
 	fileContentMoveHeading: string;
 	fileContentMoveModifierAltLabel: string;
 	fileContentMoveModifierCtrlLabel: string;
-	fileContentMoveModifierKeyDesc: string;
-	fileContentMoveModifierKeyName: string;
+	fileContentMoveModifierKeysDesc: string;
+	fileContentMoveModifierKeysName: string;
 	fileContentMoveModifierMetaLabel: string;
 	fileContentMoveModifierModLabel: string;
 	fileContentMoveModifierShiftLabel: string;
@@ -251,8 +251,8 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	fileContentMoveHeading: 'Dragged content move',
 	fileContentMoveModifierAltLabel: 'Alt',
 	fileContentMoveModifierCtrlLabel: 'Ctrl',
-	fileContentMoveModifierKeyDesc: 'The drag starts only when this modifier is the only pressed modifier key.',
-	fileContentMoveModifierKeyName: 'Modifier key',
+	fileContentMoveModifierKeysDesc: 'The drag starts only when exactly this modifier-key combination is pressed. Default: Mod + Alt.',
+	fileContentMoveModifierKeysName: 'Modifier keys',
 	fileContentMoveModifierMetaLabel: 'Meta',
 	fileContentMoveModifierModLabel: 'Mod (Ctrl or Cmd)',
 	fileContentMoveModifierShiftLabel: 'Shift',
@@ -447,8 +447,8 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	fileContentMoveHeading: '拖拽内容移动',
 	fileContentMoveModifierAltLabel: 'Alt',
 	fileContentMoveModifierCtrlLabel: 'Ctrl',
-	fileContentMoveModifierKeyDesc: '只有这个修饰键被单独按住时，才会触发拖拽移动。',
-	fileContentMoveModifierKeyName: '修饰键',
+	fileContentMoveModifierKeysDesc: '只有精确按住这组修饰键时，才会触发拖拽移动。默认：Mod + Alt。',
+	fileContentMoveModifierKeysName: '修饰键组合',
 	fileContentMoveModifierMetaLabel: 'Meta',
 	fileContentMoveModifierModLabel: 'Mod（Ctrl 或 Cmd）',
 	fileContentMoveModifierShiftLabel: 'Shift',

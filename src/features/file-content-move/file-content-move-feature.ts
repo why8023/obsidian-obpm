@@ -20,9 +20,14 @@ import {buildMovedContentList} from './markdown-list-converter';
 
 const SOURCE_PATH_MIME = 'application/x-obpm-file-content-move-path';
 const BASES_ROW_SELECTOR = '.bases-tr';
+const BASES_SOURCE_SELECTOR = '.bases-tr';
+const DRAG_PROXY_CLASS = 'obpm-file-content-move-drag-proxy';
+const DRAG_SOURCE_CLASS = 'obpm-file-content-move-source';
+const MODIFIER_ACTIVE_BODY_CLASS = 'obpm-file-content-move-mod-active';
 const INTERNAL_LINK_SELECTOR = '.internal-link[data-href]';
 const SOURCE_PATH_SELECTOR = '[data-source-path]';
 const FILE_EXPLORER_SOURCE_SELECTOR = '.nav-file, .nav-file-title, .tree-item-self';
+const FILE_EXPLORER_PROXY_SOURCE_SELECTOR = '.nav-file-title[data-path]';
 const MAX_UNDO_ENTRIES = 20;
 
 interface DragSourceResolution {
@@ -48,6 +53,7 @@ interface RemovalPlan {
 
 class DragSourceController {
 	private disposed = false;
+	private readonly mutationObserver: MutationObserver;
 	private pendingDragEl: HTMLElement | null = null;
 	private pendingPath: string | null = null;
 	private previousDraggable: boolean | null = null;
@@ -67,16 +73,25 @@ class DragSourceController {
 
 	constructor(
 		private readonly rootEl: HTMLElement,
+		private readonly sourceSelector: string,
 		private readonly isEnabled: () => boolean,
-		private readonly getModifierKey: () => FileContentMoveModifierKey,
+		private readonly getModifierKeys: () => readonly FileContentMoveModifierKey[],
 		private readonly onSourceDragEnd: () => void,
 		private readonly onSourceDragStart: (sourcePath: string) => void,
 		private readonly resolveDragSource: (targetEl: Element) => DragSourceResolution | null,
 	) {
+		this.mutationObserver = new MutationObserver(() => {
+			this.refreshProxies();
+		});
 		this.rootEl.addEventListener('mousedown', this.mouseDownHandler, true);
 		this.rootEl.addEventListener('dragstart', this.dragStartHandler, true);
 		this.rootEl.addEventListener('dragend', this.dragEndHandler, true);
 		window.addEventListener('mouseup', this.mouseUpHandler, true);
+		this.mutationObserver.observe(this.rootEl, {
+			childList: true,
+			subtree: true,
+		});
+		this.refreshProxies();
 	}
 
 	destroy(): void {
@@ -89,7 +104,9 @@ class DragSourceController {
 		this.rootEl.removeEventListener('dragstart', this.dragStartHandler, true);
 		this.rootEl.removeEventListener('dragend', this.dragEndHandler, true);
 		window.removeEventListener('mouseup', this.mouseUpHandler, true);
+		this.mutationObserver.disconnect();
 		this.cleanupPendingDrag();
+		this.removeProxies();
 	}
 
 	private cleanupPendingDrag(): void {
@@ -109,8 +126,10 @@ class DragSourceController {
 		}
 
 		const targetEl = event.target instanceof Element ? event.target : null;
+		const isProxyDrag = Boolean(targetEl?.closest(`.${DRAG_PROXY_CLASS}`));
 		const resolved = targetEl ? this.resolveDragSource(targetEl) : null;
-		const sourcePath = this.pendingPath ?? (eventMatchesModifier(event, this.getModifierKey()) ? resolved?.file.path : null);
+		const sourcePath = this.pendingPath
+			?? (isProxyDrag || eventMatchesModifiers(event, this.getModifierKeys()) ? resolved?.file.path : null);
 		if (!sourcePath) {
 			this.cleanupPendingDrag();
 			return;
@@ -131,7 +150,7 @@ class DragSourceController {
 	private handleMouseDown(event: MouseEvent): void {
 		this.cleanupPendingDrag();
 
-		if (event.button !== 0 || !this.isEnabled() || !eventMatchesModifier(event, this.getModifierKey())) {
+		if (event.button !== 0 || !this.isEnabled() || !eventMatchesModifiers(event, this.getModifierKeys())) {
 			return;
 		}
 
@@ -145,10 +164,53 @@ class DragSourceController {
 			return;
 		}
 
+		event.preventDefault();
+		event.stopPropagation();
+		event.stopImmediatePropagation();
 		this.pendingDragEl = resolved.dragEl;
 		this.pendingPath = resolved.file.path;
 		this.previousDraggable = resolved.dragEl.draggable;
 		resolved.dragEl.draggable = true;
+	}
+
+	private refreshProxies(): void {
+		if (this.disposed) {
+			return;
+		}
+
+		if (!this.isEnabled()) {
+			this.removeProxies();
+			return;
+		}
+
+		const sourceElements = Array.from(this.rootEl.querySelectorAll<HTMLElement>(this.sourceSelector));
+		for (const sourceEl of sourceElements) {
+			this.ensureProxy(sourceEl);
+		}
+	}
+
+	private ensureProxy(sourceEl: HTMLElement): void {
+		sourceEl.addClass(DRAG_SOURCE_CLASS);
+		if (Array.from(sourceEl.children).some((child) => child instanceof HTMLElement && child.hasClass(DRAG_PROXY_CLASS))) {
+			return;
+		}
+
+		const proxyEl = sourceEl.createSpan({
+			cls: DRAG_PROXY_CLASS,
+			attr: {
+				'aria-hidden': 'true',
+			},
+		});
+		proxyEl.draggable = true;
+	}
+
+	private removeProxies(): void {
+		this.rootEl.querySelectorAll<HTMLElement>(`.${DRAG_PROXY_CLASS}`).forEach((proxyEl) => {
+			proxyEl.remove();
+		});
+		this.rootEl.querySelectorAll<HTMLElement>(`.${DRAG_SOURCE_CLASS}`).forEach((sourceEl) => {
+			sourceEl.removeClass(DRAG_SOURCE_CLASS);
+		});
 	}
 }
 
@@ -188,6 +250,19 @@ export class FileContentMoveFeature extends Component {
 			void this.handleEditorDrop(event, editor, info);
 		}));
 
+		this.registerDomEvent(window, 'keydown', (event) => {
+			this.updateModifierProxyState(event);
+		}, true);
+		this.registerDomEvent(window, 'keyup', (event) => {
+			this.updateModifierProxyState(event);
+		}, true);
+		this.registerDomEvent(window, 'mousemove', (event) => {
+			this.updateModifierProxyState(event);
+		}, true);
+		this.registerDomEvent(window, 'blur', () => {
+			this.setModifierProxyActive(false);
+		}, true);
+
 		this.registerEvent(this.plugin.app.workspace.on('active-leaf-change', () => {
 			this.requestSync();
 		}));
@@ -209,6 +284,7 @@ export class FileContentMoveFeature extends Component {
 
 	onunload(): void {
 		this.syncControllers.cancel();
+		this.setModifierProxyActive(false);
 		this.destroyAllControllers();
 	}
 
@@ -265,6 +341,16 @@ export class FileContentMoveFeature extends Component {
 
 		await this.ensureParentFolderExists(entry.sourcePath);
 		await this.plugin.app.vault.create(entry.sourcePath, entry.sourceContent);
+	}
+
+	private setModifierProxyActive(active: boolean): void {
+		document.body.classList.toggle(MODIFIER_ACTIVE_BODY_CLASS, active);
+	}
+
+	private updateModifierProxyState(event: MouseEvent | KeyboardEvent): void {
+		this.setModifierProxyActive(
+			this.getSettings().enabled && eventMatchesModifiers(event, this.getSettings().modifierKeys),
+		);
 	}
 
 	private destroyAllControllers(): void {
@@ -502,8 +588,9 @@ export class FileContentMoveFeature extends Component {
 
 		return new DragSourceController(
 			rootEl,
+			BASES_SOURCE_SELECTOR,
 			() => this.isEnabledForBases(),
-			() => this.getSettings().modifierKey,
+			() => this.getSettings().modifierKeys,
 			() => {
 				this.activeDragSourcePath = null;
 			},
@@ -522,8 +609,9 @@ export class FileContentMoveFeature extends Component {
 
 		return new DragSourceController(
 			rootEl,
+			FILE_EXPLORER_PROXY_SOURCE_SELECTOR,
 			() => this.isEnabledForFileExplorer(),
-			() => this.getSettings().modifierKey,
+			() => this.getSettings().modifierKeys,
 			() => {
 				this.activeDragSourcePath = null;
 			},
@@ -789,12 +877,12 @@ function buildInsertionText(content: string, insertOffset: number, block: string
 	return `${getBlockPrefix(content, insertOffset)}${block}${getBlockSuffix(content, insertOffset)}`;
 }
 
-function eventMatchesModifier(event: MouseEvent, modifierKey: FileContentMoveModifierKey): boolean {
-	const resolvedModifier = resolvePlatformModifier(modifierKey);
-	return event.altKey === (resolvedModifier === 'alt')
-		&& event.ctrlKey === (resolvedModifier === 'ctrl')
-		&& event.metaKey === (resolvedModifier === 'meta')
-		&& event.shiftKey === (resolvedModifier === 'shift');
+function eventMatchesModifiers(event: MouseEvent | KeyboardEvent, modifierKeys: readonly FileContentMoveModifierKey[]): boolean {
+	const resolvedModifiers = new Set(modifierKeys.map(resolvePlatformModifier));
+	return event.altKey === resolvedModifiers.has('alt')
+		&& event.ctrlKey === resolvedModifiers.has('ctrl')
+		&& event.metaKey === resolvedModifiers.has('meta')
+		&& event.shiftKey === resolvedModifiers.has('shift');
 }
 
 function findSingleOccurrence(content: string, value: string): number | null {
