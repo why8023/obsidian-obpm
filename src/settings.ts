@@ -31,7 +31,6 @@ import {getSettingsLocalization, SettingsLocalization} from './settings-localiza
 
 export type BasesTopTabsPlacement = 'above-toolbar' | 'inside-toolbar';
 export type BasesTopTabsOrientation = 'horizontal' | 'vertical';
-export type FileContentMoveModifierKey = 'alt' | 'ctrl' | 'meta' | 'mod' | 'shift';
 
 const DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS = 8;
 const MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS = 50;
@@ -129,7 +128,6 @@ export interface FileNameSyncSettings {
 export interface FileContentMoveSettings {
 	enableFileExplorer: boolean;
 	enabled: boolean;
-	modifierKeys: FileContentMoveModifierKey[];
 	stripSingleH1: boolean;
 }
 
@@ -195,7 +193,6 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 	fileContentMove: {
 		enableFileExplorer: true,
 		enabled: false,
-		modifierKeys: ['mod', 'alt'],
 		stripSingleH1: true,
 	},
 	relatedLinks: {
@@ -269,10 +266,6 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 				DEFAULT_SETTINGS.fileContentMove.enableFileExplorer,
 			),
 			enabled: normalizeBoolean(settings?.fileContentMove?.enabled, DEFAULT_SETTINGS.fileContentMove.enabled),
-			modifierKeys: normalizeFileContentMoveModifierKeys(
-				settings?.fileContentMove?.modifierKeys,
-				DEFAULT_SETTINGS.fileContentMove.modifierKeys,
-			),
 			stripSingleH1: normalizeBoolean(
 				settings?.fileContentMove?.stripSingleH1,
 				DEFAULT_SETTINGS.fileContentMove.stripSingleH1,
@@ -327,26 +320,6 @@ function normalizeText(value: unknown, fallback: string): string {
 function normalizeRequiredText(value: unknown, fallback: string): string {
 	const normalized = normalizeText(value, fallback);
 	return normalized.length > 0 ? normalized : fallback;
-}
-
-function normalizeFileContentMoveModifierKeys(
-	value: unknown,
-	fallback: readonly FileContentMoveModifierKey[],
-): FileContentMoveModifierKey[] {
-	if (!Array.isArray(value)) {
-		return [...fallback];
-	}
-
-	const normalizedKeys = [...new Set(value.filter(isFileContentMoveModifierKey))];
-	return normalizedKeys.length > 0 ? normalizedKeys : [...fallback];
-}
-
-function isFileContentMoveModifierKey(value: unknown): value is FileContentMoveModifierKey {
-	return value === 'alt'
-		|| value === 'ctrl'
-		|| value === 'meta'
-		|| value === 'mod'
-		|| value === 'shift';
 }
 
 function normalizeBasesTopTabsPlacement(value: unknown, fallback: BasesTopTabsPlacement): BasesTopTabsPlacement {
@@ -1185,37 +1158,6 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					this.plugin.settings.fileContentMove.enabled = value;
 					await saveFileContentMoveSettings();
 				}));
-
-		new Setting(containerEl)
-			.setName(strings.fileContentMoveModifierKeysName)
-			.setDesc(strings.fileContentMoveModifierKeysDesc)
-			.setHeading();
-
-		const modifierKeyOptions: {key: FileContentMoveModifierKey; label: string}[] = [
-			{key: 'mod', label: strings.fileContentMoveModifierModLabel},
-			{key: 'alt', label: strings.fileContentMoveModifierAltLabel},
-			{key: 'ctrl', label: strings.fileContentMoveModifierCtrlLabel},
-			{key: 'meta', label: strings.fileContentMoveModifierMetaLabel},
-			{key: 'shift', label: strings.fileContentMoveModifierShiftLabel},
-		];
-		for (const option of modifierKeyOptions) {
-			new Setting(containerEl)
-				.setName(option.label)
-				.addToggle((toggle) => toggle
-					.setValue(this.plugin.settings.fileContentMove.modifierKeys.includes(option.key))
-					.onChange(async (value) => {
-						const currentKeys = this.plugin.settings.fileContentMove.modifierKeys;
-						const nextKeys = value
-							? [...new Set([...currentKeys, option.key])]
-							: currentKeys.filter((key) => key !== option.key);
-						this.plugin.settings.fileContentMove.modifierKeys = normalizeFileContentMoveModifierKeys(
-							nextKeys,
-							DEFAULT_SETTINGS.fileContentMove.modifierKeys,
-						);
-						await saveWithoutRefresh();
-						this.display();
-					}));
-		}
 
 		new Setting(containerEl)
 			.setName(strings.fileContentMoveStripSingleH1Name)

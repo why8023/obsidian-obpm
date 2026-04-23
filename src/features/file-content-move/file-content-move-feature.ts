@@ -4,36 +4,18 @@ import {
 	EditorPosition,
 	MarkdownFileInfo,
 	MarkdownView,
+	Menu,
 	Notice,
-	Platform,
 	TAbstractFile,
 	TFile,
 	TFolder,
-	WorkspaceLeaf,
-	debounce,
 	normalizePath,
 } from 'obsidian';
 import OBPMPlugin from '../../main';
-import type {FileContentMoveModifierKey} from '../../settings';
 import {getFileContentMoveLocalization} from './localization';
 import {buildMovedContentList} from './markdown-list-converter';
 
-const SOURCE_PATH_MIME = 'application/x-obpm-file-content-move-path';
-const BASES_ROW_SELECTOR = '.bases-tr';
-const BASES_SOURCE_SELECTOR = '.bases-tr';
-const DRAG_PROXY_CLASS = 'obpm-file-content-move-drag-proxy';
-const DRAG_SOURCE_CLASS = 'obpm-file-content-move-source';
-const MODIFIER_ACTIVE_BODY_CLASS = 'obpm-file-content-move-mod-active';
-const INTERNAL_LINK_SELECTOR = '.internal-link[data-href]';
-const SOURCE_PATH_SELECTOR = '[data-source-path]';
-const FILE_EXPLORER_SOURCE_SELECTOR = '.nav-file, .nav-file-title, .tree-item-self';
-const FILE_EXPLORER_PROXY_SOURCE_SELECTOR = '.nav-file-title[data-path]';
 const MAX_UNDO_ENTRIES = 20;
-
-interface DragSourceResolution {
-	dragEl: HTMLElement;
-	file: TFile;
-}
 
 interface MoveUndoEntry {
 	insertOffset: number;
@@ -51,177 +33,8 @@ interface RemovalPlan {
 	start: number;
 }
 
-class DragSourceController {
-	private disposed = false;
-	private readonly mutationObserver: MutationObserver;
-	private pendingDragEl: HTMLElement | null = null;
-	private pendingPath: string | null = null;
-	private previousDraggable: boolean | null = null;
-	private readonly dragEndHandler = () => {
-		this.onSourceDragEnd();
-		this.cleanupPendingDrag();
-	};
-	private readonly dragStartHandler = (event: DragEvent) => {
-		this.handleDragStart(event);
-	};
-	private readonly mouseDownHandler = (event: MouseEvent) => {
-		this.handleMouseDown(event);
-	};
-	private readonly mouseUpHandler = () => {
-		this.cleanupPendingDrag();
-	};
-
-	constructor(
-		private readonly rootEl: HTMLElement,
-		private readonly sourceSelector: string,
-		private readonly isEnabled: () => boolean,
-		private readonly getModifierKeys: () => readonly FileContentMoveModifierKey[],
-		private readonly onSourceDragEnd: () => void,
-		private readonly onSourceDragStart: (sourcePath: string) => void,
-		private readonly resolveDragSource: (targetEl: Element) => DragSourceResolution | null,
-	) {
-		this.mutationObserver = new MutationObserver(() => {
-			this.refreshProxies();
-		});
-		this.rootEl.addEventListener('mousedown', this.mouseDownHandler, true);
-		this.rootEl.addEventListener('dragstart', this.dragStartHandler, true);
-		this.rootEl.addEventListener('dragend', this.dragEndHandler, true);
-		window.addEventListener('mouseup', this.mouseUpHandler, true);
-		this.mutationObserver.observe(this.rootEl, {
-			childList: true,
-			subtree: true,
-		});
-		this.refreshProxies();
-	}
-
-	destroy(): void {
-		if (this.disposed) {
-			return;
-		}
-
-		this.disposed = true;
-		this.rootEl.removeEventListener('mousedown', this.mouseDownHandler, true);
-		this.rootEl.removeEventListener('dragstart', this.dragStartHandler, true);
-		this.rootEl.removeEventListener('dragend', this.dragEndHandler, true);
-		window.removeEventListener('mouseup', this.mouseUpHandler, true);
-		this.mutationObserver.disconnect();
-		this.cleanupPendingDrag();
-		this.removeProxies();
-	}
-
-	private cleanupPendingDrag(): void {
-		if (this.pendingDragEl && this.previousDraggable !== null) {
-			this.pendingDragEl.draggable = this.previousDraggable;
-		}
-
-		this.pendingDragEl = null;
-		this.pendingPath = null;
-		this.previousDraggable = null;
-	}
-
-	private handleDragStart(event: DragEvent): void {
-		if (!this.isEnabled() || !event.dataTransfer) {
-			this.cleanupPendingDrag();
-			return;
-		}
-
-		const targetEl = event.target instanceof Element ? event.target : null;
-		const isProxyDrag = Boolean(targetEl?.closest(`.${DRAG_PROXY_CLASS}`));
-		const resolved = targetEl ? this.resolveDragSource(targetEl) : null;
-		const sourcePath = this.pendingPath
-			?? (isProxyDrag || eventMatchesModifiers(event, this.getModifierKeys()) ? resolved?.file.path : null);
-		if (!sourcePath) {
-			this.cleanupPendingDrag();
-			return;
-		}
-
-		event.dataTransfer.setData(SOURCE_PATH_MIME, sourcePath);
-		event.dataTransfer.setData('text/plain', sourcePath);
-		event.dataTransfer.effectAllowed = 'move';
-		const dragImageEl = this.pendingDragEl ?? resolved?.dragEl;
-		if (dragImageEl) {
-			event.dataTransfer.setDragImage(dragImageEl, 12, 12);
-		}
-
-		this.onSourceDragStart(sourcePath);
-		event.stopPropagation();
-	}
-
-	private handleMouseDown(event: MouseEvent): void {
-		this.cleanupPendingDrag();
-
-		if (event.button !== 0 || !this.isEnabled() || !eventMatchesModifiers(event, this.getModifierKeys())) {
-			return;
-		}
-
-		const targetEl = event.target instanceof Element ? event.target : null;
-		if (!targetEl) {
-			return;
-		}
-
-		const resolved = this.resolveDragSource(targetEl);
-		if (!resolved) {
-			return;
-		}
-
-		event.preventDefault();
-		event.stopPropagation();
-		event.stopImmediatePropagation();
-		this.pendingDragEl = resolved.dragEl;
-		this.pendingPath = resolved.file.path;
-		this.previousDraggable = resolved.dragEl.draggable;
-		resolved.dragEl.draggable = true;
-	}
-
-	private refreshProxies(): void {
-		if (this.disposed) {
-			return;
-		}
-
-		if (!this.isEnabled()) {
-			this.removeProxies();
-			return;
-		}
-
-		const sourceElements = Array.from(this.rootEl.querySelectorAll<HTMLElement>(this.sourceSelector));
-		for (const sourceEl of sourceElements) {
-			this.ensureProxy(sourceEl);
-		}
-	}
-
-	private ensureProxy(sourceEl: HTMLElement): void {
-		sourceEl.addClass(DRAG_SOURCE_CLASS);
-		if (Array.from(sourceEl.children).some((child) => child instanceof HTMLElement && child.hasClass(DRAG_PROXY_CLASS))) {
-			return;
-		}
-
-		const proxyEl = sourceEl.createSpan({
-			cls: DRAG_PROXY_CLASS,
-			attr: {
-				'aria-hidden': 'true',
-			},
-		});
-		proxyEl.draggable = true;
-	}
-
-	private removeProxies(): void {
-		this.rootEl.querySelectorAll<HTMLElement>(`.${DRAG_PROXY_CLASS}`).forEach((proxyEl) => {
-			proxyEl.remove();
-		});
-		this.rootEl.querySelectorAll<HTMLElement>(`.${DRAG_SOURCE_CLASS}`).forEach((sourceEl) => {
-			sourceEl.removeClass(DRAG_SOURCE_CLASS);
-		});
-	}
-}
-
 export class FileContentMoveFeature extends Component {
-	private activeDragSourcePath: string | null = null;
-	private readonly basesControllers = new Map<WorkspaceLeaf, DragSourceController>();
-	private readonly fileExplorerControllers = new Map<WorkspaceLeaf, DragSourceController>();
 	private readonly localization = getFileContentMoveLocalization();
-	private readonly syncControllers = debounce(() => {
-		this.reconcileControllers();
-	}, 100, true);
 	private readonly undoStack: MoveUndoEntry[] = [];
 	private workQueue = Promise.resolve();
 
@@ -231,7 +44,7 @@ export class FileContentMoveFeature extends Component {
 
 	onload(): void {
 		this.plugin.addCommand({
-			id: 'undo-last-dragged-content-move',
+			id: 'undo-last-sent-content-move',
 			name: this.localization.undoCommandName,
 			checkCallback: (checking) => {
 				if (this.undoStack.length === 0) {
@@ -246,51 +59,26 @@ export class FileContentMoveFeature extends Component {
 			},
 		});
 
-		this.registerEvent(this.plugin.app.workspace.on('editor-drop', (event, editor, info) => {
-			void this.handleEditorDrop(event, editor, info);
+		this.registerEvent(this.plugin.app.workspace.on('file-menu', (menu, file) => {
+			this.registerMenuItem(menu, file);
 		}));
 
-		this.registerDomEvent(window, 'keydown', (event) => {
-			this.updateModifierProxyState(event);
-		}, true);
-		this.registerDomEvent(window, 'keyup', (event) => {
-			this.updateModifierProxyState(event);
-		}, true);
-		this.registerDomEvent(window, 'mousemove', (event) => {
-			this.updateModifierProxyState(event);
-		}, true);
-		this.registerDomEvent(window, 'blur', () => {
-			this.setModifierProxyActive(false);
-		}, true);
+		this.registerEvent(this.plugin.app.workspace.on('files-menu', (menu, files) => {
+			if (files.length !== 1) {
+				return;
+			}
 
-		this.registerEvent(this.plugin.app.workspace.on('active-leaf-change', () => {
-			this.requestSync();
+			const selectedFile = files[0];
+			if (!selectedFile) {
+				return;
+			}
+
+			this.registerMenuItem(menu, selectedFile);
 		}));
-
-		this.registerEvent(this.plugin.app.workspace.on('layout-change', () => {
-			this.requestSync();
-		}));
-
-		this.registerEvent(this.plugin.app.workspace.on('file-open', () => {
-			this.requestSync();
-		}));
-
-		this.plugin.app.workspace.onLayoutReady(() => {
-			this.requestSync();
-		});
-
-		this.requestSync();
-	}
-
-	onunload(): void {
-		this.syncControllers.cancel();
-		this.setModifierProxyActive(false);
-		this.destroyAllControllers();
 	}
 
 	async refresh(): Promise<void> {
-		this.syncControllers.cancel();
-		this.reconcileControllers();
+		return Promise.resolve();
 	}
 
 	private applyRemovalToEditor(editor: Editor, removalPlan: RemovalPlan): void {
@@ -343,31 +131,6 @@ export class FileContentMoveFeature extends Component {
 		await this.plugin.app.vault.create(entry.sourcePath, entry.sourceContent);
 	}
 
-	private setModifierProxyActive(active: boolean): void {
-		document.body.classList.toggle(MODIFIER_ACTIVE_BODY_CLASS, active);
-	}
-
-	private updateModifierProxyState(event: MouseEvent | KeyboardEvent): void {
-		this.setModifierProxyActive(
-			this.getSettings().enabled && eventMatchesModifiers(event, this.getSettings().modifierKeys),
-		);
-	}
-
-	private destroyAllControllers(): void {
-		this.activeDragSourcePath = null;
-
-		for (const controller of this.basesControllers.values()) {
-			controller.destroy();
-		}
-
-		for (const controller of this.fileExplorerControllers.values()) {
-			controller.destroy();
-		}
-
-		this.basesControllers.clear();
-		this.fileExplorerControllers.clear();
-	}
-
 	private async ensureFolderExists(folderPath: string): Promise<void> {
 		if (!folderPath) {
 			return;
@@ -415,35 +178,18 @@ export class FileContentMoveFeature extends Component {
 		return matchedView;
 	}
 
+	private getActiveEditorInfo(): MarkdownFileInfo | null {
+		const activeEditor = this.plugin.app.workspace.activeEditor;
+		if (activeEditor?.editor) {
+			return activeEditor;
+		}
+
+		const activeMarkdownView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+		return activeMarkdownView?.editor ? activeMarkdownView : null;
+	}
+
 	private getSettings() {
 		return this.plugin.settings.fileContentMove;
-	}
-
-	private async handleEditorDrop(event: DragEvent, editor: Editor, info: MarkdownFileInfo): Promise<void> {
-		if (!this.getSettings().enabled || event.defaultPrevented) {
-			return;
-		}
-
-		const sourcePath = event.dataTransfer?.getData(SOURCE_PATH_MIME) || this.activeDragSourcePath;
-		if (!sourcePath) {
-			return;
-		}
-
-		event.preventDefault();
-		event.stopPropagation();
-		event.stopImmediatePropagation();
-
-		try {
-			await this.enqueue(async () => {
-				await this.moveSourceContentIntoEditor(sourcePath, editor, info);
-			});
-		} finally {
-			this.activeDragSourcePath = null;
-		}
-	}
-
-	private isEnabledForBases(): boolean {
-		return this.getSettings().enabled;
 	}
 
 	private isEnabledForFileExplorer(): boolean {
@@ -525,101 +271,17 @@ export class FileContentMoveFeature extends Component {
 		}
 	}
 
-	private reconcileControllerMap(
-		leaves: readonly WorkspaceLeaf[],
-		controllers: Map<WorkspaceLeaf, DragSourceController>,
-		createController: (leaf: WorkspaceLeaf) => DragSourceController | null,
-	): void {
-		const activeLeaves = new Set(leaves);
-
-		for (const [leaf, controller] of [...controllers.entries()]) {
-			if (activeLeaves.has(leaf)) {
-				continue;
-			}
-
-			controller.destroy();
-			controllers.delete(leaf);
-		}
-
-		for (const leaf of leaves) {
-			if (controllers.has(leaf)) {
-				continue;
-			}
-
-			const controller = createController(leaf);
-			if (controller) {
-				controllers.set(leaf, controller);
-			}
-		}
-	}
-
-	private reconcileControllers(): void {
-		if (!this.getSettings().enabled) {
-			this.destroyAllControllers();
+	private registerMenuItem(menu: Menu, file: TAbstractFile): void {
+		if (!this.isEnabledForFileExplorer() || !this.isMarkdownFile(file)) {
 			return;
 		}
 
-		this.reconcileControllerMap(
-			this.plugin.app.workspace.getLeavesOfType('bases'),
-			this.basesControllers,
-			(leaf) => this.createBasesController(leaf),
-		);
-
-		if (!this.getSettings().enableFileExplorer) {
-			for (const controller of this.fileExplorerControllers.values()) {
-				controller.destroy();
-			}
-			this.fileExplorerControllers.clear();
-			return;
-		}
-
-		this.reconcileControllerMap(
-			this.plugin.app.workspace.getLeavesOfType('file-explorer'),
-			this.fileExplorerControllers,
-			(leaf) => this.createFileExplorerController(leaf),
-		);
-	}
-
-	private createBasesController(leaf: WorkspaceLeaf): DragSourceController | null {
-		const rootEl = leaf.view.containerEl instanceof HTMLElement ? leaf.view.containerEl : null;
-		if (!rootEl) {
-			return null;
-		}
-
-		return new DragSourceController(
-			rootEl,
-			BASES_SOURCE_SELECTOR,
-			() => this.isEnabledForBases(),
-			() => this.getSettings().modifierKeys,
-			() => {
-				this.activeDragSourcePath = null;
-			},
-			(sourcePath) => {
-				this.activeDragSourcePath = sourcePath;
-			},
-			(targetEl) => this.resolveBasesDragSource(leaf, targetEl),
-		);
-	}
-
-	private createFileExplorerController(leaf: WorkspaceLeaf): DragSourceController | null {
-		const rootEl = leaf.view.containerEl instanceof HTMLElement ? leaf.view.containerEl : null;
-		if (!rootEl) {
-			return null;
-		}
-
-		return new DragSourceController(
-			rootEl,
-			FILE_EXPLORER_PROXY_SOURCE_SELECTOR,
-			() => this.isEnabledForFileExplorer(),
-			() => this.getSettings().modifierKeys,
-			() => {
-				this.activeDragSourcePath = null;
-			},
-			(sourcePath) => {
-				this.activeDragSourcePath = sourcePath;
-			},
-			(targetEl) => this.resolveFileExplorerDragSource(rootEl, targetEl),
-		);
+		menu.addItem((item) => item
+			.setTitle(this.localization.menuItemLabel)
+			.setIcon('send')
+			.onClick(() => {
+				void this.sendFileToActiveCursor(file);
+			}));
 	}
 
 	private removeInsertedText(currentContent: string, entry: MoveUndoEntry): RemovalPlan | null {
@@ -654,146 +316,6 @@ export class FileContentMoveFeature extends Component {
 		return null;
 	}
 
-	private requestSync(): void {
-		if (!this.getSettings().enabled) {
-			this.destroyAllControllers();
-			return;
-		}
-
-		this.syncControllers();
-	}
-
-	private resolveBasesDragSource(leaf: WorkspaceLeaf, targetEl: Element): DragSourceResolution | null {
-		const rowEl = targetEl.closest<HTMLElement>(BASES_ROW_SELECTOR);
-		if (!rowEl) {
-			return null;
-		}
-
-		const filePath = this.resolveBasesFilePath(leaf, targetEl, rowEl);
-		const file = filePath ? this.resolveMarkdownFile(filePath, this.getCurrentBaseFilePath(leaf) ?? '') : null;
-		if (!file) {
-			return null;
-		}
-
-		return {
-			dragEl: targetEl.closest<HTMLElement>(INTERNAL_LINK_SELECTOR) ?? rowEl,
-			file,
-		};
-	}
-
-	private resolveBasesFilePath(leaf: WorkspaceLeaf, targetEl: Element, rowEl: HTMLElement): string | null {
-		const targetPath = this.resolvePathFromBasesElement(leaf, targetEl);
-		if (targetPath) {
-			return targetPath;
-		}
-
-		const rowLinkEl = rowEl.querySelector<HTMLElement>(INTERNAL_LINK_SELECTOR);
-		const rowLinkPath = this.resolvePathFromInternalLink(leaf, rowLinkEl);
-		if (rowLinkPath) {
-			return rowLinkPath;
-		}
-
-		return normalizePathValue(rowEl.querySelector<HTMLElement>(SOURCE_PATH_SELECTOR)?.dataset.sourcePath);
-	}
-
-	private resolveFileExplorerDragSource(rootEl: HTMLElement, targetEl: Element): DragSourceResolution | null {
-		const sourceEl = targetEl.closest<HTMLElement>(FILE_EXPLORER_SOURCE_SELECTOR);
-		if (!sourceEl || !rootEl.contains(sourceEl)) {
-			return null;
-		}
-
-		const filePath = this.resolvePathFromElementAncestry(rootEl, sourceEl);
-		const file = filePath ? this.resolveMarkdownFile(filePath, '') : null;
-		if (!file) {
-			return null;
-		}
-
-		return {
-			dragEl: sourceEl,
-			file,
-		};
-	}
-
-	private resolveMarkdownFile(path: string, sourcePath: string): TFile | null {
-		const normalizedPath = normalizePathValue(path);
-		if (!normalizedPath) {
-			return null;
-		}
-
-		const directFile = this.plugin.app.vault.getAbstractFileByPath(normalizePath(normalizedPath));
-		if (this.isMarkdownFile(directFile)) {
-			return directFile;
-		}
-
-		const resolvedFile = this.plugin.app.metadataCache.getFirstLinkpathDest(normalizedPath, sourcePath);
-		return this.isMarkdownFile(resolvedFile) ? resolvedFile : null;
-	}
-
-	private resolvePathFromBasesElement(leaf: WorkspaceLeaf, targetEl: Element): string | null {
-		const linkEl = targetEl.closest<HTMLElement>(INTERNAL_LINK_SELECTOR);
-		const linkPath = this.resolvePathFromInternalLink(leaf, linkEl);
-		if (linkPath) {
-			return linkPath;
-		}
-
-		return normalizePathValue(targetEl.closest<HTMLElement>(SOURCE_PATH_SELECTOR)?.dataset.sourcePath);
-	}
-
-	private resolvePathFromElementAncestry(rootEl: HTMLElement, startEl: Element): string | null {
-		let currentEl: Element | null = startEl;
-		while (currentEl && currentEl !== rootEl.parentElement) {
-			if (currentEl instanceof HTMLElement) {
-				const path = normalizePathValue(
-					currentEl.dataset.path
-					?? currentEl.dataset.filePath
-					?? currentEl.dataset.sourcePath
-					?? currentEl.dataset.href
-					?? currentEl.getAttribute('data-path')
-					?? currentEl.getAttribute('data-file-path')
-					?? currentEl.getAttribute('data-source-path')
-					?? currentEl.getAttribute('data-href')
-					?? undefined,
-				);
-				if (path) {
-					return path;
-				}
-			}
-
-			if (currentEl === rootEl) {
-				break;
-			}
-
-			currentEl = currentEl.parentElement;
-		}
-
-		return null;
-	}
-
-	private resolvePathFromInternalLink(leaf: WorkspaceLeaf, linkEl: HTMLElement | null): string | null {
-		const linkpath = normalizePathValue(linkEl?.dataset.href);
-		if (!linkpath) {
-			return null;
-		}
-
-		const sourcePath = this.getCurrentBaseFilePath(leaf) ?? '';
-		const resolvedFile = this.plugin.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
-		if (resolvedFile) {
-			return resolvedFile.path;
-		}
-
-		return this.plugin.app.vault.getAbstractFileByPath(linkpath)?.path ?? linkpath;
-	}
-
-	private getCurrentBaseFilePath(leaf: WorkspaceLeaf): string | null {
-		const viewState = leaf.getViewState();
-		if (viewState.type !== 'bases' || !isObjectRecord(viewState.state)) {
-			return null;
-		}
-
-		const filePath = viewState.state.file;
-		return typeof filePath === 'string' && filePath.length > 0 ? filePath : null;
-	}
-
 	private async rollbackEditorInsertion(
 		editor: Editor,
 		info: MarkdownFileInfo,
@@ -821,6 +343,19 @@ export class FileContentMoveFeature extends Component {
 		}
 
 		await this.plugin.app.vault.modify(targetFile, editor.getValue());
+	}
+
+	private async sendFileToActiveCursor(sourceFile: TFile): Promise<void> {
+		const activeEditorInfo = this.getActiveEditorInfo();
+		if (!activeEditorInfo?.editor) {
+			new Notice(this.localization.targetMissingNotice);
+			return;
+		}
+
+		const targetEditor = activeEditorInfo.editor;
+		await this.enqueue(async () => {
+			await this.moveSourceContentIntoEditor(sourceFile.path, targetEditor, activeEditorInfo);
+		});
 	}
 
 	private async undoLastMove(): Promise<void> {
@@ -875,14 +410,6 @@ export class FileContentMoveFeature extends Component {
 
 function buildInsertionText(content: string, insertOffset: number, block: string): string {
 	return `${getBlockPrefix(content, insertOffset)}${block}${getBlockSuffix(content, insertOffset)}`;
-}
-
-function eventMatchesModifiers(event: MouseEvent | KeyboardEvent, modifierKeys: readonly FileContentMoveModifierKey[]): boolean {
-	const resolvedModifiers = new Set(modifierKeys.map(resolvePlatformModifier));
-	return event.altKey === resolvedModifiers.has('alt')
-		&& event.ctrlKey === resolvedModifiers.has('ctrl')
-		&& event.metaKey === resolvedModifiers.has('meta')
-		&& event.shiftKey === resolvedModifiers.has('shift');
 }
 
 function findSingleOccurrence(content: string, value: string): number | null {
@@ -943,29 +470,4 @@ function getPositionAfterText(from: EditorPosition, text: string): EditorPositio
 
 function hasSaveMethod(value: MarkdownFileInfo): value is MarkdownView {
 	return typeof (value as Partial<MarkdownView>).save === 'function';
-}
-
-function isMacLike(): boolean {
-	return Platform.isMacOS;
-}
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null;
-}
-
-function normalizePathValue(value: string | undefined): string | null {
-	if (typeof value !== 'string') {
-		return null;
-	}
-
-	const normalizedValue = value.trim();
-	return normalizedValue.length > 0 ? normalizedValue : null;
-}
-
-function resolvePlatformModifier(modifierKey: FileContentMoveModifierKey): Exclude<FileContentMoveModifierKey, 'mod'> {
-	if (modifierKey !== 'mod') {
-		return modifierKey;
-	}
-
-	return isMacLike() ? 'meta' : 'ctrl';
 }

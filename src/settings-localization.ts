@@ -54,13 +54,6 @@ export interface SettingsLocalization {
 	fileContentMoveFileExplorerDesc: string;
 	fileContentMoveFileExplorerName: string;
 	fileContentMoveHeading: string;
-	fileContentMoveModifierAltLabel: string;
-	fileContentMoveModifierCtrlLabel: string;
-	fileContentMoveModifierKeysDesc: string;
-	fileContentMoveModifierKeysName: string;
-	fileContentMoveModifierMetaLabel: string;
-	fileContentMoveModifierModLabel: string;
-	fileContentMoveModifierShiftLabel: string;
 	fileContentMoveStripSingleH1Desc: string;
 	fileContentMoveStripSingleH1Name: string;
 	relatedLinksHeading: string;
@@ -244,18 +237,11 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsShowIconsName: 'Show icons',
 	basesTopTabsShowViewCountDesc: 'Show the number of views in the current Base next to the tabs.',
 	basesTopTabsShowViewCountName: 'Show view count',
-	fileContentMoveEnableDesc: 'Hold the configured modifier while dragging a Markdown file from Bases or the file explorer into an open editor. The source file content is inserted as a list, then the source file is deleted using Obsidian trash settings.',
-	fileContentMoveEnableName: 'Enable dragged content move',
-	fileContentMoveFileExplorerDesc: 'Allow the same modifier-drag behavior from file explorer items.',
+	fileContentMoveEnableDesc: 'Add a file context-menu action that sends a Markdown file into the current editor cursor position as a list, then deletes the source file using Obsidian trash settings.',
+	fileContentMoveEnableName: 'Enable send content to cursor',
+	fileContentMoveFileExplorerDesc: 'Show the send action on file explorer context-menu items.',
 	fileContentMoveFileExplorerName: 'Enable in file explorer',
-	fileContentMoveHeading: 'Dragged content move',
-	fileContentMoveModifierAltLabel: 'Alt',
-	fileContentMoveModifierCtrlLabel: 'Ctrl',
-	fileContentMoveModifierKeysDesc: 'The drag starts only when exactly this modifier-key combination is pressed. Default: Mod + Alt.',
-	fileContentMoveModifierKeysName: 'Modifier keys',
-	fileContentMoveModifierMetaLabel: 'Meta',
-	fileContentMoveModifierModLabel: 'Mod (Ctrl or Cmd)',
-	fileContentMoveModifierShiftLabel: 'Shift',
+	fileContentMoveHeading: 'Send content to cursor',
 	fileContentMoveStripSingleH1Desc: 'When the source note has exactly one level-1 heading, omit that heading and promote the remaining outline under the source file name.',
 	fileContentMoveStripSingleH1Name: 'Remove single level-1 heading',
 	relatedLinksHeading: 'Related frontmatter links',
@@ -440,18 +426,11 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsShowIconsName: '显示图标',
 	basesTopTabsShowViewCountDesc: '在 Tabs 旁显示当前 Base 的视图数量。',
 	basesTopTabsShowViewCountName: '显示视图数量',
-	fileContentMoveEnableDesc: '按住配置的修饰键，将 Markdown 文件从 Bases 或文件列表拖入已打开的编辑器。源文件内容会以列表形式插入，然后按 Obsidian 的回收站设置删除源文件。',
-	fileContentMoveEnableName: '启用拖拽内容移动',
-	fileContentMoveFileExplorerDesc: '允许在文件列表项中使用同样的修饰键拖拽行为。',
+	fileContentMoveEnableDesc: '在文件右键菜单中增加发送动作，将 Markdown 文件以列表形式插入当前编辑器光标处，然后按 Obsidian 的回收站设置删除源文件。',
+	fileContentMoveEnableName: '启用发送内容到光标处',
+	fileContentMoveFileExplorerDesc: '在文件列表项的右键菜单中显示发送动作。',
 	fileContentMoveFileExplorerName: '在文件列表中启用',
-	fileContentMoveHeading: '拖拽内容移动',
-	fileContentMoveModifierAltLabel: 'Alt',
-	fileContentMoveModifierCtrlLabel: 'Ctrl',
-	fileContentMoveModifierKeysDesc: '只有精确按住这组修饰键时，才会触发拖拽移动。默认：Mod + Alt。',
-	fileContentMoveModifierKeysName: '修饰键组合',
-	fileContentMoveModifierMetaLabel: 'Meta',
-	fileContentMoveModifierModLabel: 'Mod（Ctrl 或 Cmd）',
-	fileContentMoveModifierShiftLabel: 'Shift',
+	fileContentMoveHeading: '发送内容到光标处',
 	fileContentMoveStripSingleH1Desc: '当源文件恰好只有一个一级标题时，移动时去掉该标题，并将后续大纲提升到源文件名下面。',
 	fileContentMoveStripSingleH1Name: '去掉单一一级标题',
 	relatedLinksHeading: '关联属性链接',
