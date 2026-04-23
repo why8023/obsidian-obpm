@@ -16,6 +16,20 @@ import {getFileContentMoveLocalization} from './localization';
 import {buildMovedContentList} from './markdown-list-converter';
 
 const MAX_UNDO_ENTRIES = 20;
+const TARGET_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface CachedEditorTarget {
+	filePath: string;
+	insertOffset: number;
+	recordedAt: number;
+}
+
+interface EditorInsertionTarget {
+	editor: Editor;
+	file: TFile;
+	info: MarkdownFileInfo;
+	insertOffset: number;
+}
 
 interface MoveUndoEntry {
 	insertOffset: number;
@@ -34,6 +48,8 @@ interface RemovalPlan {
 }
 
 export class FileContentMoveFeature extends Component {
+	private cachedEditorTarget: CachedEditorTarget | null = null;
+	private readonly captureTimeouts = new Set<number>();
 	private readonly localization = getFileContentMoveLocalization();
 	private readonly undoStack: MoveUndoEntry[] = [];
 	private workQueue = Promise.resolve();
@@ -59,6 +75,8 @@ export class FileContentMoveFeature extends Component {
 			},
 		});
 
+		this.registerEditorTargetTracking();
+
 		this.registerEvent(this.plugin.app.workspace.on('file-menu', (menu, file) => {
 			this.registerMenuItem(menu, file);
 		}));
@@ -75,6 +93,17 @@ export class FileContentMoveFeature extends Component {
 
 			this.registerMenuItem(menu, selectedFile);
 		}));
+
+		this.plugin.app.workspace.onLayoutReady(() => {
+			this.scheduleActiveEditorCapture();
+		});
+	}
+
+	onunload(): void {
+		for (const timeout of this.captureTimeouts) {
+			window.clearTimeout(timeout);
+		}
+		this.captureTimeouts.clear();
 	}
 
 	async refresh(): Promise<void> {
@@ -110,6 +139,22 @@ export class FileContentMoveFeature extends Component {
 				to: end,
 			},
 		}, 'obpm-file-content-move');
+	}
+
+	private cacheEditorTarget(editor: Editor, file: TFile, insertOffset: number): void {
+		this.cachedEditorTarget = {
+			filePath: file.path,
+			insertOffset: clamp(insertOffset, 0, editor.getValue().length),
+			recordedAt: Date.now(),
+		};
+	}
+
+	private cacheEditorTargetFromInfo(info: MarkdownFileInfo | null): void {
+		if (!info?.editor || !this.isMarkdownFile(info.file)) {
+			return;
+		}
+
+		this.cacheEditorTarget(info.editor, info.file, info.editor.posToOffset(info.editor.getCursor()));
 	}
 
 	private async createSourceFileFromUndo(entry: MoveUndoEntry): Promise<void> {
@@ -178,6 +223,10 @@ export class FileContentMoveFeature extends Component {
 		return matchedView;
 	}
 
+	private captureActiveEditorTarget(): void {
+		this.cacheEditorTargetFromInfo(this.getActiveEditorInfo());
+	}
+
 	private getActiveEditorInfo(): MarkdownFileInfo | null {
 		const activeEditor = this.plugin.app.workspace.activeEditor;
 		if (activeEditor?.editor) {
@@ -192,6 +241,10 @@ export class FileContentMoveFeature extends Component {
 		return this.plugin.settings.fileContentMove;
 	}
 
+	private getTargetMenuLabel(): string {
+		return this.localization.menuItemLabel(this.resolveEditorTarget()?.file.name ?? null);
+	}
+
 	private isEnabledForFileExplorer(): boolean {
 		const settings = this.getSettings();
 		return settings.enabled && settings.enableFileExplorer;
@@ -203,25 +256,19 @@ export class FileContentMoveFeature extends Component {
 
 	private async moveSourceContentIntoEditor(
 		sourcePath: string,
-		editor: Editor,
-		info: MarkdownFileInfo,
-	): Promise<void> {
+		target: EditorInsertionTarget,
+	): Promise<boolean> {
 		const sourceFile = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
-		const targetFile = info.file;
+		const {editor, file: targetFile, info} = target;
 
 		if (!this.isMarkdownFile(sourceFile)) {
 			new Notice(this.localization.sourceMissingNotice);
-			return;
-		}
-
-		if (!this.isMarkdownFile(targetFile)) {
-			new Notice(this.localization.targetMissingNotice);
-			return;
+			return false;
 		}
 
 		if (sourceFile.path === targetFile.path) {
 			new Notice(this.localization.sameFileNotice);
-			return;
+			return false;
 		}
 
 		const originalSourceName = sourceFile.name;
@@ -230,7 +277,7 @@ export class FileContentMoveFeature extends Component {
 		const originalTargetPath = targetFile.path;
 		const sourceContent = await this.plugin.app.vault.read(sourceFile);
 		const targetContentBefore = editor.getValue();
-		const insertOffset = editor.posToOffset(editor.getCursor());
+		const insertOffset = clamp(target.insertOffset, 0, targetContentBefore.length);
 		const listBlock = buildMovedContentList({
 			sourceBasename: sourceFile.basename,
 			sourceContent,
@@ -252,7 +299,9 @@ export class FileContentMoveFeature extends Component {
 				targetContentBefore,
 				targetPath: originalTargetPath,
 			});
+			this.cacheEditorTarget(editor, targetFile, insertOffset + insertedText.length);
 			new Notice(this.localization.moveNotice(originalSourceName, originalTargetName));
+			return true;
 		} catch (error) {
 			console.error('[OBPM:file-content-move] Failed to move source content into the target editor.', {
 				error,
@@ -261,6 +310,7 @@ export class FileContentMoveFeature extends Component {
 			});
 			await this.rollbackEditorInsertion(editor, info, targetFile, insertOffset, insertedText);
 			new Notice(this.localization.moveFailureNotice);
+			return false;
 		}
 	}
 
@@ -277,11 +327,32 @@ export class FileContentMoveFeature extends Component {
 		}
 
 		menu.addItem((item) => item
-			.setTitle(this.localization.menuItemLabel)
+			.setTitle(this.getTargetMenuLabel())
 			.setIcon('send')
 			.onClick(() => {
 				void this.sendFileToActiveCursor(file);
 			}));
+	}
+
+	private registerEditorTargetTracking(): void {
+		this.registerEvent(this.plugin.app.workspace.on('active-leaf-change', () => {
+			this.scheduleActiveEditorCapture();
+		}));
+		this.registerEvent(this.plugin.app.workspace.on('file-open', () => {
+			this.scheduleActiveEditorCapture();
+		}));
+		this.registerEvent(this.plugin.app.workspace.on('editor-change', (_editor, info) => {
+			this.cacheEditorTargetFromInfo(info);
+		}));
+		this.registerDomEvent(document, 'keyup', () => {
+			this.scheduleActiveEditorCapture();
+		});
+		this.registerDomEvent(document, 'mouseup', () => {
+			this.scheduleActiveEditorCapture();
+		});
+		this.registerDomEvent(document, 'focusin', () => {
+			this.scheduleActiveEditorCapture();
+		});
 	}
 
 	private removeInsertedText(currentContent: string, entry: MoveUndoEntry): RemovalPlan | null {
@@ -345,16 +416,69 @@ export class FileContentMoveFeature extends Component {
 		await this.plugin.app.vault.modify(targetFile, editor.getValue());
 	}
 
+	private resolveCachedEditorTarget(): EditorInsertionTarget | null {
+		if (!this.cachedEditorTarget || Date.now() - this.cachedEditorTarget.recordedAt > TARGET_CACHE_TTL_MS) {
+			return null;
+		}
+
+		const targetFile = this.plugin.app.vault.getAbstractFileByPath(this.cachedEditorTarget.filePath);
+		if (!this.isMarkdownFile(targetFile)) {
+			return null;
+		}
+
+		const openTargetView = this.findOpenMarkdownView(targetFile.path);
+		if (!openTargetView) {
+			return null;
+		}
+
+		return {
+			editor: openTargetView.editor,
+			file: targetFile,
+			info: openTargetView,
+			insertOffset: clamp(this.cachedEditorTarget.insertOffset, 0, openTargetView.editor.getValue().length),
+		};
+	}
+
+	private resolveEditorInfoTarget(info: MarkdownFileInfo | null): EditorInsertionTarget | null {
+		if (!info?.editor || !this.isMarkdownFile(info.file)) {
+			return null;
+		}
+
+		return {
+			editor: info.editor,
+			file: info.file,
+			info,
+			insertOffset: info.editor.posToOffset(info.editor.getCursor()),
+		};
+	}
+
+	private resolveEditorTarget(): EditorInsertionTarget | null {
+		const activeTarget = this.resolveEditorInfoTarget(this.getActiveEditorInfo());
+		if (activeTarget) {
+			this.cacheEditorTarget(activeTarget.editor, activeTarget.file, activeTarget.insertOffset);
+			return activeTarget;
+		}
+
+		return this.resolveCachedEditorTarget();
+	}
+
+	private scheduleActiveEditorCapture(): void {
+		const timeout = window.setTimeout(() => {
+			this.captureTimeouts.delete(timeout);
+			this.captureActiveEditorTarget();
+		}, 0);
+		this.captureTimeouts.add(timeout);
+	}
+
 	private async sendFileToActiveCursor(sourceFile: TFile): Promise<void> {
-		const activeEditorInfo = this.getActiveEditorInfo();
-		if (!activeEditorInfo?.editor) {
+		const target = this.resolveEditorTarget();
+		if (!target) {
 			new Notice(this.localization.targetMissingNotice);
 			return;
 		}
 
-		const targetEditor = activeEditorInfo.editor;
 		await this.enqueue(async () => {
-			await this.moveSourceContentIntoEditor(sourceFile.path, targetEditor, activeEditorInfo);
+			await this.moveSourceContentIntoEditor(sourceFile.path, target);
 		});
 	}
 
@@ -410,6 +534,10 @@ export class FileContentMoveFeature extends Component {
 
 function buildInsertionText(content: string, insertOffset: number, block: string): string {
 	return `${getBlockPrefix(content, insertOffset)}${block}${getBlockSuffix(content, insertOffset)}`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+	return Math.min(Math.max(value, min), max);
 }
 
 function findSingleOccurrence(content: string, value: string): number | null {

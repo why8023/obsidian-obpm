@@ -1,7 +1,7 @@
 import {getLanguage} from 'obsidian';
 
 interface FileContentMoveLocalization {
-	menuItemLabel: string;
+	menuItemLabel: (targetName: string | null) => string;
 	moveFailureNotice: string;
 	moveNotice: (sourceName: string, targetName: string) => string;
 	sameFileNotice: string;
@@ -15,12 +15,14 @@ interface FileContentMoveLocalization {
 }
 
 const ENGLISH_LOCALIZATION: FileContentMoveLocalization = {
-	menuItemLabel: 'Send to editor cursor',
+	menuItemLabel: (targetName) => targetName
+		? `Send to cursor in ${targetName}`
+		: 'Send to editor cursor',
 	moveFailureNotice: 'Could not move the source file content.',
 	moveNotice: (sourceName, targetName) => `Moved ${sourceName} into ${targetName}.`,
 	sameFileNotice: 'Choose a different target file.',
 	sourceMissingNotice: 'The selected source file no longer exists.',
-	targetMissingNotice: 'Open a Markdown editor and place the cursor where the content should be inserted.',
+	targetMissingNotice: 'Place the cursor in a target Markdown editor first, then send the source file.',
 	undoCommandName: 'Undo last sent content move',
 	undoFailureNotice: 'Could not undo the last sent content move.',
 	undoNoOperationNotice: 'There is no sent content move to undo.',
@@ -29,12 +31,14 @@ const ENGLISH_LOCALIZATION: FileContentMoveLocalization = {
 };
 
 const CHINESE_LOCALIZATION: FileContentMoveLocalization = {
-	menuItemLabel: '发送到编辑器光标处',
+	menuItemLabel: (targetName) => targetName
+		? `发送到 ${targetName} 的光标处`
+		: '发送到编辑器光标处',
 	moveFailureNotice: '无法移动源文件内容。',
 	moveNotice: (sourceName, targetName) => `已将 ${sourceName} 移入 ${targetName}。`,
 	sameFileNotice: '请选择另一个目标文件。',
 	sourceMissingNotice: '选中的源文件已不存在。',
-	targetMissingNotice: '请先打开 Markdown 编辑器，并把光标放到要插入的位置。',
+	targetMissingNotice: '请先在目标 Markdown 编辑器中放置光标，然后再发送源文件。',
 	undoCommandName: '撤销上一次发送内容移动',
 	undoFailureNotice: '无法撤销上一次发送内容移动。',
 	undoNoOperationNotice: '没有可撤销的发送内容移动。',
