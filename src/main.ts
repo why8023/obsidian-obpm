@@ -2,6 +2,7 @@ import {Plugin} from 'obsidian';
 import {BasesFileRevealFeature} from './features/bases-file-reveal/bases-file-reveal-feature';
 import {BasesGroupFoldFeature} from './features/bases-group-fold/bases-group-fold-feature';
 import {BasesTopTabsFeature} from './features/bases-top-tabs/bases-top-tabs-feature';
+import {FileContentMoveFeature} from './features/file-content-move/file-content-move-feature';
 import {FileNameSyncFeature} from './features/file-name-sync/file-name-sync-feature';
 import {FrontmatterAutomationFeature} from './features/frontmatter-automation/frontmatter-automation-feature';
 import {ProjectRoutingFeature} from './features/project-routing/project-routing-feature';
@@ -22,6 +23,7 @@ export default class OBPMPlugin extends Plugin {
 	private basesFileRevealFeature: BasesFileRevealFeature | null = null;
 	private basesGroupFoldFeature: BasesGroupFoldFeature | null = null;
 	private basesTopTabsFeature: BasesTopTabsFeature | null = null;
+	private fileContentMoveFeature: FileContentMoveFeature | null = null;
 	private fileNameSyncFeature: FileNameSyncFeature | null = null;
 	private frontmatterAutomationFeature: FrontmatterAutomationFeature | null = null;
 	private projectRoutingFeature: ProjectRoutingFeature | null = null;
@@ -36,6 +38,8 @@ export default class OBPMPlugin extends Plugin {
 		this.addChild(this.basesGroupFoldFeature);
 		this.basesTopTabsFeature = new BasesTopTabsFeature(this);
 		this.addChild(this.basesTopTabsFeature);
+		this.fileContentMoveFeature = new FileContentMoveFeature(this);
+		this.addChild(this.fileContentMoveFeature);
 		this.relatedLinksFeature = new RelatedLinksFeature(this);
 		this.addChild(this.relatedLinksFeature);
 		this.fileNameSyncFeature = new FileNameSyncFeature(this);
@@ -124,6 +128,11 @@ export default class OBPMPlugin extends Plugin {
 				case 'basesTopTabs':
 					if (this.basesTopTabsFeature) {
 						refreshTasks.push(this.basesTopTabsFeature.refresh());
+					}
+					break;
+				case 'fileContentMove':
+					if (this.fileContentMoveFeature) {
+						refreshTasks.push(this.fileContentMoveFeature.refresh());
 					}
 					break;
 				case 'relatedLinks':

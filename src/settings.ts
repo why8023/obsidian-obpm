@@ -31,6 +31,7 @@ import {getSettingsLocalization, SettingsLocalization} from './settings-localiza
 
 export type BasesTopTabsPlacement = 'above-toolbar' | 'inside-toolbar';
 export type BasesTopTabsOrientation = 'horizontal' | 'vertical';
+export type FileContentMoveModifierKey = 'alt' | 'ctrl' | 'meta' | 'mod' | 'shift';
 
 const DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS = 8;
 const MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS = 50;
@@ -125,6 +126,13 @@ export interface FileNameSyncSettings {
 	maxFileNameLength: number;
 }
 
+export interface FileContentMoveSettings {
+	enableFileExplorer: boolean;
+	enabled: boolean;
+	modifierKey: FileContentMoveModifierKey;
+	stripSingleH1: boolean;
+}
+
 interface FrontmatterAutomationRuleListSectionOptions {
 	addRuleButton: string;
 	addRuleDesc: string;
@@ -152,6 +160,7 @@ export interface OBPMPluginSettings {
 	basesFileReveal: BasesFileRevealSettings;
 	basesGroupFold: BasesGroupFoldSettings;
 	basesTopTabs: BasesTopTabsSettings;
+	fileContentMove: FileContentMoveSettings;
 	relatedLinks: RelatedLinksSettings;
 	fileNameSync: FileNameSyncSettings;
 	frontmatterAutomation: FrontmatterAutomationSettings;
@@ -182,6 +191,12 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		scrollable: true,
 		showIcons: true,
 		showViewCount: false,
+	},
+	fileContentMove: {
+		enableFileExplorer: true,
+		enabled: false,
+		modifierKey: 'alt',
+		stripSingleH1: true,
 	},
 	relatedLinks: {
 		enabled: false,
@@ -248,6 +263,21 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 			showIcons: normalizeBoolean(settings?.basesTopTabs?.showIcons, DEFAULT_SETTINGS.basesTopTabs.showIcons),
 			showViewCount: normalizeBoolean(settings?.basesTopTabs?.showViewCount, DEFAULT_SETTINGS.basesTopTabs.showViewCount),
 		},
+		fileContentMove: {
+			enableFileExplorer: normalizeBoolean(
+				settings?.fileContentMove?.enableFileExplorer,
+				DEFAULT_SETTINGS.fileContentMove.enableFileExplorer,
+			),
+			enabled: normalizeBoolean(settings?.fileContentMove?.enabled, DEFAULT_SETTINGS.fileContentMove.enabled),
+			modifierKey: normalizeFileContentMoveModifierKey(
+				settings?.fileContentMove?.modifierKey,
+				DEFAULT_SETTINGS.fileContentMove.modifierKey,
+			),
+			stripSingleH1: normalizeBoolean(
+				settings?.fileContentMove?.stripSingleH1,
+				DEFAULT_SETTINGS.fileContentMove.stripSingleH1,
+			),
+		},
 		relatedLinks: {
 			enabled: normalizeBoolean(settings?.relatedLinks?.enabled, DEFAULT_SETTINGS.relatedLinks.enabled),
 			relationProperty: normalizeText(settings?.relatedLinks?.relationProperty, DEFAULT_SETTINGS.relatedLinks.relationProperty),
@@ -297,6 +327,19 @@ function normalizeText(value: unknown, fallback: string): string {
 function normalizeRequiredText(value: unknown, fallback: string): string {
 	const normalized = normalizeText(value, fallback);
 	return normalized.length > 0 ? normalized : fallback;
+}
+
+function normalizeFileContentMoveModifierKey(
+	value: unknown,
+	fallback: FileContentMoveModifierKey,
+): FileContentMoveModifierKey {
+	return value === 'alt'
+		|| value === 'ctrl'
+		|| value === 'meta'
+		|| value === 'mod'
+		|| value === 'shift'
+		? value
+		: fallback;
 }
 
 function normalizeBasesTopTabsPlacement(value: unknown, fallback: BasesTopTabsPlacement): BasesTopTabsPlacement {
@@ -608,6 +651,9 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				});
 				break;
 			case 'workflow':
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderFileContentMoveSettingsSection(panelBodyEl);
+				});
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderProjectRoutingSettingsSection(panelBodyEl);
 				});
@@ -1111,6 +1157,64 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.sameFolderNote.enabled = value;
 					await saveWithoutRefresh();
+				}));
+	}
+
+	private renderFileContentMoveSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveFileContentMoveSettings = async () => this.saveSettingsFor('fileContentMove');
+		const saveWithoutRefresh = async () => this.saveSettingsFor();
+
+		new Setting(containerEl)
+			.setName(strings.fileContentMoveHeading)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.fileContentMoveEnableName)
+			.setDesc(strings.fileContentMoveEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.fileContentMove.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.fileContentMove.enabled = value;
+					await saveFileContentMoveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.fileContentMoveModifierKeyName)
+			.setDesc(strings.fileContentMoveModifierKeyDesc)
+			.addDropdown((dropdown) => dropdown
+				.addOption('alt', strings.fileContentMoveModifierAltLabel)
+				.addOption('mod', strings.fileContentMoveModifierModLabel)
+				.addOption('ctrl', strings.fileContentMoveModifierCtrlLabel)
+				.addOption('meta', strings.fileContentMoveModifierMetaLabel)
+				.addOption('shift', strings.fileContentMoveModifierShiftLabel)
+				.setValue(this.plugin.settings.fileContentMove.modifierKey)
+				.onChange(async (value) => {
+					this.plugin.settings.fileContentMove.modifierKey = normalizeFileContentMoveModifierKey(
+						value,
+						this.plugin.settings.fileContentMove.modifierKey,
+					);
+					await saveWithoutRefresh();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.fileContentMoveStripSingleH1Name)
+			.setDesc(strings.fileContentMoveStripSingleH1Desc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.fileContentMove.stripSingleH1)
+				.onChange(async (value) => {
+					this.plugin.settings.fileContentMove.stripSingleH1 = value;
+					await saveWithoutRefresh();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.fileContentMoveFileExplorerName)
+			.setDesc(strings.fileContentMoveFileExplorerDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.fileContentMove.enableFileExplorer)
+				.onChange(async (value) => {
+					this.plugin.settings.fileContentMove.enableFileExplorer = value;
+					await saveFileContentMoveSettings();
 				}));
 	}
 

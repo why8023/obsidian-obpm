@@ -2,6 +2,7 @@ export type RefreshableFeatureId =
 	| 'basesFileReveal'
 	| 'basesGroupFold'
 	| 'basesTopTabs'
+	| 'fileContentMove'
 	| 'relatedLinks'
 	| 'fileNameSync'
 	| 'projectRouting'
