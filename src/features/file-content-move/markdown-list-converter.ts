@@ -21,11 +21,12 @@ const FENCE_LINE_PATTERN = /^(?: {0,3})(`{3,}|~{3,})/;
 
 export function buildMovedContentList(options: BuildMovedContentListOptions): string {
 	const sourceBasename = normalizeListItemText(options.sourceBasename) || 'Untitled';
-	const lines = normalizeLineEndings(options.sourceContent).split('\n');
+	const lines = normalizeSourceContent(options.sourceContent).split('\n');
 	const shouldStripSingleH1 = options.stripSingleH1 && countLevelOneHeadings(lines) === 1;
 	const headingLevelOffset = shouldStripSingleH1 ? 1 : 0;
 	const outputLines: string[] = [formatListItem(0, sourceBasename)];
 	let currentHeadingLevel = 0;
+	let hasContentAfterRoot = false;
 	let listIndentStack: number[] = [];
 	let previousListOutputLevel: number | null = null;
 	let inFence = false;
@@ -38,7 +39,9 @@ export function buildMovedContentList(options: BuildMovedContentListOptions): st
 
 		if (trimmedLine.length === 0) {
 			listIndentStack = [];
-			previousListOutputLevel = null;
+			if (hasContentAfterRoot && outputLines[outputLines.length - 1] !== '') {
+				outputLines.push('');
+			}
 			continue;
 		}
 
@@ -58,6 +61,7 @@ export function buildMovedContentList(options: BuildMovedContentListOptions): st
 
 				currentHeadingLevel = Math.max(1, heading.level - headingLevelOffset);
 				outputLines.push(formatListItem(currentHeadingLevel, heading.text));
+				hasContentAfterRoot = true;
 				if (fenceMatch) {
 					inFence = !inFence;
 				}
@@ -69,6 +73,7 @@ export function buildMovedContentList(options: BuildMovedContentListOptions): st
 				const relativeListLevel = updateListIndentStack(listIndentStack, listLine.indentWidth);
 				const outputLevel = getContentLevel(currentHeadingLevel) + relativeListLevel;
 				outputLines.push(formatListItem(outputLevel, listLine.content));
+				hasContentAfterRoot = true;
 				previousListOutputLevel = outputLevel;
 				if (fenceMatch) {
 					inFence = !inFence;
@@ -77,19 +82,24 @@ export function buildMovedContentList(options: BuildMovedContentListOptions): st
 			}
 		}
 
-		const outputLevel = previousListOutputLevel !== null && hasLeadingWhitespace(line)
-			? previousListOutputLevel + 1
+		const isListContinuationLine = previousListOutputLevel !== null && hasLeadingWhitespace(line);
+		const continuationBaseLevel = previousListOutputLevel;
+		const outputLevel = isListContinuationLine && continuationBaseLevel !== null
+			? continuationBaseLevel + 1
 			: getContentLevel(currentHeadingLevel);
-		outputLines.push(formatListItem(outputLevel, trimmedLine));
+		outputLines.push(formatIndentedContent(outputLevel, fenceBeforeLine || fenceMatch ? line : trimmedLine));
+		hasContentAfterRoot = true;
 		listIndentStack = [];
-		previousListOutputLevel = null;
+		if (!isListContinuationLine) {
+			previousListOutputLevel = null;
+		}
 
 		if (fenceMatch) {
 			inFence = !inFence;
 		}
 	}
 
-	return outputLines.join('\n');
+	return trimTrailingBlankLines(outputLines).join('\n');
 }
 
 function countLevelOneHeadings(lines: readonly string[]): number {
@@ -117,6 +127,10 @@ function formatListItem(level: number, text: string): string {
 	return `${LIST_INDENT.repeat(Math.max(0, level))}- ${normalizeListItemText(text)}`;
 }
 
+function formatIndentedContent(level: number, text: string): string {
+	return `${LIST_INDENT.repeat(Math.max(1, level))}${text}`;
+}
+
 function getContentLevel(currentHeadingLevel: number): number {
 	return Math.max(1, currentHeadingLevel + 1);
 }
@@ -127,6 +141,10 @@ function hasLeadingWhitespace(value: string): boolean {
 
 function normalizeLineEndings(value: string): string {
 	return value.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
+}
+
+function normalizeSourceContent(value: string): string {
+	return normalizeLineEndings(stripLeadingFrontmatter(value));
 }
 
 function normalizeListItemText(value: string): string {
@@ -184,4 +202,29 @@ function updateListIndentStack(stack: number[], indentWidth: number): number {
 	}
 
 	return Math.max(0, stack.indexOf(indentWidth));
+}
+
+function stripLeadingFrontmatter(value: string): string {
+	const normalizedValue = value.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+	const lines = normalizedValue.split('\n');
+	if (lines[0]?.trim() !== '---') {
+		return normalizedValue;
+	}
+
+	for (let index = 1; index < lines.length; index += 1) {
+		const currentLine = lines[index]?.trim();
+		if (currentLine === '---' || currentLine === '...') {
+			return lines.slice(index + 1).join('\n');
+		}
+	}
+
+	return normalizedValue;
+}
+
+function trimTrailingBlankLines(lines: string[]): string[] {
+	while (lines.length > 1 && lines[lines.length - 1] === '') {
+		lines.pop();
+	}
+
+	return lines;
 }
