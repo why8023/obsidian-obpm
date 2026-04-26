@@ -39,7 +39,7 @@ export function buildMovedContentList(options: BuildMovedContentListOptions): st
 
 		if (trimmedLine.length === 0) {
 			listIndentStack = [];
-			if (hasContentAfterRoot && outputLines[outputLines.length - 1] !== '') {
+			if (inFence && hasContentAfterRoot && outputLines[outputLines.length - 1] !== '') {
 				outputLines.push('');
 			}
 			continue;
