@@ -593,6 +593,88 @@
 	white-space: nowrap;
 }
 
+.obpm-settings-root .obpm-automation-rule-list {
+	display: grid;
+	gap: var(--size-4-3);
+	margin-top: var(--size-4-3);
+}
+
+.obpm-settings-root .obpm-automation-rule-card {
+	border: 1px solid color-mix(in srgb, var(--background-modifier-border) 58%, transparent);
+	border-radius: var(--radius-s);
+	background: color-mix(in srgb, var(--background-primary) 84%, var(--background-secondary) 16%);
+}
+
+.obpm-settings-root .obpm-automation-rule-card-header {
+	display: flex;
+	gap: var(--size-4-3);
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--size-4-3);
+	border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 45%, transparent);
+}
+
+.obpm-settings-root .obpm-automation-rule-card-title {
+	font-weight: var(--font-semibold);
+	line-height: var(--line-height-tight);
+}
+
+.obpm-settings-root .obpm-automation-rule-card-summary {
+	margin-top: var(--size-2-1);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	overflow-wrap: anywhere;
+}
+
+.obpm-settings-root .obpm-automation-rule-card-actions {
+	display: flex;
+	flex: 0 0 auto;
+	gap: var(--size-2-3);
+	align-items: center;
+}
+
+.obpm-settings-root .obpm-automation-rule-card-actions button {
+	white-space: nowrap;
+}
+
+.obpm-settings-root .obpm-automation-rule-form {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--size-4-3);
+	padding: var(--size-4-3);
+}
+
+.obpm-settings-root .obpm-automation-rule-field {
+	min-width: 0;
+}
+
+.obpm-settings-root .obpm-automation-rule-field-wide {
+	grid-column: 1 / -1;
+}
+
+.obpm-settings-root .obpm-automation-rule-field-label {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	line-height: var(--line-height-tight);
+}
+
+.obpm-settings-root .obpm-automation-rule-field-desc {
+	margin-top: var(--size-2-1);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: var(--line-height-tight);
+}
+
+.obpm-settings-root .obpm-automation-rule-field-control {
+	margin-top: var(--size-2-2);
+}
+
+.obpm-settings-root .obpm-automation-rule-field-control input[type="text"],
+.obpm-settings-root .obpm-automation-rule-field-control select {
+	width: 100%;
+	min-width: 0;
+}
+
 .obpm-settings-root .obpm-rule-table-footer {
 	display: flex;
 	gap: var(--size-4-3);
@@ -647,6 +729,20 @@
 
 	.obpm-settings-root .obpm-rule-table-automation {
 		min-width: 1280px;
+	}
+
+	.obpm-settings-root .obpm-automation-rule-card-header {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.obpm-settings-root .obpm-automation-rule-card-actions {
+		width: 100%;
+		justify-content: space-between;
+	}
+
+	.obpm-settings-root .obpm-automation-rule-form {
+		grid-template-columns: 1fr;
 	}
 
 	.obpm-settings-root .obpm-rule-table-footer {
