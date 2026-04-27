@@ -195,6 +195,93 @@ describe('FrontmatterAutomationService', () => {
 
 		assert.equal(settings.rules.at(0)?.triggerOperator, 'contains');
 	});
+
+	it('emits a project move action from a configurable trigger rule', () => {
+		const result = service.evaluate({
+			currentSnapshot: {
+				status: 'archived',
+			},
+			previousSnapshot: {
+				status: 'active',
+			},
+			settings: createSettings({
+				rules: [
+					createDefaultFrontmatterAutomationRule({
+						actionType: 'ensure_project_folder',
+						id: 'archive-into-project',
+						targetField: '',
+						targetSubfolderPath: 'done',
+						triggerField: 'status',
+						triggerOperator: 'equals',
+						triggerValue: 'archived',
+					}),
+				],
+			}),
+		});
+
+		assert.equal(result.actions.length, 0);
+		assert.deepEqual(result.projectMoveActions, [
+			{
+				ruleId: 'archive-into-project',
+				targetSubfolderPath: 'done',
+			},
+		]);
+	});
+
+	it('can write frontmatter and request a project move from the same trigger change', () => {
+		const result = service.evaluate({
+			currentSnapshot: {
+				obpm_status: 'done',
+			},
+			previousSnapshot: {
+				obpm_status: 'todo',
+			},
+			settings: createSettings({
+				rules: [
+					createDefaultFrontmatterAutomationRule({
+						id: 'done-set-end-time',
+					}),
+					createDefaultFrontmatterAutomationRule({
+						actionType: 'ensure_project_folder',
+						id: 'done-move-into-project',
+						targetField: '',
+						targetSubfolderPath: 'archive',
+					}),
+				],
+			}),
+			now: new Date(2026, 3, 10, 23, 45, 12),
+		});
+
+		assert.deepEqual(result.actions, [
+			{
+				nextValue: '2026-04-10T23:45:12',
+				ruleId: 'done-set-end-time',
+				targetField: 'obpm_end_time',
+			},
+		]);
+		assert.equal(result.nextSnapshot.obpm_end_time, '2026-04-10T23:45:12');
+		assert.deepEqual(result.projectMoveActions, [
+			{
+				ruleId: 'done-move-into-project',
+				targetSubfolderPath: 'archive',
+			},
+		]);
+	});
+
+	it('migrates legacy done project move settings into a configurable rule', () => {
+		const settings = normalizeFrontmatterAutomationSettings({
+			doneProjectMove: {
+				enabled: true,
+				targetSubfolderPath: ' task\\done ',
+			},
+		});
+		const projectMoveRule = settings.rules.find((rule) => rule.id === 'obpm-status-done-ensure-project-folder');
+
+		assert.equal(projectMoveRule?.actionType, 'ensure_project_folder');
+		assert.equal(projectMoveRule?.triggerField, 'obpm_status');
+		assert.equal(projectMoveRule?.triggerValue, 'done');
+		assert.equal(projectMoveRule?.targetSubfolderPath, 'task/done');
+	});
 });
 
 function createSettings(overrides: Partial<FrontmatterAutomationSettings> = {}): FrontmatterAutomationSettings {

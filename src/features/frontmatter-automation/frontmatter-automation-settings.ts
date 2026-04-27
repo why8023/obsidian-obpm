@@ -5,6 +5,7 @@ import {
 	FrontmatterAutomationTriggerOperator,
 	FrontmatterAutomationWriteMode,
 } from './frontmatter-automation-types';
+import {normalizeProjectSubfolderPath} from '../project-routing/settings';
 
 export const DEFAULT_FRONTMATTER_AUTOMATION_TIME_FORMAT = 'YYYY-MM-DDTHH:mm:ss';
 
@@ -22,6 +23,7 @@ export function createDefaultFrontmatterAutomationRule(
 		actionType: 'set_current_time',
 		targetField: 'obpm_end_time',
 		staticValue: '',
+		targetSubfolderPath: '',
 		writeMode: 'always',
 		...overrides,
 	};
@@ -33,8 +35,17 @@ export const DEFAULT_FRONTMATTER_AUTOMATION_SETTINGS: FrontmatterAutomationSetti
 	rules: [createDefaultFrontmatterAutomationRule()],
 };
 
+interface LegacyDoneProjectMoveSettings {
+	enabled?: unknown;
+	targetSubfolderPath?: unknown;
+}
+
+interface LegacyFrontmatterAutomationSettings extends Partial<FrontmatterAutomationSettings> {
+	doneProjectMove?: LegacyDoneProjectMoveSettings | null;
+}
+
 export function normalizeFrontmatterAutomationSettings(
-	settings: Partial<FrontmatterAutomationSettings> | null | undefined,
+	settings: LegacyFrontmatterAutomationSettings | null | undefined,
 ): FrontmatterAutomationSettings {
 	return {
 		enableFrontmatterAutomation: normalizeBoolean(
@@ -45,7 +56,7 @@ export function normalizeFrontmatterAutomationSettings(
 			settings?.timeFormat,
 			DEFAULT_FRONTMATTER_AUTOMATION_SETTINGS.timeFormat,
 		),
-		rules: normalizeRules(settings?.rules),
+		rules: normalizeRulesWithLegacyProjectMove(settings),
 	};
 }
 
@@ -53,7 +64,9 @@ function normalizeActionType(
 	value: unknown,
 	fallback: FrontmatterAutomationActionType,
 ): FrontmatterAutomationActionType {
-	return value === 'set_current_time' || value === 'set_static_value' ? value : fallback;
+	return value === 'set_current_time' || value === 'set_static_value' || value === 'ensure_project_folder'
+		? value
+		: fallback;
 }
 
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
@@ -86,6 +99,10 @@ function normalizeRule(
 		actionType: normalizeActionType(rule.actionType, fallbackRule.actionType),
 		targetField: normalizeText(rule.targetField, fallbackRule.targetField),
 		staticValue: normalizeText(rule.staticValue, fallbackRule.staticValue ?? ''),
+		targetSubfolderPath: normalizeProjectSubfolderPath(
+			rule.targetSubfolderPath,
+			fallbackRule.targetSubfolderPath ?? '',
+		),
 		writeMode: normalizeWriteMode(rule.writeMode, fallbackRule.writeMode),
 	};
 }
@@ -96,6 +113,27 @@ function normalizeRules(value: unknown): FrontmatterAutomationRule[] {
 	}
 
 	return value.map((rule, index) => normalizeRule(rule, index));
+}
+
+function normalizeRulesWithLegacyProjectMove(
+	settings: LegacyFrontmatterAutomationSettings | null | undefined,
+): FrontmatterAutomationRule[] {
+	const rules = normalizeRules(settings?.rules);
+	if (!settings?.doneProjectMove || !normalizeBoolean(settings.doneProjectMove.enabled, false)) {
+		return rules;
+	}
+
+	const legacyRule = createDefaultFrontmatterAutomationRule({
+		id: 'obpm-status-done-ensure-project-folder',
+		actionType: 'ensure_project_folder',
+		targetField: '',
+		targetSubfolderPath: normalizeProjectSubfolderPath(settings.doneProjectMove.targetSubfolderPath, ''),
+	});
+	if (rules.some((rule) => rule.id === legacyRule.id)) {
+		return rules;
+	}
+
+	return [...rules, legacyRule];
 }
 
 function normalizeText(value: unknown, fallback: string): string {

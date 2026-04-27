@@ -1,5 +1,5 @@
 export type FrontmatterAutomationTriggerOperator = 'equals' | 'contains';
-export type FrontmatterAutomationActionType = 'set_current_time' | 'set_static_value';
+export type FrontmatterAutomationActionType = 'set_current_time' | 'set_static_value' | 'ensure_project_folder';
 export type FrontmatterAutomationWriteMode = 'always' | 'when-empty';
 
 export interface FrontmatterAutomationRule {
@@ -11,6 +11,7 @@ export interface FrontmatterAutomationRule {
 	actionType: FrontmatterAutomationActionType;
 	targetField: string;
 	staticValue?: string;
+	targetSubfolderPath?: string;
 	writeMode: FrontmatterAutomationWriteMode;
 }
 
@@ -28,7 +29,13 @@ export interface FrontmatterAutomationAction {
 	targetField: string;
 }
 
+export interface FrontmatterAutomationProjectMoveAction {
+	ruleId: string;
+	targetSubfolderPath: string;
+}
+
 export interface FrontmatterAutomationEvaluationResult {
 	actions: FrontmatterAutomationAction[];
 	nextSnapshot: FrontmatterSnapshot;
+	projectMoveActions: FrontmatterAutomationProjectMoveAction[];
 }

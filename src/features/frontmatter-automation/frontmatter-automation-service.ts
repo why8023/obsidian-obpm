@@ -1,4 +1,4 @@
-import {FrontmatterAutomationSettings, FrontmatterSnapshot, FrontmatterAutomationAction, FrontmatterAutomationEvaluationResult, FrontmatterAutomationRule} from './frontmatter-automation-types';
+import {FrontmatterAutomationSettings, FrontmatterSnapshot, FrontmatterAutomationAction, FrontmatterAutomationEvaluationResult, FrontmatterAutomationProjectMoveAction, FrontmatterAutomationRule} from './frontmatter-automation-types';
 import {createSnapshotWithAppliedActions, formatFrontmatterAutomationTime, isFrontmatterValueEmpty} from './frontmatter-automation-utils';
 
 interface EvaluateFrontmatterAutomationOptions {
@@ -20,9 +20,22 @@ export class FrontmatterAutomationService {
 		const now = options.now ?? new Date();
 		const actions: FrontmatterAutomationAction[] = [];
 		const nextSnapshot = createSnapshotWithAppliedActions(currentSnapshot, []);
+		const projectMoveActions: FrontmatterAutomationProjectMoveAction[] = [];
 
 		for (const rule of settings.rules) {
 			if (!rule.enabled || !this.shouldTrigger(previousSnapshot, currentSnapshot, rule)) {
+				continue;
+			}
+
+			if (rule.actionType === 'ensure_project_folder') {
+				projectMoveActions.push({
+					ruleId: rule.id,
+					targetSubfolderPath: rule.targetSubfolderPath ?? '',
+				});
+				continue;
+			}
+
+			if (rule.targetField.length === 0) {
 				continue;
 			}
 
@@ -42,6 +55,7 @@ export class FrontmatterAutomationService {
 		return {
 			actions,
 			nextSnapshot,
+			projectMoveActions,
 		};
 	}
 
@@ -62,7 +76,7 @@ export class FrontmatterAutomationService {
 		currentSnapshot: FrontmatterSnapshot,
 		rule: FrontmatterAutomationRule,
 	): boolean {
-		if (rule.triggerField.length === 0 || rule.targetField.length === 0) {
+		if (rule.triggerField.length === 0) {
 			return false;
 		}
 

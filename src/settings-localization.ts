@@ -122,12 +122,16 @@ export interface SettingsLocalization {
 	frontmatterAutomationActionTypeDesc: string;
 	frontmatterAutomationActionTypeCurrentTimeLabel: string;
 	frontmatterAutomationActionTypeStaticValueLabel: string;
+	frontmatterAutomationActionTypeProjectFolderLabel: string;
 	frontmatterAutomationTargetFieldName: string;
 	frontmatterAutomationTargetFieldDesc: string;
 	frontmatterAutomationTargetFieldPlaceholder: string;
 	frontmatterAutomationStaticValueName: string;
 	frontmatterAutomationStaticValueDesc: string;
 	frontmatterAutomationStaticValuePlaceholder: string;
+	frontmatterAutomationTargetSubfolderPathName: string;
+	frontmatterAutomationTargetSubfolderPathDesc: string;
+	frontmatterAutomationTargetSubfolderPathPlaceholder: string;
 	frontmatterAutomationWriteModeName: string;
 	frontmatterAutomationWriteModeDesc: string;
 	frontmatterAutomationWriteModeAlwaysLabel: string;
@@ -315,22 +319,26 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	frontmatterAutomationTriggerFieldDesc: 'Frontmatter field that is observed for state changes.',
 	frontmatterAutomationTriggerFieldPlaceholder: 'Enter trigger field',
 	frontmatterAutomationTriggerOperatorName: 'Trigger operator',
-	frontmatterAutomationTriggerOperatorDesc: 'How the trigger field is matched. Contains works well for values like [[done]].',
+	frontmatterAutomationTriggerOperatorDesc: 'How the trigger field is matched. Contains works well for wikilink-style values.',
 	frontmatterAutomationTriggerOperatorContainsLabel: 'Contains',
 	frontmatterAutomationTriggerOperatorEqualsLabel: 'Equals',
 	frontmatterAutomationTriggerValueName: 'Trigger value',
 	frontmatterAutomationTriggerValueDesc: 'The rule runs only when the trigger field changes into this exact value.',
 	frontmatterAutomationTriggerValuePlaceholder: 'Enter trigger value',
 	frontmatterAutomationActionTypeName: 'Action type',
-	frontmatterAutomationActionTypeDesc: 'Choose whether the rule writes the current time or a fixed value.',
+	frontmatterAutomationActionTypeDesc: 'Choose whether the rule writes frontmatter or moves the file into its project folder.',
 	frontmatterAutomationActionTypeCurrentTimeLabel: 'Set current time',
 	frontmatterAutomationActionTypeStaticValueLabel: 'Set static value',
+	frontmatterAutomationActionTypeProjectFolderLabel: 'Move into project folder',
 	frontmatterAutomationTargetFieldName: 'Target field',
 	frontmatterAutomationTargetFieldDesc: 'Frontmatter field that will be written when the rule triggers.',
 	frontmatterAutomationTargetFieldPlaceholder: 'Enter target field',
 	frontmatterAutomationStaticValueName: 'Static value',
 	frontmatterAutomationStaticValueDesc: 'Value written when the action type is set to static value.',
 	frontmatterAutomationStaticValuePlaceholder: 'Enter static value',
+	frontmatterAutomationTargetSubfolderPathName: 'Target subfolder',
+	frontmatterAutomationTargetSubfolderPathDesc: 'When the file is outside its associated project folder, move it into this child folder under the project folder. Leave empty to use the project folder itself.',
+	frontmatterAutomationTargetSubfolderPathPlaceholder: 'archive (leave empty for project folder)',
 	frontmatterAutomationWriteModeName: 'Write mode',
 	frontmatterAutomationWriteModeDesc: 'Always overwrite the target field, or only write when it is empty.',
 	frontmatterAutomationWriteModeAlwaysLabel: 'Always',
@@ -518,22 +526,26 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	frontmatterAutomationTriggerFieldDesc: '用于监听状态变化的 frontmatter 字段名。',
 	frontmatterAutomationTriggerFieldPlaceholder: '输入触发字段',
 	frontmatterAutomationTriggerOperatorName: '触发条件',
-	frontmatterAutomationTriggerOperatorDesc: '指定如何匹配触发字段。对于 `[[done]]` 这类值，更适合使用“包含”。',
+	frontmatterAutomationTriggerOperatorDesc: '指定如何匹配触发字段。对于 wikilink 这类包装后的值，更适合使用“包含”。',
 	frontmatterAutomationTriggerOperatorContainsLabel: '包含',
 	frontmatterAutomationTriggerOperatorEqualsLabel: '等于',
 	frontmatterAutomationTriggerValueName: '触发值',
 	frontmatterAutomationTriggerValueDesc: '只有当触发字段变化为这个精确值时才执行规则。',
 	frontmatterAutomationTriggerValuePlaceholder: '输入触发值',
 	frontmatterAutomationActionTypeName: '动作类型',
-	frontmatterAutomationActionTypeDesc: '选择写入当前时间，或写入固定值。',
+	frontmatterAutomationActionTypeDesc: '选择回写 frontmatter，或把文件移动到所属项目文件夹。',
 	frontmatterAutomationActionTypeCurrentTimeLabel: '写入当前时间',
 	frontmatterAutomationActionTypeStaticValueLabel: '写入固定值',
+	frontmatterAutomationActionTypeProjectFolderLabel: '移动到项目文件夹',
 	frontmatterAutomationTargetFieldName: '目标字段',
 	frontmatterAutomationTargetFieldDesc: '规则命中后要写入的 frontmatter 字段名。',
 	frontmatterAutomationTargetFieldPlaceholder: '输入目标字段',
 	frontmatterAutomationStaticValueName: '固定值',
 	frontmatterAutomationStaticValueDesc: '当动作类型为“写入固定值”时使用。',
 	frontmatterAutomationStaticValuePlaceholder: '输入固定值',
+	frontmatterAutomationTargetSubfolderPathName: '目标子目录',
+	frontmatterAutomationTargetSubfolderPathDesc: '当文件不在关联项目文件夹层级下时，把它移动到项目文件夹下的这个子目录中。留空则使用项目文件夹本身。',
+	frontmatterAutomationTargetSubfolderPathPlaceholder: 'archive（留空则使用项目目录）',
 	frontmatterAutomationWriteModeName: '写入策略',
 	frontmatterAutomationWriteModeDesc: '始终覆盖目标字段，或仅在目标字段为空时写入。',
 	frontmatterAutomationWriteModeAlwaysLabel: '总是写入',

@@ -1,8 +1,10 @@
 import {CachedMetadata, Component, Notice, TAbstractFile, TFile} from 'obsidian';
 import OBPMPlugin from '../../main';
+import {ProjectFileRecognitionOptions} from '../project-routing/project-resolver';
 import {FrontmatterAutomationService} from './frontmatter-automation-service';
-import {FrontmatterSnapshot} from './frontmatter-automation-types';
+import {FrontmatterAutomationProjectMoveAction, FrontmatterSnapshot} from './frontmatter-automation-types';
 import {areFrontmatterSnapshotsEqual, createFrontmatterSnapshot} from './frontmatter-automation-utils';
+import {ensureFileInProjectFolder} from './project-placement-action';
 
 const DEFAULT_FLUSH_DELAY_MS = 200;
 const EMPTY_FRONTMATTER_SNAPSHOT: FrontmatterSnapshot = Object.freeze({});
@@ -98,6 +100,13 @@ export class FrontmatterAutomationFeature extends Component {
 		void nextTask.finally(() => {
 			if (this.fileWorkQueues.get(filePath) === nextTask) {
 				this.fileWorkQueues.delete(filePath);
+				return;
+			}
+
+			for (const [queuedPath, queuedTask] of this.fileWorkQueues.entries()) {
+				if (queuedTask === nextTask) {
+					this.fileWorkQueues.delete(queuedPath);
+				}
 			}
 		});
 
@@ -237,7 +246,7 @@ export class FrontmatterAutomationFeature extends Component {
 			previousSnapshot,
 			settings: this.plugin.settings.frontmatterAutomation,
 		});
-		if (observedEvaluation.actions.length === 0) {
+		if (observedEvaluation.actions.length === 0 && observedEvaluation.projectMoveActions.length === 0) {
 			this.setStableSnapshot(change.file.path, change.snapshot);
 			return;
 		}
@@ -249,40 +258,47 @@ export class FrontmatterAutomationFeature extends Component {
 		const now = new Date();
 		let didMutateFrontmatter = false;
 		let resolvedSnapshot: FrontmatterSnapshot | null = null;
+		let projectMoveActions = observedEvaluation.projectMoveActions;
 
 		try {
-			await this.plugin.app.fileManager.processFrontMatter(liveFile, (frontmatter) => {
-				const liveSnapshot = createFrontmatterSnapshot(frontmatter as Record<string, unknown> | null | undefined);
-				if (liveSnapshot === null) {
-					resolvedSnapshot = null;
-					return;
-				}
+			if (observedEvaluation.actions.length === 0) {
+				resolvedSnapshot = change.snapshot;
+			} else {
+				await this.plugin.app.fileManager.processFrontMatter(liveFile, (frontmatter) => {
+					const liveSnapshot = createFrontmatterSnapshot(frontmatter as Record<string, unknown> | null | undefined);
+					if (liveSnapshot === null) {
+						resolvedSnapshot = null;
+						projectMoveActions = [];
+						return;
+					}
 
-				if (!this.isEnabled() || change.generation !== this.stateGeneration) {
-					resolvedSnapshot = liveSnapshot;
-					return;
-				}
+					if (!this.isEnabled() || change.generation !== this.stateGeneration) {
+						resolvedSnapshot = liveSnapshot;
+						return;
+					}
 
-				if ((this.changeVersionByPath.get(change.file.path) ?? 0) !== change.version) {
-					resolvedSnapshot = liveSnapshot;
-					return;
-				}
+					if ((this.changeVersionByPath.get(change.file.path) ?? 0) !== change.version) {
+						resolvedSnapshot = liveSnapshot;
+						return;
+					}
 
-				const liveEvaluation = this.service.evaluate({
-					currentSnapshot: liveSnapshot,
-					previousSnapshot,
-					settings: this.plugin.settings.frontmatterAutomation,
-					now,
+					const liveEvaluation = this.service.evaluate({
+						currentSnapshot: liveSnapshot,
+						previousSnapshot,
+						settings: this.plugin.settings.frontmatterAutomation,
+						now,
+					});
+					projectMoveActions = liveEvaluation.projectMoveActions;
+					if (liveEvaluation.actions.length === 0) {
+						resolvedSnapshot = liveSnapshot;
+						return;
+					}
+
+					this.service.applyActions(frontmatter as Record<string, unknown>, liveEvaluation.actions);
+					didMutateFrontmatter = true;
+					resolvedSnapshot = liveEvaluation.nextSnapshot;
 				});
-				if (liveEvaluation.actions.length === 0) {
-					resolvedSnapshot = liveSnapshot;
-					return;
-				}
-
-				this.service.applyActions(frontmatter as Record<string, unknown>, liveEvaluation.actions);
-				didMutateFrontmatter = true;
-				resolvedSnapshot = liveEvaluation.nextSnapshot;
-			});
+			}
 		} catch (error) {
 			this.handleError(change.file.path, error);
 			return;
@@ -297,14 +313,20 @@ export class FrontmatterAutomationFeature extends Component {
 		}
 
 		this.setStableSnapshot(change.file.path, resolvedSnapshot);
-		if (!didMutateFrontmatter || resolvedSnapshot === null) {
+		if (resolvedSnapshot === null) {
 			return;
 		}
 
-		this.pendingOwnWrites.set(change.file.path, {
-			expectedSnapshot: resolvedSnapshot,
-			expiresAt: Date.now() + OWN_WRITE_TTL_MS,
-		});
+		if (didMutateFrontmatter) {
+			this.pendingOwnWrites.set(change.file.path, {
+				expectedSnapshot: resolvedSnapshot,
+				expiresAt: Date.now() + OWN_WRITE_TTL_MS,
+			});
+		}
+
+		for (const projectMoveAction of projectMoveActions) {
+			await this.ensureFileInProjectFolder(liveFile, resolvedSnapshot, projectMoveAction);
+		}
 	}
 
 	private resetState(): void {
@@ -335,6 +357,32 @@ export class FrontmatterAutomationFeature extends Component {
 
 	private setStableSnapshot(filePath: string, snapshot: FrontmatterSnapshot | null): void {
 		this.stableSnapshots.set(filePath, snapshot ?? EMPTY_FRONTMATTER_SNAPSHOT);
+	}
+
+	private getProjectFileRecognitionOptions(): ProjectFileRecognitionOptions {
+		return {
+			projectFileRules: this.plugin.settings.projectRouting.projectFileRules,
+			recognizeFilenameMatchesFolderAsProject:
+				this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject,
+		};
+	}
+
+	private async ensureFileInProjectFolder(
+		file: TFile,
+		snapshot: FrontmatterSnapshot,
+		action: FrontmatterAutomationProjectMoveAction,
+	): Promise<void> {
+		await ensureFileInProjectFolder({
+			app: this.plugin.app,
+			autoMoveWhenSingleCandidate: this.plugin.settings.projectRouting.autoMoveWhenSingleCandidate,
+			cache: {frontmatter: snapshot as CachedMetadata['frontmatter']},
+			displayProperty: this.plugin.settings.relatedLinks.displayProperty,
+			file,
+			projectFileRecognition: this.getProjectFileRecognitionOptions(),
+			relationProperty: this.plugin.settings.relatedLinks.relationProperty,
+			showNoticeAfterMove: this.plugin.settings.projectRouting.showNoticeAfterMove,
+			targetSubfolderPath: action.targetSubfolderPath,
+		});
 	}
 }
 

@@ -1622,21 +1622,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				text: options.noRulesText,
 			});
 		} else {
-			const tableWrapEl = containerEl.createDiv({cls: 'obpm-rule-table-wrap'});
-			const tableEl = tableWrapEl.createEl('table', {cls: 'obpm-rule-table obpm-rule-table-automation'});
-			const headerRowEl = tableEl.createEl('thead').createEl('tr');
-			headerRowEl.createEl('th', {text: '#'});
-			headerRowEl.createEl('th', {text: strings.frontmatterAutomationRuleEnabledName});
-			headerRowEl.createEl('th', {text: strings.frontmatterAutomationTriggerFieldName});
-			headerRowEl.createEl('th', {text: strings.frontmatterAutomationTriggerOperatorName});
-			headerRowEl.createEl('th', {text: strings.frontmatterAutomationTriggerValueName});
-			headerRowEl.createEl('th', {text: strings.frontmatterAutomationActionTypeName});
-			headerRowEl.createEl('th', {text: strings.frontmatterAutomationTargetFieldName});
-			headerRowEl.createEl('th', {text: strings.frontmatterAutomationStaticValueName});
-			headerRowEl.createEl('th', {text: strings.frontmatterAutomationWriteModeName});
-			headerRowEl.createEl('th', {text: options.removeRuleButton});
-
-			const bodyEl = tableEl.createEl('tbody');
+			const ruleListEl = containerEl.createDiv({cls: 'obpm-automation-rule-list'});
 			rules.forEach((rule, index) => {
 				const ruleLabel = options.ruleLabel(index + 1);
 				const getLatestRule = () => {
@@ -1653,14 +1639,41 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					this.plugin.settings.frontmatterAutomation.rules = nextRules;
 					await saveFrontmatterAutomationSettings();
 				};
-				const rowEl = bodyEl.createEl('tr');
-				rowEl.createEl('td', {
-					cls: 'obpm-rule-table-index',
-					text: String(index + 1),
-				});
+				const createFieldControl = (
+					label: string,
+					description: string,
+					controlClass = '',
+				) => {
+					const fieldEl = formEl.createDiv({
+						cls: `obpm-automation-rule-field${controlClass ? ` ${controlClass}` : ''}`,
+					});
+					fieldEl.createDiv({
+						cls: 'obpm-automation-rule-field-label',
+						text: label,
+					});
+					if (description) {
+						fieldEl.createDiv({
+							cls: 'obpm-automation-rule-field-desc',
+							text: description,
+						});
+					}
 
-				const enabledCellEl = rowEl.createEl('td', {cls: 'obpm-rule-table-toggle'});
-				const enabledInputEl = enabledCellEl.createEl('input', {
+					return fieldEl.createDiv({cls: 'obpm-automation-rule-field-control'});
+				};
+				const actionTypeLabel = getFrontmatterAutomationActionTypeLabel(rule.actionType, strings);
+				const cardEl = ruleListEl.createDiv({cls: 'obpm-automation-rule-card'});
+				const headerEl = cardEl.createDiv({cls: 'obpm-automation-rule-card-header'});
+				const titleWrapEl = headerEl.createDiv({cls: 'obpm-automation-rule-card-title-wrap'});
+				titleWrapEl.createDiv({
+					cls: 'obpm-automation-rule-card-title',
+					text: ruleLabel,
+				});
+				titleWrapEl.createDiv({
+					cls: 'obpm-automation-rule-card-summary',
+					text: `${rule.triggerField || strings.frontmatterAutomationTriggerFieldPlaceholder} -> ${actionTypeLabel}`,
+				});
+				const headerActionsEl = headerEl.createDiv({cls: 'obpm-automation-rule-card-actions'});
+				const enabledInputEl = headerActionsEl.createEl('input', {
 					attr: {
 						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationRuleEnabledName}`,
 						type: 'checkbox',
@@ -1675,8 +1688,27 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 						}));
 					})();
 				});
+				const removeButtonEl = headerActionsEl.createEl('button', {
+					cls: 'mod-warning',
+					text: options.removeRuleButton,
+				});
+				removeButtonEl.type = 'button';
+				removeButtonEl.setAttr('aria-label', `${options.removeRuleName}: ${ruleLabel}`);
+				removeButtonEl.setAttr('title', `${options.removeRuleDesc} ${rule.id}`);
+				removeButtonEl.addEventListener('click', () => {
+					void (async () => {
+						this.plugin.settings.frontmatterAutomation.rules =
+							this.plugin.settings.frontmatterAutomation.rules.filter((existingRule) => existingRule.id !== rule.id);
+						await saveFrontmatterAutomationSettings();
+						this.display();
+					})();
+				});
 
-				const triggerFieldInputEl = rowEl.createEl('td').createEl('input', {
+				const formEl = cardEl.createDiv({cls: 'obpm-automation-rule-form'});
+				const triggerFieldInputEl = createFieldControl(
+					strings.frontmatterAutomationTriggerFieldName,
+					strings.frontmatterAutomationTriggerFieldDesc,
+				).createEl('input', {
 					attr: {
 						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationTriggerFieldName}`,
 						placeholder: strings.frontmatterAutomationTriggerFieldPlaceholder,
@@ -1696,7 +1728,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					},
 				);
 
-				const triggerOperatorSelectEl = rowEl.createEl('td').createEl('select', {
+				const triggerOperatorSelectEl = createFieldControl(
+					strings.frontmatterAutomationTriggerOperatorName,
+					strings.frontmatterAutomationTriggerOperatorDesc,
+				).createEl('select', {
 					attr: {
 						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationTriggerOperatorName}`,
 					},
@@ -1725,7 +1760,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					})();
 				});
 
-				const triggerValueInputEl = rowEl.createEl('td').createEl('input', {
+				const triggerValueInputEl = createFieldControl(
+					strings.frontmatterAutomationTriggerValueName,
+					strings.frontmatterAutomationTriggerValueDesc,
+				).createEl('input', {
 					attr: {
 						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationTriggerValueName}`,
 						placeholder: strings.frontmatterAutomationTriggerValuePlaceholder,
@@ -1745,7 +1783,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					},
 				);
 
-				const actionTypeSelectEl = rowEl.createEl('td').createEl('select', {
+				const actionTypeSelectEl = createFieldControl(
+					strings.frontmatterAutomationActionTypeName,
+					strings.frontmatterAutomationActionTypeDesc,
+				).createEl('select', {
 					attr: {
 						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationActionTypeName}`,
 					},
@@ -1759,49 +1800,11 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					attr: {value: 'set_static_value'},
 					text: strings.frontmatterAutomationActionTypeStaticValueLabel,
 				});
+				actionTypeSelectEl.createEl('option', {
+					attr: {value: 'ensure_project_folder'},
+					text: strings.frontmatterAutomationActionTypeProjectFolderLabel,
+				});
 				actionTypeSelectEl.value = rule.actionType;
-
-				const targetFieldInputEl = rowEl.createEl('td').createEl('input', {
-					attr: {
-						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationTargetFieldName}`,
-						placeholder: strings.frontmatterAutomationTargetFieldPlaceholder,
-						type: 'text',
-					},
-					cls: 'obpm-rule-table-input',
-					value: rule.targetField,
-				});
-				bindCommittedInput(
-					targetFieldInputEl,
-					() => getLatestRule().targetField,
-					async (value) => {
-						await updateRule((currentRule) => ({
-							...currentRule,
-							targetField: value,
-						}));
-					},
-				);
-
-				const staticValueInputEl = rowEl.createEl('td').createEl('input', {
-					attr: {
-						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationStaticValueName}`,
-						placeholder: strings.frontmatterAutomationStaticValuePlaceholder,
-						type: 'text',
-					},
-					cls: 'obpm-rule-table-input',
-					value: rule.staticValue ?? '',
-				});
-				staticValueInputEl.disabled = rule.actionType !== 'set_static_value';
-				bindCommittedInput(
-					staticValueInputEl,
-					() => getLatestRule().staticValue ?? '',
-					async (value) => {
-						await updateRule((currentRule) => ({
-							...currentRule,
-							staticValue: value,
-						}));
-					},
-				);
-
 				actionTypeSelectEl.addEventListener('change', () => {
 					void (async () => {
 						const actionType = normalizeFrontmatterAutomationActionType(
@@ -1809,56 +1812,122 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 							getLatestRule().actionType,
 						);
 						actionTypeSelectEl.value = actionType;
-						staticValueInputEl.disabled = actionType !== 'set_static_value';
 						await updateRule((currentRule) => ({
 							...currentRule,
 							actionType,
 						}));
-					})();
-				});
-
-				const writeModeSelectEl = rowEl.createEl('td').createEl('select', {
-					attr: {
-						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationWriteModeName}`,
-					},
-					cls: 'obpm-rule-table-select',
-				});
-				writeModeSelectEl.createEl('option', {
-					attr: {value: 'always'},
-					text: strings.frontmatterAutomationWriteModeAlwaysLabel,
-				});
-				writeModeSelectEl.createEl('option', {
-					attr: {value: 'when-empty'},
-					text: strings.frontmatterAutomationWriteModeWhenEmptyLabel,
-				});
-				writeModeSelectEl.value = rule.writeMode;
-				writeModeSelectEl.addEventListener('change', () => {
-					void (async () => {
-						const writeMode = normalizeFrontmatterAutomationWriteMode(writeModeSelectEl.value, getLatestRule().writeMode);
-						writeModeSelectEl.value = writeMode;
-						await updateRule((currentRule) => ({
-							...currentRule,
-							writeMode,
-						}));
-					})();
-				});
-
-				const actionCellEl = rowEl.createEl('td', {cls: 'obpm-rule-table-action'});
-				const removeButtonEl = actionCellEl.createEl('button', {
-					cls: 'mod-warning',
-					text: options.removeRuleButton,
-				});
-				removeButtonEl.type = 'button';
-				removeButtonEl.setAttr('aria-label', `${options.removeRuleName}: ${ruleLabel}`);
-				removeButtonEl.setAttr('title', `${options.removeRuleDesc} ${rule.id}`);
-				removeButtonEl.addEventListener('click', () => {
-					void (async () => {
-						this.plugin.settings.frontmatterAutomation.rules =
-							this.plugin.settings.frontmatterAutomation.rules.filter((existingRule) => existingRule.id !== rule.id);
-						await saveFrontmatterAutomationSettings();
 						this.display();
 					})();
 				});
+
+				if (rule.actionType === 'ensure_project_folder') {
+					const targetSubfolderPathInputEl = createFieldControl(
+						strings.frontmatterAutomationTargetSubfolderPathName,
+						strings.frontmatterAutomationTargetSubfolderPathDesc,
+						'obpm-automation-rule-field-wide',
+					).createEl('input', {
+						attr: {
+							'aria-label': `${ruleLabel} ${strings.frontmatterAutomationTargetSubfolderPathName}`,
+							placeholder: strings.frontmatterAutomationTargetSubfolderPathPlaceholder,
+							type: 'text',
+						},
+						cls: 'obpm-rule-table-input',
+						value: rule.targetSubfolderPath ?? '',
+					});
+					bindCommittedInput(
+						targetSubfolderPathInputEl,
+						() => getLatestRule().targetSubfolderPath ?? '',
+						async (value) => {
+							await updateRule((currentRule) => ({
+								...currentRule,
+								targetSubfolderPath: normalizeProjectSubfolderPath(
+									value,
+									currentRule.targetSubfolderPath ?? '',
+								),
+							}));
+						},
+					);
+				} else {
+					const targetFieldInputEl = createFieldControl(
+						strings.frontmatterAutomationTargetFieldName,
+						strings.frontmatterAutomationTargetFieldDesc,
+					).createEl('input', {
+						attr: {
+							'aria-label': `${ruleLabel} ${strings.frontmatterAutomationTargetFieldName}`,
+							placeholder: strings.frontmatterAutomationTargetFieldPlaceholder,
+							type: 'text',
+						},
+						cls: 'obpm-rule-table-input',
+						value: rule.targetField,
+					});
+					bindCommittedInput(
+						targetFieldInputEl,
+						() => getLatestRule().targetField,
+						async (value) => {
+							await updateRule((currentRule) => ({
+								...currentRule,
+								targetField: value,
+							}));
+						},
+					);
+
+					if (rule.actionType === 'set_static_value') {
+						const staticValueInputEl = createFieldControl(
+							strings.frontmatterAutomationStaticValueName,
+							strings.frontmatterAutomationStaticValueDesc,
+						).createEl('input', {
+							attr: {
+								'aria-label': `${ruleLabel} ${strings.frontmatterAutomationStaticValueName}`,
+								placeholder: strings.frontmatterAutomationStaticValuePlaceholder,
+								type: 'text',
+							},
+							cls: 'obpm-rule-table-input',
+							value: rule.staticValue ?? '',
+						});
+						bindCommittedInput(
+							staticValueInputEl,
+							() => getLatestRule().staticValue ?? '',
+							async (value) => {
+								await updateRule((currentRule) => ({
+									...currentRule,
+									staticValue: value,
+								}));
+							},
+						);
+					}
+
+					const writeModeSelectEl = createFieldControl(
+						strings.frontmatterAutomationWriteModeName,
+						strings.frontmatterAutomationWriteModeDesc,
+					).createEl('select', {
+						attr: {
+							'aria-label': `${ruleLabel} ${strings.frontmatterAutomationWriteModeName}`,
+						},
+						cls: 'obpm-rule-table-select',
+					});
+					writeModeSelectEl.createEl('option', {
+						attr: {value: 'always'},
+						text: strings.frontmatterAutomationWriteModeAlwaysLabel,
+					});
+					writeModeSelectEl.createEl('option', {
+						attr: {value: 'when-empty'},
+						text: strings.frontmatterAutomationWriteModeWhenEmptyLabel,
+					});
+					writeModeSelectEl.value = rule.writeMode;
+					writeModeSelectEl.addEventListener('change', () => {
+						void (async () => {
+							const writeMode = normalizeFrontmatterAutomationWriteMode(
+								writeModeSelectEl.value,
+								getLatestRule().writeMode,
+							);
+							writeModeSelectEl.value = writeMode;
+							await updateRule((currentRule) => ({
+								...currentRule,
+								writeMode,
+							}));
+						})();
+					});
+				}
 			});
 		}
 
@@ -1902,7 +1971,25 @@ function normalizeFrontmatterAutomationActionType(
 	value: string,
 	fallback: FrontmatterAutomationActionType,
 ): FrontmatterAutomationActionType {
-	return value === 'set_static_value' ? 'set_static_value' : value === 'set_current_time' ? 'set_current_time' : fallback;
+	if (value === 'ensure_project_folder' || value === 'set_current_time' || value === 'set_static_value') {
+		return value;
+	}
+
+	return fallback;
+}
+
+function getFrontmatterAutomationActionTypeLabel(
+	actionType: FrontmatterAutomationActionType,
+	strings: SettingsLocalization,
+): string {
+	switch (actionType) {
+		case 'ensure_project_folder':
+			return strings.frontmatterAutomationActionTypeProjectFolderLabel;
+		case 'set_static_value':
+			return strings.frontmatterAutomationActionTypeStaticValueLabel;
+		case 'set_current_time':
+			return strings.frontmatterAutomationActionTypeCurrentTimeLabel;
+	}
 }
 
 function normalizeFrontmatterAutomationTriggerOperator(
