@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-obpm",
 	"name": "OBPM",
-	"version": "0.0.25",
+	"version": "0.0.26",
 	"minAppVersion": "0.15.0",
 	"description": "OBPM plugin for Obsidian.",
 	"author": "Obsidian",
