@@ -481,16 +481,6 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				label: strings.settingsTabBases,
 			},
 			{
-				description: strings.settingsTabMetadataDesc,
-				id: 'metadata',
-				label: strings.settingsTabMetadata,
-			},
-			{
-				description: strings.settingsTabAutomationDesc,
-				id: 'automation',
-				label: strings.settingsTabAutomation,
-			},
-			{
 				description: strings.settingsTabProjectDesc,
 				id: 'project',
 				label: strings.settingsTabProject,
@@ -499,6 +489,16 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				description: strings.settingsTabWorkflowDesc,
 				id: 'workflow',
 				label: strings.settingsTabWorkflow,
+			},
+			{
+				description: strings.settingsTabAutomationDesc,
+				id: 'automation',
+				label: strings.settingsTabAutomation,
+			},
+			{
+				description: strings.settingsTabMetadataDesc,
+				id: 'metadata',
+				label: strings.settingsTabMetadata,
 			},
 		];
 	}
@@ -635,6 +635,9 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderFrontmatterAutomationSettingsSection(panelBodyEl);
 				});
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderProjectRoutingSettingsSection(panelBodyEl);
+				});
 				break;
 			case 'project':
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
@@ -644,9 +647,6 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			case 'workflow':
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderFileContentMoveSettingsSection(panelBodyEl);
-				});
-				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
-					this.renderProjectRoutingSettingsSection(panelBodyEl);
 				});
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderSameFolderNoteSettingsSection(panelBodyEl);
