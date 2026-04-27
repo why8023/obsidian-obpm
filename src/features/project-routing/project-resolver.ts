@@ -1,8 +1,9 @@
 import {App, TFile, WorkspaceLeaf, normalizePath} from 'obsidian';
-import {matchesFrontmatterRule} from './matcher';
+import {matchesAnyFrontmatterRule} from './matcher';
 import {CurrentProjectResolution, FrontmatterMatchRule, ProjectCandidate} from './types';
 
-interface ProjectFileRecognitionOptions {
+export interface ProjectFileRecognitionOptions {
+	projectFileRules: readonly FrontmatterMatchRule[];
 	recognizeFilenameMatchesFolderAsProject: boolean;
 	projectSubfolderPath?: string;
 }
@@ -13,7 +14,6 @@ interface CandidateOptions {
 
 export function getOpenProjectCandidates(
 	app: App,
-	projectRule: FrontmatterMatchRule,
 	projectFileRecognition: ProjectFileRecognitionOptions,
 	options: CandidateOptions = {},
 ): ProjectCandidate[] {
@@ -29,7 +29,7 @@ export function getOpenProjectCandidates(
 			return;
 		}
 
-		if (!isProjectFile(app, file, projectRule, projectFileRecognition)) {
+		if (!isProjectFile(app, file, projectFileRecognition)) {
 			return;
 		}
 
@@ -39,17 +39,26 @@ export function getOpenProjectCandidates(
 	return [...candidatesByPath.values()].sort(compareProjectCandidates);
 }
 
+export function getVaultProjectCandidates(
+	app: App,
+	projectFileRecognition: ProjectFileRecognitionOptions,
+): ProjectCandidate[] {
+	return app.vault.getMarkdownFiles()
+		.filter((file) => isProjectFile(app, file, projectFileRecognition))
+		.map((file) => toProjectCandidate(file))
+		.sort(compareProjectCandidates);
+}
+
 export function resolveCurrentProject(
 	app: App,
 	activeFile: TFile | null,
-	projectRule: FrontmatterMatchRule,
 	projectFileRecognition: ProjectFileRecognitionOptions,
 ): CurrentProjectResolution {
 	if (!(activeFile instanceof TFile) || activeFile.extension !== 'md') {
 		return {kind: 'none'};
 	}
 
-	if (isProjectFile(app, activeFile, projectRule, projectFileRecognition)) {
+	if (isProjectFile(app, activeFile, projectFileRecognition)) {
 		return {
 			kind: 'project',
 			candidate: toProjectCandidate(activeFile),
@@ -57,7 +66,7 @@ export function resolveCurrentProject(
 	}
 
 	const activeFolderPath = activeFile.parent?.path ?? '';
-	const folderMatches = getOpenProjectCandidates(app, projectRule, projectFileRecognition)
+	const folderMatches = getOpenProjectCandidates(app, projectFileRecognition)
 		.filter((candidate) => getProjectAssociationFolderPath(candidate.folderPath, projectFileRecognition) === activeFolderPath);
 	const onlyFolderMatch = folderMatches[0];
 
@@ -78,14 +87,13 @@ export function resolveCurrentProject(
 	return {kind: 'none'};
 }
 
-function isProjectFile(
+export function isProjectFile(
 	app: App,
 	file: TFile,
-	projectRule: FrontmatterMatchRule,
 	projectFileRecognition: ProjectFileRecognitionOptions,
 ): boolean {
 	const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
-	if (matchesFrontmatterRule(frontmatter, projectRule)) {
+	if (matchesAnyFrontmatterRule(frontmatter, projectFileRecognition.projectFileRules)) {
 		return true;
 	}
 

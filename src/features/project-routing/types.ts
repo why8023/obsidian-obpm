@@ -15,8 +15,9 @@ export interface CurrentFileCommandSettings {
 
 export interface ProjectRoutingSettings {
 	currentFileCommand: CurrentFileCommandSettings;
+	detectDuplicateProjectFiles: boolean;
 	enabled: boolean;
-	projectRule: FrontmatterMatchRule;
+	projectFileRules: FrontmatterMatchRule[];
 	projectSubfolderPath: string;
 	recognizeFilenameMatchesFolderAsProject: boolean;
 	routableFileRules: FrontmatterMatchRule[];

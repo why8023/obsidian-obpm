@@ -13,14 +13,15 @@ import {
 } from './features/frontmatter-automation/frontmatter-automation-settings';
 import {
 	FrontmatterAutomationActionType,
+	FrontmatterAutomationRule,
 	FrontmatterAutomationSettings,
 	FrontmatterAutomationTriggerOperator,
 	FrontmatterAutomationWriteMode,
 } from './features/frontmatter-automation/frontmatter-automation-types';
 import {
 	createDefaultCurrentFileCommandRule,
+	createDefaultProjectFileRule,
 	createDefaultRoutableFileRule,
-	DEFAULT_PROJECT_ROUTING_PROJECT_RULE,
 	normalizeFrontmatterMatchMode,
 	normalizeProjectSubfolderPath,
 	normalizeProjectRoutingSettings,
@@ -142,7 +143,7 @@ interface FrontmatterAutomationRuleListSectionOptions {
 	ruleLabel: (index: number) => string;
 }
 
-type SettingsPageTabId = 'bases' | 'metadata' | 'automation' | 'workflow';
+type SettingsPageTabId = 'bases' | 'metadata' | 'automation' | 'project' | 'workflow';
 
 interface SettingsPageTabDefinition {
 	description: string;
@@ -490,6 +491,11 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				label: strings.settingsTabAutomation,
 			},
 			{
+				description: strings.settingsTabProjectDesc,
+				id: 'project',
+				label: strings.settingsTabProject,
+			},
+			{
 				description: strings.settingsTabWorkflowDesc,
 				id: 'workflow',
 				label: strings.settingsTabWorkflow,
@@ -628,6 +634,11 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			case 'automation':
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderFrontmatterAutomationSettingsSection(panelBodyEl);
+				});
+				break;
+			case 'project':
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderProjectRecognitionSettingsSection(panelBodyEl);
 				});
 				break;
 			case 'workflow':
@@ -1198,111 +1209,238 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				cls: 'setting-item-description',
 				text: options.noRulesText,
 			});
-		}
+		} else {
+			const tableWrapEl = containerEl.createDiv({cls: 'obpm-rule-table-wrap'});
+			const tableEl = tableWrapEl.createEl('table', {cls: 'obpm-rule-table'});
+			const headerRowEl = tableEl.createEl('thead').createEl('tr');
+			headerRowEl.createEl('th', {text: '#'});
+			headerRowEl.createEl('th', {text: strings.projectRoutingRuleKeyName});
+			headerRowEl.createEl('th', {text: strings.projectRoutingRuleMatchModeName});
+			headerRowEl.createEl('th', {text: strings.projectRoutingRuleValueName});
+			headerRowEl.createEl('th', {text: options.removeRuleButton});
 
-		rules.forEach((rule, index) => {
-			new Setting(containerEl)
-				.setName(options.ruleLabel(index + 1))
-				.setHeading();
-
-			new Setting(containerEl)
-				.setName(strings.projectRoutingRuleKeyName)
-				.setDesc(strings.projectRoutingRuleKeyDesc)
-				.addText((text) => {
-					text.setPlaceholder(strings.projectRoutingRuleKeyPlaceholder);
-					return this.bindCommittedTextSetting(text, {
-						initialValue: rule.key,
-						normalize: (value) => value.trim() || rule.key,
-						onCommit: (value) => {
-							const nextRules = [...options.getRules()];
-							const currentRule = nextRules[index] ?? rule;
-							nextRules[index] = {
-								...currentRule,
-								key: value,
-							};
-							options.setRules(nextRules);
-						},
-						refreshFeatures: ['projectRouting'],
-					});
+			const bodyEl = tableEl.createEl('tbody');
+			rules.forEach((rule, index) => {
+				const rowEl = bodyEl.createEl('tr');
+				rowEl.createEl('td', {
+					cls: 'obpm-rule-table-index',
+					text: String(index + 1),
 				});
 
-			new Setting(containerEl)
-				.setName(strings.projectRoutingRuleMatchModeName)
-				.setDesc(strings.projectRoutingRuleMatchModeDesc)
-				.addDropdown((dropdown) => dropdown
-					.addOption('key-exists', strings.projectRoutingMatchModeKeyExistsLabel)
-					.addOption('key-value-equals', strings.projectRoutingMatchModeKeyValueEqualsLabel)
-					.setValue(rule.matchMode)
-					.onChange(async (value) => {
-						const nextMatchMode = normalizeFrontmatterMatchMode(value, rule.matchMode);
+				const keyInputEl = rowEl.createEl('td').createEl('input', {
+					attr: {
+						'aria-label': `${options.ruleLabel(index + 1)} ${strings.projectRoutingRuleKeyName}`,
+						placeholder: strings.projectRoutingRuleKeyPlaceholder,
+						type: 'text',
+					},
+					cls: 'obpm-rule-table-input',
+					value: rule.key,
+				});
+
+				const matchModeSelectEl = rowEl.createEl('td').createEl('select', {
+					attr: {
+						'aria-label': `${options.ruleLabel(index + 1)} ${strings.projectRoutingRuleMatchModeName}`,
+					},
+					cls: 'obpm-rule-table-select',
+				});
+				matchModeSelectEl.createEl('option', {
+					attr: {value: 'key-exists'},
+					text: strings.projectRoutingMatchModeKeyExistsLabel,
+				});
+				matchModeSelectEl.createEl('option', {
+					attr: {value: 'key-value-equals'},
+					text: strings.projectRoutingMatchModeKeyValueEqualsLabel,
+				});
+				matchModeSelectEl.value = rule.matchMode;
+
+				const valueInputEl = rowEl.createEl('td').createEl('input', {
+					attr: {
+						'aria-label': `${options.ruleLabel(index + 1)} ${strings.projectRoutingRuleValueName}`,
+						placeholder: strings.projectRoutingRuleValuePlaceholder,
+						type: 'text',
+					},
+					cls: 'obpm-rule-table-input',
+					value: rule.value ?? '',
+				});
+				valueInputEl.disabled = rule.matchMode !== 'key-value-equals';
+
+				const commitKey = async () => {
+					const nextRules = [...options.getRules()];
+					const currentRule = nextRules[index] ?? rule;
+					const nextValue = keyInputEl.value.trim() || currentRule.key;
+					keyInputEl.value = nextValue;
+					if (currentRule.key === nextValue) {
+						return;
+					}
+
+					nextRules[index] = {
+						...currentRule,
+						key: nextValue,
+					};
+					options.setRules(nextRules);
+					await saveProjectRoutingSettings();
+				};
+
+				const commitValue = async () => {
+					if (valueInputEl.disabled) {
+						return;
+					}
+
+					const nextValue = valueInputEl.value.trim();
+					valueInputEl.value = nextValue;
+					const nextRules = [...options.getRules()];
+					const currentRule = nextRules[index] ?? rule;
+					if (currentRule.matchMode !== 'key-value-equals' || currentRule.value === nextValue) {
+						return;
+					}
+
+					nextRules[index] = {
+						...currentRule,
+						value: nextValue,
+					};
+					options.setRules(nextRules);
+					await saveProjectRoutingSettings();
+				};
+
+				keyInputEl.addEventListener('change', () => {
+					void commitKey();
+				});
+				keyInputEl.addEventListener('keydown', (event) => {
+					if (event.key !== 'Enter') {
+						return;
+					}
+
+					event.preventDefault();
+					void commitKey();
+				});
+				valueInputEl.addEventListener('change', () => {
+					void commitValue();
+				});
+				valueInputEl.addEventListener('keydown', (event) => {
+					if (event.key !== 'Enter') {
+						return;
+					}
+
+					event.preventDefault();
+					void commitValue();
+				});
+
+				matchModeSelectEl.addEventListener('change', () => {
+					void (async () => {
 						const nextRules = [...options.getRules()];
+						const currentRule = nextRules[index] ?? rule;
+						const nextMatchMode = normalizeFrontmatterMatchMode(matchModeSelectEl.value, currentRule.matchMode);
 						nextRules[index] = nextMatchMode === 'key-value-equals'
 							? {
-								...rule,
+								...currentRule,
 								matchMode: nextMatchMode,
-								value: rule.value ?? '',
+								value: currentRule.value ?? valueInputEl.value.trim(),
 							}
 							: {
-								key: rule.key,
+								key: currentRule.key,
 								matchMode: nextMatchMode,
 							};
 						options.setRules(nextRules);
+						valueInputEl.disabled = nextMatchMode !== 'key-value-equals';
+						if (valueInputEl.disabled) {
+							valueInputEl.value = '';
+						}
 
 						await saveProjectRoutingSettings();
-						this.display();
-					}));
+					})();
+				});
 
-			if (rule.matchMode === 'key-value-equals') {
-				new Setting(containerEl)
-					.setName(strings.projectRoutingRuleValueName)
-					.setDesc(strings.projectRoutingRuleValueDesc)
-					.addText((text) => {
-						text.setPlaceholder(strings.projectRoutingRuleValuePlaceholder);
-						return this.bindCommittedTextSetting(text, {
-							initialValue: rule.value ?? '',
-							normalize: (value) => value.trim(),
-							onCommit: (value) => {
-								const nextRules = [...options.getRules()];
-								const currentRule = nextRules[index] ?? rule;
-								nextRules[index] = {
-									...currentRule,
-									value,
-								};
-								options.setRules(nextRules);
-							},
-							refreshFeatures: ['projectRouting'],
-						});
-					});
-			}
-
-			new Setting(containerEl)
-				.setName(options.removeRuleName)
-				.setDesc(options.removeRuleDesc)
-				.addButton((button) => button
-					.setWarning()
-					.setButtonText(options.removeRuleButton)
-					.onClick(async () => {
+				const actionCellEl = rowEl.createEl('td', {cls: 'obpm-rule-table-action'});
+				const removeButtonEl = actionCellEl.createEl('button', {
+					cls: 'mod-warning',
+					text: options.removeRuleButton,
+				});
+				removeButtonEl.type = 'button';
+				removeButtonEl.setAttr('aria-label', `${options.removeRuleName}: ${options.ruleLabel(index + 1)}`);
+				removeButtonEl.setAttr('title', options.removeRuleDesc);
+				removeButtonEl.addEventListener('click', () => {
+					void (async () => {
 						const nextRules = [...options.getRules()];
 						nextRules.splice(index, 1);
 						options.setRules(nextRules);
 						await saveProjectRoutingSettings();
 						this.display();
-					}));
+					})();
+				});
+			});
+		}
+
+		const footerEl = containerEl.createDiv({cls: 'obpm-rule-table-footer'});
+		const footerTextEl = footerEl.createDiv({cls: 'obpm-rule-table-footer-text'});
+		footerTextEl.createDiv({
+			cls: 'obpm-rule-table-footer-name',
+			text: options.addRuleName,
+		});
+		footerTextEl.createDiv({
+			cls: 'obpm-rule-table-footer-desc',
+			text: options.addRuleDesc,
 		});
 
+		const addButtonEl = footerEl.createEl('button', {text: options.addRuleButton});
+		addButtonEl.type = 'button';
+		addButtonEl.addEventListener('click', () => {
+			void (async () => {
+				options.setRules([
+					...options.getRules(),
+					options.createRule(),
+				]);
+				await saveProjectRoutingSettings();
+				this.display();
+			})();
+		});
+	}
+
+	private renderProjectRecognitionSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveProjectRoutingSettings = async () => this.saveSettingsFor('projectRouting');
+
 		new Setting(containerEl)
-			.setName(options.addRuleName)
-			.setDesc(options.addRuleDesc)
-			.addButton((button) => button
-				.setButtonText(options.addRuleButton)
-				.onClick(async () => {
-					options.setRules([
-						...options.getRules(),
-						options.createRule(),
-					]);
+			.setName(strings.projectRoutingProjectRuleHeading)
+			.setDesc(strings.projectRoutingProjectRuleDesc)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingDuplicateProjectDetectionName)
+			.setDesc(strings.projectRoutingDuplicateProjectDetectionDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.projectRouting.detectDuplicateProjectFiles)
+				.onChange(async (value) => {
+					this.plugin.settings.projectRouting.detectDuplicateProjectFiles = value;
 					await saveProjectRoutingSettings();
-					this.display();
 				}));
+
+		new Setting(containerEl)
+			.setName(strings.projectRoutingRecognizeFilenameMatchesFolderNameName)
+			.setDesc(strings.projectRoutingRecognizeFilenameMatchesFolderNameDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject)
+				.onChange(async (value) => {
+					this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject = value;
+					await saveProjectRoutingSettings();
+				}));
+
+		this.renderProjectRoutingRuleListSection(containerEl, {
+			addRuleButton: strings.projectRoutingProjectFileAddRuleButton,
+			addRuleDesc: strings.projectRoutingProjectFileAddRuleDesc,
+			addRuleName: strings.projectRoutingProjectFileAddRuleName,
+			createRule: createDefaultProjectFileRule,
+			getRules: () => this.plugin.settings.projectRouting.projectFileRules,
+			headingDesc: strings.projectRoutingProjectFileRulesDesc,
+			headingName: strings.projectRoutingProjectFileRulesHeading,
+			noRulesText: strings.projectRoutingNoProjectFileRules,
+			removeRuleButton: strings.projectRoutingProjectFileRemoveRuleButton,
+			removeRuleDesc: strings.projectRoutingProjectFileRemoveRuleDesc,
+			removeRuleName: strings.projectRoutingProjectFileRemoveRuleName,
+			ruleLabel: strings.projectRoutingProjectFileRuleLabel,
+			setRules: (rules) => {
+				this.plugin.settings.projectRouting.projectFileRules = rules;
+			},
+		});
 	}
 
 	private renderProjectRoutingSettingsSection(containerEl: HTMLElement): void {
@@ -1365,11 +1503,6 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName(strings.projectRoutingProjectRuleHeading)
-			.setDesc(strings.projectRoutingProjectRuleDesc)
-			.setHeading();
-
-		new Setting(containerEl)
 			.setName(strings.projectRoutingSubfolderPathName)
 			.setDesc(strings.projectRoutingSubfolderPathDesc)
 			.addText((text) => {
@@ -1386,69 +1519,6 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					refreshFeatures: ['projectRouting'],
 				});
 			});
-
-		new Setting(containerEl)
-			.setName(strings.projectRoutingRecognizeFilenameMatchesFolderNameName)
-			.setDesc(strings.projectRoutingRecognizeFilenameMatchesFolderNameDesc)
-			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject)
-				.onChange(async (value) => {
-					this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject = value;
-					await saveProjectRoutingSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.projectRoutingRuleKeyName)
-			.setDesc(strings.projectRoutingRuleKeyDesc)
-			.addText((text) => {
-				text.setPlaceholder(strings.projectRoutingRuleKeyPlaceholder);
-				return this.bindCommittedTextSetting(text, {
-					initialValue: this.plugin.settings.projectRouting.projectRule.key,
-					normalize: (value) => value.trim() || DEFAULT_PROJECT_ROUTING_PROJECT_RULE.key,
-					onCommit: (value) => {
-						this.plugin.settings.projectRouting.projectRule.key = value;
-					},
-					refreshFeatures: ['projectRouting'],
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(strings.projectRoutingRuleMatchModeName)
-			.setDesc(strings.projectRoutingRuleMatchModeDesc)
-			.addDropdown((dropdown) => dropdown
-				.addOption('key-exists', strings.projectRoutingMatchModeKeyExistsLabel)
-				.addOption('key-value-equals', strings.projectRoutingMatchModeKeyValueEqualsLabel)
-				.setValue(this.plugin.settings.projectRouting.projectRule.matchMode)
-				.onChange(async (value) => {
-					const nextMatchMode = normalizeFrontmatterMatchMode(
-						value,
-						this.plugin.settings.projectRouting.projectRule.matchMode,
-					);
-					this.plugin.settings.projectRouting.projectRule.matchMode = nextMatchMode;
-					if (nextMatchMode === 'key-value-equals' && !this.plugin.settings.projectRouting.projectRule.value) {
-						this.plugin.settings.projectRouting.projectRule.value = DEFAULT_PROJECT_ROUTING_PROJECT_RULE.value ?? '';
-					}
-
-					await saveProjectRoutingSettings();
-					this.display();
-				}));
-
-		if (this.plugin.settings.projectRouting.projectRule.matchMode === 'key-value-equals') {
-			new Setting(containerEl)
-				.setName(strings.projectRoutingRuleValueName)
-				.setDesc(strings.projectRoutingRuleValueDesc)
-				.addText((text) => {
-					text.setPlaceholder(strings.projectRoutingRuleValuePlaceholder);
-					return this.bindCommittedTextSetting(text, {
-						initialValue: this.plugin.settings.projectRouting.projectRule.value ?? '',
-						normalize: (value) => value.trim() || (DEFAULT_PROJECT_ROUTING_PROJECT_RULE.value ?? ''),
-						onCommit: (value) => {
-							this.plugin.settings.projectRouting.projectRule.value = value;
-						},
-						refreshFeatures: ['projectRouting'],
-					});
-				});
-		}
 
 		this.renderProjectRoutingRuleListSection(containerEl, {
 			addRuleButton: strings.projectRoutingAddRuleButton,
@@ -1509,6 +1579,37 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		const strings = getSettingsLocalization();
 		const saveFrontmatterAutomationSettings = async () => this.saveSettingsFor('frontmatterAutomation');
 		const rules = this.plugin.settings.frontmatterAutomation.rules;
+		const bindCommittedInput = (
+			inputEl: HTMLInputElement,
+			getCurrentValue: () => string,
+			onCommit: (value: string) => Promise<void>,
+		) => {
+			const commitValue = async () => {
+				if (inputEl.disabled) {
+					return;
+				}
+
+				const nextValue = inputEl.value.trim();
+				inputEl.value = nextValue;
+				if (getCurrentValue() === nextValue) {
+					return;
+				}
+
+				await onCommit(nextValue);
+			};
+
+			inputEl.addEventListener('change', () => {
+				void commitValue();
+			});
+			inputEl.addEventListener('keydown', (event) => {
+				if (event.key !== 'Enter') {
+					return;
+				}
+
+				event.preventDefault();
+				void commitValue();
+			});
+		};
 
 		new Setting(containerEl)
 			.setName(strings.frontmatterAutomationRulesHeading)
@@ -1520,147 +1621,272 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				cls: 'setting-item-description',
 				text: options.noRulesText,
 			});
-		}
+		} else {
+			const tableWrapEl = containerEl.createDiv({cls: 'obpm-rule-table-wrap'});
+			const tableEl = tableWrapEl.createEl('table', {cls: 'obpm-rule-table obpm-rule-table-automation'});
+			const headerRowEl = tableEl.createEl('thead').createEl('tr');
+			headerRowEl.createEl('th', {text: '#'});
+			headerRowEl.createEl('th', {text: strings.frontmatterAutomationRuleEnabledName});
+			headerRowEl.createEl('th', {text: strings.frontmatterAutomationTriggerFieldName});
+			headerRowEl.createEl('th', {text: strings.frontmatterAutomationTriggerOperatorName});
+			headerRowEl.createEl('th', {text: strings.frontmatterAutomationTriggerValueName});
+			headerRowEl.createEl('th', {text: strings.frontmatterAutomationActionTypeName});
+			headerRowEl.createEl('th', {text: strings.frontmatterAutomationTargetFieldName});
+			headerRowEl.createEl('th', {text: strings.frontmatterAutomationStaticValueName});
+			headerRowEl.createEl('th', {text: strings.frontmatterAutomationWriteModeName});
+			headerRowEl.createEl('th', {text: options.removeRuleButton});
 
-		rules.forEach((rule, index) => {
-			new Setting(containerEl)
-				.setName(options.ruleLabel(index + 1))
-				.setDesc(rule.id)
-				.addExtraButton((button) => button
-					.setIcon('trash')
-					.setTooltip(options.removeRuleButton)
-					.onClick(async () => {
+			const bodyEl = tableEl.createEl('tbody');
+			rules.forEach((rule, index) => {
+				const ruleLabel = options.ruleLabel(index + 1);
+				const getLatestRule = () => {
+					return this.plugin.settings.frontmatterAutomation.rules.find((existingRule) => existingRule.id === rule.id) ?? rule;
+				};
+				const updateRule = async (updater: (currentRule: FrontmatterAutomationRule) => FrontmatterAutomationRule) => {
+					const nextRules = [...this.plugin.settings.frontmatterAutomation.rules];
+					const ruleIndex = nextRules.findIndex((existingRule) => existingRule.id === rule.id);
+					if (ruleIndex === -1) {
+						return;
+					}
+
+					nextRules[ruleIndex] = updater(nextRules[ruleIndex]!);
+					this.plugin.settings.frontmatterAutomation.rules = nextRules;
+					await saveFrontmatterAutomationSettings();
+				};
+				const rowEl = bodyEl.createEl('tr');
+				rowEl.createEl('td', {
+					cls: 'obpm-rule-table-index',
+					text: String(index + 1),
+				});
+
+				const enabledCellEl = rowEl.createEl('td', {cls: 'obpm-rule-table-toggle'});
+				const enabledInputEl = enabledCellEl.createEl('input', {
+					attr: {
+						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationRuleEnabledName}`,
+						type: 'checkbox',
+					},
+				});
+				enabledInputEl.checked = rule.enabled;
+				enabledInputEl.addEventListener('change', () => {
+					void (async () => {
+						await updateRule((currentRule) => ({
+							...currentRule,
+							enabled: enabledInputEl.checked,
+						}));
+					})();
+				});
+
+				const triggerFieldInputEl = rowEl.createEl('td').createEl('input', {
+					attr: {
+						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationTriggerFieldName}`,
+						placeholder: strings.frontmatterAutomationTriggerFieldPlaceholder,
+						type: 'text',
+					},
+					cls: 'obpm-rule-table-input',
+					value: rule.triggerField,
+				});
+				bindCommittedInput(
+					triggerFieldInputEl,
+					() => getLatestRule().triggerField,
+					async (value) => {
+						await updateRule((currentRule) => ({
+							...currentRule,
+							triggerField: value,
+						}));
+					},
+				);
+
+				const triggerOperatorSelectEl = rowEl.createEl('td').createEl('select', {
+					attr: {
+						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationTriggerOperatorName}`,
+					},
+					cls: 'obpm-rule-table-select',
+				});
+				triggerOperatorSelectEl.createEl('option', {
+					attr: {value: 'contains'},
+					text: strings.frontmatterAutomationTriggerOperatorContainsLabel,
+				});
+				triggerOperatorSelectEl.createEl('option', {
+					attr: {value: 'equals'},
+					text: strings.frontmatterAutomationTriggerOperatorEqualsLabel,
+				});
+				triggerOperatorSelectEl.value = rule.triggerOperator;
+				triggerOperatorSelectEl.addEventListener('change', () => {
+					void (async () => {
+						const triggerOperator = normalizeFrontmatterAutomationTriggerOperator(
+							triggerOperatorSelectEl.value,
+							getLatestRule().triggerOperator,
+						);
+						triggerOperatorSelectEl.value = triggerOperator;
+						await updateRule((currentRule) => ({
+							...currentRule,
+							triggerOperator,
+						}));
+					})();
+				});
+
+				const triggerValueInputEl = rowEl.createEl('td').createEl('input', {
+					attr: {
+						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationTriggerValueName}`,
+						placeholder: strings.frontmatterAutomationTriggerValuePlaceholder,
+						type: 'text',
+					},
+					cls: 'obpm-rule-table-input',
+					value: rule.triggerValue,
+				});
+				bindCommittedInput(
+					triggerValueInputEl,
+					() => getLatestRule().triggerValue,
+					async (value) => {
+						await updateRule((currentRule) => ({
+							...currentRule,
+							triggerValue: value,
+						}));
+					},
+				);
+
+				const actionTypeSelectEl = rowEl.createEl('td').createEl('select', {
+					attr: {
+						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationActionTypeName}`,
+					},
+					cls: 'obpm-rule-table-select',
+				});
+				actionTypeSelectEl.createEl('option', {
+					attr: {value: 'set_current_time'},
+					text: strings.frontmatterAutomationActionTypeCurrentTimeLabel,
+				});
+				actionTypeSelectEl.createEl('option', {
+					attr: {value: 'set_static_value'},
+					text: strings.frontmatterAutomationActionTypeStaticValueLabel,
+				});
+				actionTypeSelectEl.value = rule.actionType;
+
+				const targetFieldInputEl = rowEl.createEl('td').createEl('input', {
+					attr: {
+						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationTargetFieldName}`,
+						placeholder: strings.frontmatterAutomationTargetFieldPlaceholder,
+						type: 'text',
+					},
+					cls: 'obpm-rule-table-input',
+					value: rule.targetField,
+				});
+				bindCommittedInput(
+					targetFieldInputEl,
+					() => getLatestRule().targetField,
+					async (value) => {
+						await updateRule((currentRule) => ({
+							...currentRule,
+							targetField: value,
+						}));
+					},
+				);
+
+				const staticValueInputEl = rowEl.createEl('td').createEl('input', {
+					attr: {
+						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationStaticValueName}`,
+						placeholder: strings.frontmatterAutomationStaticValuePlaceholder,
+						type: 'text',
+					},
+					cls: 'obpm-rule-table-input',
+					value: rule.staticValue ?? '',
+				});
+				staticValueInputEl.disabled = rule.actionType !== 'set_static_value';
+				bindCommittedInput(
+					staticValueInputEl,
+					() => getLatestRule().staticValue ?? '',
+					async (value) => {
+						await updateRule((currentRule) => ({
+							...currentRule,
+							staticValue: value,
+						}));
+					},
+				);
+
+				actionTypeSelectEl.addEventListener('change', () => {
+					void (async () => {
+						const actionType = normalizeFrontmatterAutomationActionType(
+							actionTypeSelectEl.value,
+							getLatestRule().actionType,
+						);
+						actionTypeSelectEl.value = actionType;
+						staticValueInputEl.disabled = actionType !== 'set_static_value';
+						await updateRule((currentRule) => ({
+							...currentRule,
+							actionType,
+						}));
+					})();
+				});
+
+				const writeModeSelectEl = rowEl.createEl('td').createEl('select', {
+					attr: {
+						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationWriteModeName}`,
+					},
+					cls: 'obpm-rule-table-select',
+				});
+				writeModeSelectEl.createEl('option', {
+					attr: {value: 'always'},
+					text: strings.frontmatterAutomationWriteModeAlwaysLabel,
+				});
+				writeModeSelectEl.createEl('option', {
+					attr: {value: 'when-empty'},
+					text: strings.frontmatterAutomationWriteModeWhenEmptyLabel,
+				});
+				writeModeSelectEl.value = rule.writeMode;
+				writeModeSelectEl.addEventListener('change', () => {
+					void (async () => {
+						const writeMode = normalizeFrontmatterAutomationWriteMode(writeModeSelectEl.value, getLatestRule().writeMode);
+						writeModeSelectEl.value = writeMode;
+						await updateRule((currentRule) => ({
+							...currentRule,
+							writeMode,
+						}));
+					})();
+				});
+
+				const actionCellEl = rowEl.createEl('td', {cls: 'obpm-rule-table-action'});
+				const removeButtonEl = actionCellEl.createEl('button', {
+					cls: 'mod-warning',
+					text: options.removeRuleButton,
+				});
+				removeButtonEl.type = 'button';
+				removeButtonEl.setAttr('aria-label', `${options.removeRuleName}: ${ruleLabel}`);
+				removeButtonEl.setAttr('title', `${options.removeRuleDesc} ${rule.id}`);
+				removeButtonEl.addEventListener('click', () => {
+					void (async () => {
 						this.plugin.settings.frontmatterAutomation.rules =
 							this.plugin.settings.frontmatterAutomation.rules.filter((existingRule) => existingRule.id !== rule.id);
 						await saveFrontmatterAutomationSettings();
 						this.display();
-					}));
-
-			new Setting(containerEl)
-				.setName(strings.frontmatterAutomationRuleEnabledName)
-				.setDesc(strings.frontmatterAutomationRuleEnabledDesc)
-				.addToggle((toggle) => toggle
-					.setValue(rule.enabled)
-					.onChange(async (value) => {
-						rule.enabled = value;
-						await saveFrontmatterAutomationSettings();
-					}));
-
-			new Setting(containerEl)
-				.setName(strings.frontmatterAutomationTriggerFieldName)
-				.setDesc(strings.frontmatterAutomationTriggerFieldDesc)
-				.addText((text) => {
-					text.setPlaceholder(strings.frontmatterAutomationTriggerFieldPlaceholder);
-					return this.bindCommittedTextSetting(text, {
-						initialValue: rule.triggerField,
-						normalize: (value) => value.trim(),
-						onCommit: (value) => {
-							rule.triggerField = value;
-						},
-						refreshFeatures: ['frontmatterAutomation'],
-					});
+					})();
 				});
+			});
+		}
 
-			new Setting(containerEl)
-				.setName(strings.frontmatterAutomationTriggerOperatorName)
-				.setDesc(strings.frontmatterAutomationTriggerOperatorDesc)
-				.addDropdown((dropdown) => dropdown
-					.addOption('contains', strings.frontmatterAutomationTriggerOperatorContainsLabel)
-					.addOption('equals', strings.frontmatterAutomationTriggerOperatorEqualsLabel)
-					.setValue(rule.triggerOperator)
-					.onChange(async (value) => {
-						rule.triggerOperator = normalizeFrontmatterAutomationTriggerOperator(value, rule.triggerOperator);
-						await saveFrontmatterAutomationSettings();
-					}));
-
-			new Setting(containerEl)
-				.setName(strings.frontmatterAutomationTriggerValueName)
-				.setDesc(strings.frontmatterAutomationTriggerValueDesc)
-				.addText((text) => {
-					text.setPlaceholder(strings.frontmatterAutomationTriggerValuePlaceholder);
-					return this.bindCommittedTextSetting(text, {
-						initialValue: rule.triggerValue,
-						normalize: (value) => value.trim(),
-						onCommit: (value) => {
-							rule.triggerValue = value;
-						},
-						refreshFeatures: ['frontmatterAutomation'],
-					});
-				});
-
-			new Setting(containerEl)
-				.setName(strings.frontmatterAutomationActionTypeName)
-				.setDesc(strings.frontmatterAutomationActionTypeDesc)
-				.addDropdown((dropdown) => dropdown
-					.addOption('set_current_time', strings.frontmatterAutomationActionTypeCurrentTimeLabel)
-					.addOption('set_static_value', strings.frontmatterAutomationActionTypeStaticValueLabel)
-					.setValue(rule.actionType)
-					.onChange(async (value) => {
-						rule.actionType = normalizeFrontmatterAutomationActionType(value, rule.actionType);
-						await saveFrontmatterAutomationSettings();
-						this.display();
-					}));
-
-			new Setting(containerEl)
-				.setName(strings.frontmatterAutomationTargetFieldName)
-				.setDesc(strings.frontmatterAutomationTargetFieldDesc)
-				.addText((text) => {
-					text.setPlaceholder(strings.frontmatterAutomationTargetFieldPlaceholder);
-					return this.bindCommittedTextSetting(text, {
-						initialValue: rule.targetField,
-						normalize: (value) => value.trim(),
-						onCommit: (value) => {
-							rule.targetField = value;
-						},
-						refreshFeatures: ['frontmatterAutomation'],
-					});
-				});
-
-			if (rule.actionType === 'set_static_value') {
-				new Setting(containerEl)
-					.setName(strings.frontmatterAutomationStaticValueName)
-					.setDesc(strings.frontmatterAutomationStaticValueDesc)
-					.addText((text) => {
-						text.setPlaceholder(strings.frontmatterAutomationStaticValuePlaceholder);
-						return this.bindCommittedTextSetting(text, {
-							initialValue: rule.staticValue ?? '',
-							normalize: (value) => value.trim(),
-							onCommit: (value) => {
-								rule.staticValue = value;
-							},
-							refreshFeatures: ['frontmatterAutomation'],
-						});
-					});
-			}
-
-			new Setting(containerEl)
-				.setName(strings.frontmatterAutomationWriteModeName)
-				.setDesc(strings.frontmatterAutomationWriteModeDesc)
-				.addDropdown((dropdown) => dropdown
-					.addOption('always', strings.frontmatterAutomationWriteModeAlwaysLabel)
-					.addOption('when-empty', strings.frontmatterAutomationWriteModeWhenEmptyLabel)
-					.setValue(rule.writeMode)
-					.onChange(async (value) => {
-						rule.writeMode = normalizeFrontmatterAutomationWriteMode(value, rule.writeMode);
-						await saveFrontmatterAutomationSettings();
-					}));
+		const footerEl = containerEl.createDiv({cls: 'obpm-rule-table-footer'});
+		const footerTextEl = footerEl.createDiv({cls: 'obpm-rule-table-footer-text'});
+		footerTextEl.createDiv({
+			cls: 'obpm-rule-table-footer-name',
+			text: options.addRuleName,
+		});
+		footerTextEl.createDiv({
+			cls: 'obpm-rule-table-footer-desc',
+			text: options.addRuleDesc,
 		});
 
-		new Setting(containerEl)
-			.setName(options.addRuleName)
-			.setDesc(options.addRuleDesc)
-			.addButton((button) => button
-				.setButtonText(options.addRuleButton)
-				.onClick(async () => {
-					this.plugin.settings.frontmatterAutomation.rules = [
-						...this.plugin.settings.frontmatterAutomation.rules,
-						createDefaultFrontmatterAutomationRule({
-							id: `frontmatter-automation-rule-${Date.now()}`,
-						}),
-					];
-					await saveFrontmatterAutomationSettings();
-					this.display();
-				}));
+		const addButtonEl = footerEl.createEl('button', {text: options.addRuleButton});
+		addButtonEl.type = 'button';
+		addButtonEl.addEventListener('click', () => {
+			void (async () => {
+				this.plugin.settings.frontmatterAutomation.rules = [
+					...this.plugin.settings.frontmatterAutomation.rules,
+					createDefaultFrontmatterAutomationRule({
+						id: `frontmatter-automation-rule-${Date.now()}`,
+					}),
+				];
+				await saveFrontmatterAutomationSettings();
+				this.display();
+			})();
+		});
 	}
 
 	display(): void {

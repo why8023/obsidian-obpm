@@ -11,6 +11,19 @@ export const DEFAULT_PROJECT_ROUTING_PROJECT_RULE: FrontmatterMatchRule = {
 	value: 'project',
 };
 
+export const DEFAULT_PROJECT_ROUTING_PROJECT_FILE_RULES: readonly FrontmatterMatchRule[] = [
+	DEFAULT_PROJECT_ROUTING_PROJECT_RULE,
+	{
+		key: 'type',
+		matchMode: 'key-value-equals',
+		value: 'project',
+	},
+	{
+		key: 'project_id',
+		matchMode: 'key-exists',
+	},
+];
+
 export const DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE: FrontmatterMatchRule = {
 	key: 'obar_session_id',
 	matchMode: 'key-exists',
@@ -26,16 +39,25 @@ export const DEFAULT_PROJECT_ROUTING_SETTINGS: ProjectRoutingSettings = {
 		limitToMatchingFiles: false,
 		matchRules: [cloneMatchRule(DEFAULT_PROJECT_ROUTING_CURRENT_FILE_COMMAND_RULE)],
 	},
+	detectDuplicateProjectFiles: true,
 	enabled: false,
-	projectRule: cloneMatchRule(DEFAULT_PROJECT_ROUTING_PROJECT_RULE),
+	projectFileRules: cloneMatchRules(DEFAULT_PROJECT_ROUTING_PROJECT_FILE_RULES),
 	projectSubfolderPath: 'raw',
-	recognizeFilenameMatchesFolderAsProject: false,
+	recognizeFilenameMatchesFolderAsProject: true,
 	routableFileRules: [cloneMatchRule(DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE)],
 	autoMoveWhenSingleCandidate: true,
 	showStatusBar: true,
 	showNoticeAfterMove: true,
 	debugLog: false,
 };
+
+interface LegacyProjectRoutingSettings extends Partial<ProjectRoutingSettings> {
+	projectRule?: Partial<FrontmatterMatchRule> | null;
+}
+
+export function createDefaultProjectFileRule(): FrontmatterMatchRule {
+	return cloneMatchRule(DEFAULT_PROJECT_ROUTING_PROJECT_FILE_RULES[0]!);
+}
 
 export function createDefaultRoutableFileRule(): FrontmatterMatchRule {
 	return cloneMatchRule(DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE);
@@ -46,12 +68,16 @@ export function createDefaultCurrentFileCommandRule(): FrontmatterMatchRule {
 }
 
 export function normalizeProjectRoutingSettings(
-	settings: Partial<ProjectRoutingSettings> | null | undefined,
+	settings: LegacyProjectRoutingSettings | null | undefined,
 ): ProjectRoutingSettings {
 	return {
 		currentFileCommand: normalizeCurrentFileCommandSettings(settings?.currentFileCommand),
+		detectDuplicateProjectFiles: normalizeBoolean(
+			settings?.detectDuplicateProjectFiles,
+			DEFAULT_PROJECT_ROUTING_SETTINGS.detectDuplicateProjectFiles,
+		),
 		enabled: normalizeBoolean(settings?.enabled, DEFAULT_PROJECT_ROUTING_SETTINGS.enabled),
-		projectRule: normalizeRequiredMatchRule(settings?.projectRule, DEFAULT_PROJECT_ROUTING_PROJECT_RULE),
+		projectFileRules: normalizeProjectFileRules(settings),
 		projectSubfolderPath: normalizeProjectSubfolderPath(
 			settings?.projectSubfolderPath,
 			DEFAULT_PROJECT_ROUTING_SETTINGS.projectSubfolderPath,
@@ -62,7 +88,7 @@ export function normalizeProjectRoutingSettings(
 		),
 		routableFileRules: normalizeOptionalMatchRules(
 			settings?.routableFileRules,
-			DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE,
+			[DEFAULT_PROJECT_ROUTING_ROUTABLE_FILE_RULE],
 		),
 		autoMoveWhenSingleCandidate: normalizeBoolean(
 			settings?.autoMoveWhenSingleCandidate,
@@ -106,9 +132,29 @@ function normalizeCurrentFileCommandSettings(
 		),
 		matchRules: normalizeOptionalMatchRules(
 			settings?.matchRules,
-			DEFAULT_PROJECT_ROUTING_CURRENT_FILE_COMMAND_RULE,
+			[DEFAULT_PROJECT_ROUTING_CURRENT_FILE_COMMAND_RULE],
 		),
 	};
+}
+
+function normalizeProjectFileRules(settings: LegacyProjectRoutingSettings | null | undefined): FrontmatterMatchRule[] {
+	if (Array.isArray(settings?.projectFileRules)) {
+		return normalizeOptionalMatchRules(
+			settings.projectFileRules,
+			DEFAULT_PROJECT_ROUTING_PROJECT_FILE_RULES,
+		);
+	}
+
+	if (settings?.projectRule) {
+		const legacyRule = normalizeRequiredMatchRule(settings.projectRule, DEFAULT_PROJECT_ROUTING_PROJECT_RULE);
+		if (matchRulesEqual(legacyRule, DEFAULT_PROJECT_ROUTING_PROJECT_RULE)) {
+			return cloneMatchRules(DEFAULT_PROJECT_ROUTING_PROJECT_FILE_RULES);
+		}
+
+		return [legacyRule];
+	}
+
+	return cloneMatchRules(DEFAULT_PROJECT_ROUTING_PROJECT_FILE_RULES);
 }
 
 function normalizeRequiredMatchRule(
@@ -131,19 +177,19 @@ function normalizeRequiredMatchRule(
 	};
 }
 
-function normalizeOptionalMatchRules(value: unknown, fallbackRule: FrontmatterMatchRule): FrontmatterMatchRule[] {
+function normalizeOptionalMatchRules(value: unknown, fallbackRules: readonly FrontmatterMatchRule[]): FrontmatterMatchRule[] {
 	if (!Array.isArray(value)) {
-		return [cloneMatchRule(fallbackRule)];
+		return cloneMatchRules(fallbackRules);
 	}
 
 	const normalizedRules = value
-		.map((rule) => normalizeOptionalMatchRule(rule, fallbackRule))
+		.map((rule) => normalizeOptionalMatchRule(rule))
 		.filter((rule): rule is FrontmatterMatchRule => rule !== null);
 
 	return normalizedRules;
 }
 
-function normalizeOptionalMatchRule(value: unknown, fallbackRule: FrontmatterMatchRule): FrontmatterMatchRule | null {
+function normalizeOptionalMatchRule(value: unknown): FrontmatterMatchRule | null {
 	if (!isObjectRecord(value)) {
 		return null;
 	}
@@ -153,7 +199,7 @@ function normalizeOptionalMatchRule(value: unknown, fallbackRule: FrontmatterMat
 		return null;
 	}
 
-	const matchMode = normalizeFrontmatterMatchMode(value.matchMode, fallbackRule.matchMode);
+	const matchMode = normalizeFrontmatterMatchMode(value.matchMode);
 	if (matchMode === 'key-value-equals') {
 		return {
 			key,
@@ -166,6 +212,22 @@ function normalizeOptionalMatchRule(value: unknown, fallbackRule: FrontmatterMat
 		key,
 		matchMode,
 	};
+}
+
+function cloneMatchRules(rules: readonly FrontmatterMatchRule[]): FrontmatterMatchRule[] {
+	return rules.map((rule) => cloneMatchRule(rule));
+}
+
+function matchRulesEqual(left: FrontmatterMatchRule, right: FrontmatterMatchRule): boolean {
+	if (left.key !== right.key || left.matchMode !== right.matchMode) {
+		return false;
+	}
+
+	if (left.matchMode === 'key-exists' || right.matchMode === 'key-exists') {
+		return true;
+	}
+
+	return left.value === right.value;
 }
 
 function cloneMatchRule(rule: FrontmatterMatchRule): FrontmatterMatchRule {

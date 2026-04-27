@@ -9,6 +9,8 @@ export interface SettingsLocalization {
 	settingsTabMetadataDesc: string;
 	settingsTabAutomation: string;
 	settingsTabAutomationDesc: string;
+	settingsTabProject: string;
+	settingsTabProjectDesc: string;
 	settingsTabWorkflow: string;
 	settingsTabWorkflowDesc: string;
 	basesFileRevealEnableDesc: string;
@@ -146,8 +148,20 @@ export interface SettingsLocalization {
 	projectRoutingSubfolderPathName: string;
 	projectRoutingSubfolderPathDesc: string;
 	projectRoutingSubfolderPathPlaceholder: string;
+	projectRoutingDuplicateProjectDetectionName: string;
+	projectRoutingDuplicateProjectDetectionDesc: string;
 	projectRoutingRecognizeFilenameMatchesFolderNameName: string;
 	projectRoutingRecognizeFilenameMatchesFolderNameDesc: string;
+	projectRoutingProjectFileRulesHeading: string;
+	projectRoutingProjectFileRulesDesc: string;
+	projectRoutingProjectFileRuleLabel: (index: number) => string;
+	projectRoutingNoProjectFileRules: string;
+	projectRoutingProjectFileAddRuleName: string;
+	projectRoutingProjectFileAddRuleDesc: string;
+	projectRoutingProjectFileAddRuleButton: string;
+	projectRoutingProjectFileRemoveRuleName: string;
+	projectRoutingProjectFileRemoveRuleDesc: string;
+	projectRoutingProjectFileRemoveRuleButton: string;
 	projectRoutingRuleKeyName: string;
 	projectRoutingRuleKeyDesc: string;
 	projectRoutingRuleKeyPlaceholder: string;
@@ -196,6 +210,8 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	settingsTabMetadataDesc: 'Keep frontmatter-derived links and filenames tidy with metadata-focused behaviors.',
 	settingsTabAutomation: 'Automation',
 	settingsTabAutomationDesc: 'Define rules that watch frontmatter changes and write values back into the current file.',
+	settingsTabProject: 'Projects',
+	settingsTabProjectDesc: 'Configure how markdown files are recognized as project files.',
 	settingsTabWorkflow: 'Workflow',
 	settingsTabWorkflowDesc: 'Commands and routing flows that help move files into the right place faster.',
 	basesFileRevealEnableDesc: 'Hold Alt and click a row or file link in a native Bases table view to reveal that file in the file explorer.',
@@ -330,13 +346,25 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectRoutingShowNoticeDesc: 'Show a notice after a new file is moved into a project folder.',
 	projectRoutingDebugLogName: 'Debug log',
 	projectRoutingDebugLogDesc: 'Write detailed project-routing diagnostics to the developer console.',
-	projectRoutingProjectRuleHeading: 'Project file rule',
-	projectRoutingProjectRuleDesc: 'Open files whose frontmatter matches this rule are treated as project files.',
+	projectRoutingProjectRuleHeading: 'Project recognition',
+	projectRoutingProjectRuleDesc: 'Define how open markdown files are recognized as projects.',
 	projectRoutingSubfolderPathName: 'Project subfolder path',
 	projectRoutingSubfolderPathDesc: 'Move files into this child folder under the selected project folder. Leave it empty to move directly into the project folder. Missing folders are created automatically.',
 	projectRoutingSubfolderPathPlaceholder: 'raw (leave empty for project folder)',
+	projectRoutingDuplicateProjectDetectionName: 'Detect multiple projects in one folder',
+	projectRoutingDuplicateProjectDetectionDesc: 'Show a persistent notice when one folder contains multiple markdown files recognized as projects.',
 	projectRoutingRecognizeFilenameMatchesFolderNameName: 'Also recognize file name = folder name',
-	projectRoutingRecognizeFilenameMatchesFolderNameDesc: 'When enabled, an open markdown file is also treated as a project file if its file name exactly matches its parent folder name. This is combined with the frontmatter rule above.',
+	projectRoutingRecognizeFilenameMatchesFolderNameDesc: 'When enabled, an open markdown file is treated as a project file if its file name exactly matches its parent folder name.',
+	projectRoutingProjectFileRulesHeading: 'Project property rules',
+	projectRoutingProjectFileRulesDesc: 'Open markdown files are also treated as project files when frontmatter matches any of these rules.',
+	projectRoutingProjectFileRuleLabel: (index) => `Project property rule ${index}`,
+	projectRoutingNoProjectFileRules: 'No project property rules are configured. Only the file-name rule can recognize project files.',
+	projectRoutingProjectFileAddRuleName: 'Add project property rule',
+	projectRoutingProjectFileAddRuleDesc: 'Append another frontmatter rule for recognizing project files.',
+	projectRoutingProjectFileAddRuleButton: 'Add rule',
+	projectRoutingProjectFileRemoveRuleName: 'Remove this project rule',
+	projectRoutingProjectFileRemoveRuleDesc: 'Delete this project property rule from the list.',
+	projectRoutingProjectFileRemoveRuleButton: 'Remove rule',
 	projectRoutingRuleKeyName: 'Frontmatter key',
 	projectRoutingRuleKeyDesc: 'Frontmatter key used by this rule.',
 	projectRoutingRuleKeyPlaceholder: 'Enter a frontmatter key',
@@ -385,6 +413,8 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	settingsTabMetadataDesc: '集中处理 frontmatter 派生的链接、显示文本和文件名同步等元数据行为。',
 	settingsTabAutomation: '自动化',
 	settingsTabAutomationDesc: '配置监听 frontmatter 变化并自动回写当前文件的规则。',
+	settingsTabProject: '项目',
+	settingsTabProjectDesc: '配置 Markdown 文件如何被识别为项目文件。',
 	settingsTabWorkflow: '工作流',
 	settingsTabWorkflowDesc: '放置移动文件、项目归档和同目录新建等更偏流程效率的能力。',
 	basesFileRevealEnableDesc: '在原生 Bases 的表格视图中按住 Alt 再点击某一行或文件链接，即可在左侧文件列表里定位该文件。',
@@ -519,13 +549,25 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectRoutingShowNoticeDesc: '当新建文件被移动到项目目录后显示提示消息。',
 	projectRoutingDebugLogName: '调试日志',
 	projectRoutingDebugLogDesc: '将项目归档路由的详细调试信息输出到开发者控制台。',
-	projectRoutingProjectRuleHeading: '项目文件规则',
-	projectRoutingProjectRuleDesc: '已打开文件中，frontmatter 命中这条规则的文件会被视为项目文件。',
+	projectRoutingProjectRuleHeading: '项目识别规则',
+	projectRoutingProjectRuleDesc: '统一配置已打开 Markdown 文件如何被识别为项目。',
 	projectRoutingSubfolderPathName: '项目子目录路径',
 	projectRoutingSubfolderPathDesc: '把文件移动到所选项目目录下的这个子目录中。留空时会直接移动到项目目录本身。若目录不存在，会自动创建。',
 	projectRoutingSubfolderPathPlaceholder: 'raw（留空则使用项目目录）',
+	projectRoutingDuplicateProjectDetectionName: '检测同目录多个项目',
+	projectRoutingDuplicateProjectDetectionDesc: '当同一文件夹内存在多个被识别为项目的 Markdown 文件时，显示常驻通知。',
 	projectRoutingRecognizeFilenameMatchesFolderNameName: '同时识别“文件名等于目录名”',
-	projectRoutingRecognizeFilenameMatchesFolderNameDesc: '开启后，如果某个已打开 Markdown 文件的文件名与其所在目录名完全一致，也会被视为项目文件。这条规则会与上面的 frontmatter 规则取并集。',
+	projectRoutingRecognizeFilenameMatchesFolderNameDesc: '开启后，如果某个已打开 Markdown 文件的文件名与其所在目录名完全一致，也会被视为项目文件。',
+	projectRoutingProjectFileRulesHeading: '项目属性规则',
+	projectRoutingProjectFileRulesDesc: '当已打开 Markdown 文件的 frontmatter 命中以下任一规则时，也会被视为项目文件。',
+	projectRoutingProjectFileRuleLabel: (index) => `项目属性规则 ${index}`,
+	projectRoutingNoProjectFileRules: '当前没有配置项目属性规则，只会通过文件名规则识别项目文件。',
+	projectRoutingProjectFileAddRuleName: '添加项目属性规则',
+	projectRoutingProjectFileAddRuleDesc: '再添加一条用于识别项目文件的 frontmatter 规则。',
+	projectRoutingProjectFileAddRuleButton: '添加规则',
+	projectRoutingProjectFileRemoveRuleName: '删除这条项目规则',
+	projectRoutingProjectFileRemoveRuleDesc: '从列表中移除这条项目属性规则。',
+	projectRoutingProjectFileRemoveRuleButton: '删除规则',
 	projectRoutingRuleKeyName: 'Frontmatter 键名',
 	projectRoutingRuleKeyDesc: '这条规则要匹配的 frontmatter 键名。',
 	projectRoutingRuleKeyPlaceholder: '输入 frontmatter 键名',

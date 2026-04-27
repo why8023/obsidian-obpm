@@ -27,8 +27,8 @@ export class ProjectRoutingStatusBar {
 		const resolution = resolveCurrentProject(
 			this.plugin.app,
 			this.plugin.app.workspace.getActiveFile(),
-			this.plugin.settings.projectRouting.projectRule,
 			{
+				projectFileRules: this.plugin.settings.projectRouting.projectFileRules,
 				projectSubfolderPath: this.plugin.settings.projectRouting.projectSubfolderPath,
 				recognizeFilenameMatchesFolderAsProject:
 					this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject,

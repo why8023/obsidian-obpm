@@ -5,6 +5,11 @@ export interface ProjectRoutingLocalization {
 	currentFileCommandName: string;
 	currentFileCommandNoOpenProjectNotice: string;
 	currentFileCommandRestrictionNotice: string;
+	duplicateProjectFilesNoticeFolderLabel: (folderPath: string, projectCount: number) => string;
+	duplicateProjectFilesNoticeGuidance: string;
+	duplicateProjectFilesNoticeIntro: (folderCount: number, projectCount: number) => string;
+	duplicateProjectFilesNoticeProjectListLabel: string;
+	duplicateProjectFilesNoticeTitle: string;
 	moveFailureNotice: string;
 	moveNotice: (fileName: string, projectName: string) => string;
 	modalDismissInstructionPurpose: string;
@@ -26,6 +31,14 @@ const ENGLISH_LOCALIZATION: ProjectRoutingLocalization = {
 	currentFileCommandName: 'Move current file to project folder',
 	currentFileCommandNoOpenProjectNotice: 'No open project file is available for moving the current file.',
 	currentFileCommandRestrictionNotice: 'The current file does not match the move-current-file command rules.',
+	duplicateProjectFilesNoticeFolderLabel: (folderPath, projectCount) =>
+		`${folderPath}: ${projectCount} project files`,
+	duplicateProjectFilesNoticeGuidance:
+		'Keep one project file in each folder, move the extra project files, or adjust project recognition rules.',
+	duplicateProjectFilesNoticeIntro: (folderCount, projectCount) =>
+		`${folderCount} folder${folderCount === 1 ? '' : 's'} contain ${projectCount} project files in total.`,
+	duplicateProjectFilesNoticeProjectListLabel: 'Project files:',
+	duplicateProjectFilesNoticeTitle: 'Multiple project files detected in the same folder',
 	moveFailureNotice: 'Failed to move the file into a project folder. Check the developer console for details.',
 	moveNotice: (fileName, projectName) => `Moved ${fileName} into project ${projectName}.`,
 	modalDismissInstructionPurpose: 'Cancel',
@@ -47,6 +60,13 @@ const CHINESE_LOCALIZATION: ProjectRoutingLocalization = {
 	currentFileCommandName: '将当前文件移动到项目文件夹',
 	currentFileCommandNoOpenProjectNotice: '当前没有可用于移动当前文件的已打开项目文件。',
 	currentFileCommandRestrictionNotice: '当前文件未命中“移动当前文件”命令的属性规则。',
+	duplicateProjectFilesNoticeFolderLabel: (folderPath, projectCount) =>
+		`${folderPath}：${projectCount} 个项目文件`,
+	duplicateProjectFilesNoticeGuidance: '请在每个文件夹内只保留一个项目文件，移动多余项目文件，或调整项目识别规则。',
+	duplicateProjectFilesNoticeIntro: (folderCount, projectCount) =>
+		`当前有 ${folderCount} 个文件夹共包含 ${projectCount} 个项目文件。`,
+	duplicateProjectFilesNoticeProjectListLabel: '项目文件：',
+	duplicateProjectFilesNoticeTitle: '检测到同一文件夹内存在多个项目文件',
 	moveFailureNotice: '移动文件到项目目录时失败。请打开开发者控制台查看详情。',
 	moveNotice: (fileName, projectName) => `已将 ${fileName} 移动到项目 ${projectName}。`,
 	modalDismissInstructionPurpose: '取消',

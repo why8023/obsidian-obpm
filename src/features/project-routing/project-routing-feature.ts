@@ -1,10 +1,15 @@
 import {Component, Notice, TAbstractFile, TFile, TFolder, debounce, normalizePath} from 'obsidian';
 import OBPMPlugin from '../../main';
+import {
+	DuplicateProjectFolder,
+	findDuplicateProjectFolders,
+	getDuplicateProjectFoldersKey,
+} from './duplicate-project-detector';
 import {getProjectRoutingLocalization} from './localization';
 import {matchesAnyFrontmatterRule} from './matcher';
 import {ProjectRoutingSuggestModal} from './modal';
 import {PendingProjectRoutingQueue} from './pending-queue';
-import {getOpenProjectCandidates} from './project-resolver';
+import {getOpenProjectCandidates, ProjectFileRecognitionOptions} from './project-resolver';
 import {ProjectRoutingStatusBar} from './status-bar';
 import {ProjectCandidate} from './types';
 
@@ -46,7 +51,12 @@ export class ProjectRoutingFeature extends Component {
 	private readonly requestStatusBarRefresh = debounce(() => {
 		this.statusBar.refresh();
 	}, 100, true);
+	private readonly requestDuplicateProjectCheck = debounce(() => {
+		this.updateDuplicateProjectWarning();
+	}, 300, true);
 	private readonly statusBar: ProjectRoutingStatusBar;
+	private duplicateProjectWarningKey = '';
+	private duplicateProjectWarningNotice: Notice | null = null;
 	private flushTimer: number | null = null;
 	private routingActivationTimer: number | null = null;
 	private routingEventListenersRegistered = false;
@@ -96,14 +106,18 @@ export class ProjectRoutingFeature extends Component {
 	onunload() {
 		this.clearRoutingActivationTimer();
 		this.requestStatusBarRefresh.cancel();
+		this.requestDuplicateProjectCheck.cancel();
 		this.clearFlushTimer();
 		this.pendingQueue.clear();
 		this.processingPaths.clear();
 		this.statusBar.destroy();
+		this.hideDuplicateProjectWarning();
 	}
 
 	async refresh(): Promise<void> {
 		this.clearFlushTimer();
+		this.requestDuplicateProjectCheck.cancel();
+		this.updateDuplicateProjectWarning();
 
 		if (!this.isEnabled()) {
 			this.pendingQueue.clear();
@@ -205,6 +219,10 @@ export class ProjectRoutingFeature extends Component {
 			this.handleMetadataChanged(file);
 		}));
 
+		this.registerEvent(this.plugin.app.metadataCache.on('resolved', () => {
+			this.requestDuplicateProjectCheck();
+		}));
+
 		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
 			this.handleFileRenamed(file, oldPath);
 		}));
@@ -242,7 +260,13 @@ export class ProjectRoutingFeature extends Component {
 	}
 
 	private handleFileCreated(file: TAbstractFile): void {
-		if (!this.isEnabled() || !this.isMarkdownFile(file)) {
+		if (!this.isMarkdownFile(file)) {
+			return;
+		}
+
+		this.requestDuplicateProjectCheck();
+
+		if (!this.isEnabled()) {
 			return;
 		}
 
@@ -256,10 +280,13 @@ export class ProjectRoutingFeature extends Component {
 	private handleFileDeleted(file: TAbstractFile): void {
 		this.pendingQueue.remove(file.path);
 		this.processingPaths.delete(file.path);
+		this.requestDuplicateProjectCheck();
 		this.requestStatusBarRefresh();
 	}
 
 	private handleFileRenamed(file: TAbstractFile, oldPath: string): void {
+		this.requestDuplicateProjectCheck();
+
 		if (this.isMarkdownFile(file)) {
 			this.pendingQueue.rename(oldPath, file.path);
 			if (this.pendingQueue.has(file.path)) {
@@ -275,6 +302,8 @@ export class ProjectRoutingFeature extends Component {
 	}
 
 	private handleMetadataChanged(file: TFile): void {
+		this.requestDuplicateProjectCheck();
+
 		if (this.pendingQueue.has(file.path)) {
 			this.pendingQueue.markReadyForImmediateRetry(file.path);
 			this.debugLog('Observed metadata change for a pending project-routing file.', {
@@ -339,6 +368,116 @@ export class ProjectRoutingFeature extends Component {
 
 	private isMarkdownFile(file: TAbstractFile): file is TFile {
 		return file instanceof TFile && file.extension === 'md';
+	}
+
+	private getProjectFileRecognitionOptions(): ProjectFileRecognitionOptions {
+		return {
+			projectFileRules: this.plugin.settings.projectRouting.projectFileRules,
+			recognizeFilenameMatchesFolderAsProject:
+				this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject,
+		};
+	}
+
+	private hideDuplicateProjectWarning(): void {
+		if (this.duplicateProjectWarningNotice) {
+			this.duplicateProjectWarningNotice.hide();
+		}
+
+		this.duplicateProjectWarningNotice = null;
+		this.duplicateProjectWarningKey = '';
+	}
+
+	private updateDuplicateProjectWarning(): void {
+		if (!this.plugin.settings.projectRouting.detectDuplicateProjectFiles) {
+			this.hideDuplicateProjectWarning();
+			return;
+		}
+
+		const duplicateFolders = findDuplicateProjectFolders(
+			this.plugin.app,
+			this.getProjectFileRecognitionOptions(),
+		);
+		if (duplicateFolders.length === 0) {
+			this.hideDuplicateProjectWarning();
+			return;
+		}
+
+		const nextWarningKey = getDuplicateProjectFoldersKey(duplicateFolders);
+		if (nextWarningKey === this.duplicateProjectWarningKey) {
+			return;
+		}
+
+		this.hideDuplicateProjectWarning();
+		this.duplicateProjectWarningNotice = new Notice(
+			this.createDuplicateProjectWarningMessage(duplicateFolders),
+			0,
+		);
+		this.duplicateProjectWarningKey = nextWarningKey;
+	}
+
+	private createDuplicateProjectWarningMessage(
+		duplicateFolders: readonly DuplicateProjectFolder[],
+	): string | DocumentFragment {
+		const projectCount = duplicateFolders.reduce((total, folder) => total + folder.projects.length, 0);
+		if (typeof document === 'undefined') {
+			return [
+				this.localization.duplicateProjectFilesNoticeTitle,
+				this.localization.duplicateProjectFilesNoticeIntro(duplicateFolders.length, projectCount),
+				...duplicateFolders.flatMap((folder) => [
+					this.localization.duplicateProjectFilesNoticeFolderLabel(
+						this.getDisplayFolderPath(folder.folderPath),
+						folder.projects.length,
+					),
+					...folder.projects.map((project) => `- ${project.file.path}`),
+				]),
+				this.localization.duplicateProjectFilesNoticeGuidance,
+			].join('\n');
+		}
+
+		const fragment = document.createDocumentFragment();
+		const containerEl = document.createElement('div');
+		const titleEl = document.createElement('strong');
+		titleEl.textContent = this.localization.duplicateProjectFilesNoticeTitle;
+		containerEl.appendChild(titleEl);
+
+		const introEl = document.createElement('p');
+		introEl.textContent = this.localization.duplicateProjectFilesNoticeIntro(
+			duplicateFolders.length,
+			projectCount,
+		);
+		containerEl.appendChild(introEl);
+
+		for (const folder of duplicateFolders) {
+			const folderEl = document.createElement('div');
+			folderEl.textContent = this.localization.duplicateProjectFilesNoticeFolderLabel(
+				this.getDisplayFolderPath(folder.folderPath),
+				folder.projects.length,
+			);
+			containerEl.appendChild(folderEl);
+
+			const listLabelEl = document.createElement('div');
+			listLabelEl.textContent = this.localization.duplicateProjectFilesNoticeProjectListLabel;
+			containerEl.appendChild(listLabelEl);
+
+			const listEl = document.createElement('ul');
+			for (const project of folder.projects) {
+				const itemEl = document.createElement('li');
+				itemEl.textContent = project.file.path;
+				listEl.appendChild(itemEl);
+			}
+			containerEl.appendChild(listEl);
+		}
+
+		const guidanceEl = document.createElement('p');
+		guidanceEl.textContent = this.localization.duplicateProjectFilesNoticeGuidance;
+		containerEl.appendChild(guidanceEl);
+
+		fragment.appendChild(containerEl);
+		return fragment;
+	}
+
+	private getDisplayFolderPath(folderPath: string): string {
+		return folderPath || this.localization.rootFolderLabel;
 	}
 
 	private currentFileCommandAllows(file: TFile): boolean {
@@ -467,11 +606,7 @@ export class ProjectRoutingFeature extends Component {
 		try {
 			const candidates = getOpenProjectCandidates(
 				this.plugin.app,
-				this.plugin.settings.projectRouting.projectRule,
-				{
-					recognizeFilenameMatchesFolderAsProject:
-						this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject,
-				},
+				this.getProjectFileRecognitionOptions(),
 				options.excludePath ? {excludePath: options.excludePath} : {},
 			);
 			if (candidates.length === 0) {
