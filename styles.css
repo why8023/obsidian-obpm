@@ -478,6 +478,149 @@
 	white-space: nowrap;
 }
 
+.obpm-settings-root .obpm-rule-table-wrap {
+	margin-top: var(--size-4-3);
+	border: 1px solid color-mix(in srgb, var(--background-modifier-border) 58%, transparent);
+	border-radius: var(--radius-m);
+	background: color-mix(in srgb, var(--background-primary) 82%, var(--background-secondary) 18%);
+	overflow-x: auto;
+}
+
+.obpm-settings-root .obpm-rule-table {
+	width: 100%;
+	min-width: 720px;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+.obpm-settings-root .obpm-rule-table th,
+.obpm-settings-root .obpm-rule-table td {
+	padding: 8px 10px;
+	border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 45%, transparent);
+	vertical-align: middle;
+}
+
+.obpm-settings-root .obpm-rule-table th {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	text-align: left;
+	white-space: nowrap;
+}
+
+.obpm-settings-root .obpm-rule-table th:first-child,
+.obpm-settings-root .obpm-rule-table td:first-child {
+	width: 44px;
+	text-align: center;
+}
+
+.obpm-settings-root .obpm-rule-table th:nth-child(2) {
+	width: 30%;
+}
+
+.obpm-settings-root .obpm-rule-table th:nth-child(3) {
+	width: 22%;
+}
+
+.obpm-settings-root .obpm-rule-table th:nth-child(4) {
+	width: 28%;
+}
+
+.obpm-settings-root .obpm-rule-table th:last-child,
+.obpm-settings-root .obpm-rule-table td:last-child {
+	width: 112px;
+	text-align: right;
+}
+
+.obpm-settings-root .obpm-rule-table tr:last-child td {
+	border-bottom: 0;
+}
+
+.obpm-settings-root .obpm-rule-table-index {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
+}
+
+.obpm-settings-root .obpm-rule-table-input,
+.obpm-settings-root .obpm-rule-table-select {
+	width: 100%;
+	min-width: 0;
+}
+
+.obpm-settings-root .obpm-rule-table-input:disabled {
+	opacity: 0.55;
+	background: var(--background-secondary);
+}
+
+.obpm-settings-root .obpm-rule-table-toggle {
+	text-align: center;
+}
+
+.obpm-settings-root .obpm-rule-table-toggle input[type="checkbox"] {
+	margin: 0 auto;
+}
+
+.obpm-settings-root .obpm-rule-table-automation {
+	min-width: 1280px;
+}
+
+.obpm-settings-root .obpm-rule-table-automation th:nth-child(2),
+.obpm-settings-root .obpm-rule-table-automation td:nth-child(2) {
+	width: 72px;
+	text-align: center;
+}
+
+.obpm-settings-root .obpm-rule-table-automation th:nth-child(3),
+.obpm-settings-root .obpm-rule-table-automation th:nth-child(5),
+.obpm-settings-root .obpm-rule-table-automation th:nth-child(7),
+.obpm-settings-root .obpm-rule-table-automation th:nth-child(8) {
+	width: 160px;
+}
+
+.obpm-settings-root .obpm-rule-table-automation th:nth-child(4),
+.obpm-settings-root .obpm-rule-table-automation th:nth-child(6),
+.obpm-settings-root .obpm-rule-table-automation th:nth-child(9) {
+	width: 144px;
+}
+
+.obpm-settings-root .obpm-rule-table-automation th:last-child,
+.obpm-settings-root .obpm-rule-table-automation td:last-child {
+	width: 100px;
+}
+
+.obpm-settings-root .obpm-rule-table-action button {
+	white-space: nowrap;
+}
+
+.obpm-settings-root .obpm-rule-table-footer {
+	display: flex;
+	gap: var(--size-4-3);
+	align-items: center;
+	justify-content: space-between;
+	margin-top: var(--size-4-3);
+	padding: var(--size-4-3);
+	border: 1px dashed color-mix(in srgb, var(--background-modifier-border) 70%, transparent);
+	border-radius: var(--radius-m);
+	background: color-mix(in srgb, var(--background-primary) 70%, var(--background-secondary) 30%);
+}
+
+.obpm-settings-root .obpm-rule-table-footer-name {
+	font-weight: var(--font-semibold);
+	line-height: var(--line-height-tight);
+}
+
+.obpm-settings-root .obpm-rule-table-footer-desc {
+	margin-top: var(--size-2-1);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.obpm-settings-root .obpm-rule-table-footer button {
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+
 @media (max-width: 768px) {
 	.obpm-settings-root .obpm-settings-hero {
 		padding: var(--size-4-4);
@@ -495,6 +638,23 @@
 	.obpm-settings-root .obpm-settings-panel .setting-item-control input[type="number"],
 	.obpm-settings-root .obpm-settings-panel .setting-item-control select {
 		min-width: 0;
+		width: 100%;
+	}
+
+	.obpm-settings-root .obpm-rule-table {
+		min-width: 640px;
+	}
+
+	.obpm-settings-root .obpm-rule-table-automation {
+		min-width: 1280px;
+	}
+
+	.obpm-settings-root .obpm-rule-table-footer {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.obpm-settings-root .obpm-rule-table-footer button {
 		width: 100%;
 	}
 }
