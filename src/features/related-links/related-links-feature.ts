@@ -14,6 +14,7 @@ import {
 	buildDesiredLinkTreesByTarget,
 	buildFullSourceIndex,
 	buildFullSourceIndexWithContentFallback,
+	buildProjectMarkdownLinkContributions,
 	buildSourceContribution,
 	SourceIndex,
 } from './source-index';
@@ -1165,9 +1166,29 @@ export class RelatedLinksFeature extends Component {
 	}
 
 	private async persistTrackedState() {
-		const nextState = buildRelatedLinksState(this.sourceContributionsByPath.values());
+		const projectMarkdownLinkContributions = this.buildProjectMarkdownLinkContributions();
+		const nextState = buildRelatedLinksState(
+			this.sourceContributionsByPath.values(),
+			projectMarkdownLinkContributions,
+		);
 		this.currentState = nextState;
 		await this.plugin.saveRelatedLinksState(nextState);
+	}
+
+	private buildProjectMarkdownLinkContributions(): SourceContribution[] {
+		if (!this.plugin.settings.relatedLinks.recognizeProjectMarkdownLinks) {
+			return [];
+		}
+
+		return buildProjectMarkdownLinkContributions(this.plugin.app, {
+			displayProperty: this.plugin.settings.relatedLinks.displayProperty.trim(),
+			projectFileRecognition: {
+				projectFileRules: this.plugin.settings.projectRouting.projectFileRules,
+				projectSubfolderPath: this.plugin.settings.projectRouting.projectSubfolderPath,
+				recognizeFilenameMatchesFolderAsProject:
+					this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject,
+			},
+		});
 	}
 
 	private trackRenamedSourcePath(oldPath: string, nextPath: string) {

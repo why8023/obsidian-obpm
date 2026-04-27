@@ -13,6 +13,8 @@ export interface SettingsLocalization {
 	settingsTabProjectDesc: string;
 	settingsTabWorkflow: string;
 	settingsTabWorkflowDesc: string;
+	settingsTabRelations: string;
+	settingsTabRelationsDesc: string;
 	basesFileRevealEnableDesc: string;
 	basesFileRevealEnableName: string;
 	basesFileRevealHeading: string;
@@ -58,6 +60,13 @@ export interface SettingsLocalization {
 	fileContentMoveHeading: string;
 	fileContentMoveStripSingleH1Desc: string;
 	fileContentMoveStripSingleH1Name: string;
+	relatedDocumentWorkflowHeading: string;
+	relatedDocumentWorkflowDesc: string;
+	relatedDocumentWorkflowEnableName: string;
+	relatedDocumentWorkflowEnableDesc: string;
+	relatedDocumentWorkflowTargetSubfolderPathName: string;
+	relatedDocumentWorkflowTargetSubfolderPathDesc: string;
+	relatedDocumentWorkflowTargetSubfolderPathPlaceholder: string;
 	relatedLinksHeading: string;
 	enableRelatedLinksName: string;
 	enableRelatedLinksDesc: string;
@@ -72,6 +81,10 @@ export interface SettingsLocalization {
 	inboxHeadingPlaceholder: string;
 	includeInheritedRelatedLinksName: string;
 	includeInheritedRelatedLinksDesc: string;
+	projectMarkdownRelationsHeading: string;
+	projectMarkdownRelationsDesc: string;
+	recognizeProjectMarkdownLinksName: string;
+	recognizeProjectMarkdownLinksDesc: string;
 	missingLinkGracePeriodName: string;
 	missingLinkGracePeriodDesc: (min: number, max: number, defaultValue: number) => string;
 	missingLinkGracePeriodNotice: (min: number, max: number) => string;
@@ -218,6 +231,8 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	settingsTabProjectDesc: 'Configure how markdown files are recognized as project files.',
 	settingsTabWorkflow: 'Workflow',
 	settingsTabWorkflowDesc: 'Commands that help move content and create project-adjacent notes faster.',
+	settingsTabRelations: 'Relations',
+	settingsTabRelationsDesc: 'Configure relation recognition and managed related-link synchronization.',
 	basesFileRevealEnableDesc: 'Hold Alt and click a row or file link in a native Bases table view to reveal that file in the file explorer.',
 	basesFileRevealEnableName: 'Enable Bases Alt-click reveal',
 	basesFileRevealHeading: 'Bases file reveal',
@@ -264,6 +279,13 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	fileContentMoveHeading: 'Send content to cursor',
 	fileContentMoveStripSingleH1Desc: 'When the source note has exactly one level-1 heading, omit that heading and promote the remaining outline under the source file name.',
 	fileContentMoveStripSingleH1Name: 'Remove single level-1 heading',
+	relatedDocumentWorkflowHeading: 'Related document workflow',
+	relatedDocumentWorkflowDesc: 'Move documents related to a project into a configured folder under that project folder when you run the command.',
+	relatedDocumentWorkflowEnableName: 'Enable related document workflow',
+	relatedDocumentWorkflowEnableDesc: 'Adds a command that moves documents associated with project files into the configured project subfolder.',
+	relatedDocumentWorkflowTargetSubfolderPathName: 'Target subfolder path',
+	relatedDocumentWorkflowTargetSubfolderPathDesc: 'Move related documents into this child folder under the project folder. Leave empty to use the project folder itself.',
+	relatedDocumentWorkflowTargetSubfolderPathPlaceholder: 'related',
 	relatedLinksHeading: 'Related frontmatter links',
 	enableRelatedLinksName: 'Enable related frontmatter links',
 	enableRelatedLinksDesc: 'Automatically add this note into the notes referenced by a frontmatter property.',
@@ -278,6 +300,10 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	inboxHeadingPlaceholder: 'Enter Inbox heading',
 	includeInheritedRelatedLinksName: 'Include inherited related links',
 	includeInheritedRelatedLinksDesc: 'Nest upstream sources under their source note when rebuilding managed related-link lists.',
+	projectMarkdownRelationsHeading: 'Project Markdown link relations',
+	projectMarkdownRelationsDesc: 'Treat links already written in project files as existing relations without adding managed backlinks.',
+	recognizeProjectMarkdownLinksName: 'Recognize project Markdown links as relations',
+	recognizeProjectMarkdownLinksDesc: 'Record internal Markdown file links in recognized project files as existing relations without writing backlinks into linked files.',
 	missingLinkGracePeriodName: 'Missing-link grace period',
 	missingLinkGracePeriodDesc: (min, max, defaultValue) =>
 		`Wait this many seconds before restoring a missing managed link. Range: ${min}-${max}. Default: ${defaultValue}.`,
@@ -425,6 +451,8 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	settingsTabProjectDesc: '配置 Markdown 文件如何被识别为项目文件。',
 	settingsTabWorkflow: '工作流',
 	settingsTabWorkflowDesc: '放置移动内容和同目录新建等更偏项目流程效率的能力。',
+	settingsTabRelations: '关联',
+	settingsTabRelationsDesc: '配置关联识别和托管关联链接同步。',
 	basesFileRevealEnableDesc: '在原生 Bases 的表格视图中按住 Alt 再点击某一行或文件链接，即可在左侧文件列表里定位该文件。',
 	basesFileRevealEnableName: '启用 Bases Alt+点击定位文件',
 	basesFileRevealHeading: 'Bases 文件定位',
@@ -471,6 +499,13 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	fileContentMoveHeading: '发送内容到光标处',
 	fileContentMoveStripSingleH1Desc: '当源文件恰好只有一个一级标题时，移动时去掉该标题，并将后续大纲提升到源文件名下面。',
 	fileContentMoveStripSingleH1Name: '去掉单一一级标题',
+	relatedDocumentWorkflowHeading: '关联文档工作流',
+	relatedDocumentWorkflowDesc: '执行命令时，将与项目相关联的文档移动到该项目文件夹下配置的目录中。',
+	relatedDocumentWorkflowEnableName: '启用关联文档工作流',
+	relatedDocumentWorkflowEnableDesc: '添加一个命令，用来把项目关联文档移动到配置的项目子目录中。',
+	relatedDocumentWorkflowTargetSubfolderPathName: '目标子目录路径',
+	relatedDocumentWorkflowTargetSubfolderPathDesc: '把关联文档移动到项目文件夹下的这个子目录中。留空则使用项目文件夹本身。',
+	relatedDocumentWorkflowTargetSubfolderPathPlaceholder: 'related',
 	relatedLinksHeading: '关联属性链接',
 	enableRelatedLinksName: '启用关联属性链接',
 	enableRelatedLinksDesc: '当某个属性引用了其他笔记时，自动把当前笔记回填到那些被引用笔记里。',
@@ -485,6 +520,10 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	inboxHeadingPlaceholder: '输入 Inbox 标题',
 	includeInheritedRelatedLinksName: '包含继承关联链接',
 	includeInheritedRelatedLinksDesc: '重建托管关联链接列表时，将上游来源按源笔记层级嵌套插入。',
+	projectMarkdownRelationsHeading: '项目 Markdown 链接关联',
+	projectMarkdownRelationsDesc: '把项目文件里已经写好的链接视为现有关联，不额外添加托管反向链接。',
+	recognizeProjectMarkdownLinksName: '将项目文件中的 Markdown 链接判别为关联',
+	recognizeProjectMarkdownLinksDesc: '把已识别项目文件正文中的内部 Markdown 文件链接记录为现有关联关系，但不会在被链接文件中额外写入反向关联。',
 	missingLinkGracePeriodName: '缺失链接宽限期',
 	missingLinkGracePeriodDesc: (min, max, defaultValue) =>
 		`当托管链接暂时消失时，等待这么多秒后再自动补回。范围：${min}-${max}。默认值：${defaultValue}。`,

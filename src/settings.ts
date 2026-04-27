@@ -66,6 +66,7 @@ interface ProjectRoutingRuleListSectionOptions {
 	removeRuleButton: string;
 	removeRuleDesc: string;
 	removeRuleName: string;
+	refreshFeatures?: readonly RefreshableFeatureId[];
 	ruleLabel: (index: number) => string;
 	setRules: (rules: FrontmatterMatchRule[]) => void;
 }
@@ -77,6 +78,7 @@ export interface RelatedLinksSettings {
 	inboxHeading: string;
 	includeInheritedLinks: boolean;
 	missingLinkGracePeriodSeconds: number;
+	recognizeProjectMarkdownLinks: boolean;
 	verboseLogging: boolean;
 }
 
@@ -132,6 +134,11 @@ export interface FileContentMoveSettings {
 	stripSingleH1: boolean;
 }
 
+export interface RelatedDocumentWorkflowSettings {
+	enabled: boolean;
+	targetSubfolderPath: string;
+}
+
 interface FrontmatterAutomationRuleListSectionOptions {
 	addRuleButton: string;
 	addRuleDesc: string;
@@ -143,7 +150,7 @@ interface FrontmatterAutomationRuleListSectionOptions {
 	ruleLabel: (index: number) => string;
 }
 
-type SettingsPageTabId = 'bases' | 'metadata' | 'automation' | 'project' | 'workflow';
+type SettingsPageTabId = 'bases' | 'metadata' | 'automation' | 'project' | 'workflow' | 'relations';
 
 interface SettingsPageTabDefinition {
 	description: string;
@@ -164,6 +171,7 @@ export interface OBPMPluginSettings {
 	fileNameSync: FileNameSyncSettings;
 	frontmatterAutomation: FrontmatterAutomationSettings;
 	projectRouting: ProjectRoutingSettings;
+	relatedDocumentWorkflow: RelatedDocumentWorkflowSettings;
 	sameFolderNote: SameFolderNoteSettings;
 }
 
@@ -203,6 +211,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		inboxHeading: DEFAULT_RELATED_LINKS_INBOX_HEADING,
 		includeInheritedLinks: false,
 		missingLinkGracePeriodSeconds: DEFAULT_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
+		recognizeProjectMarkdownLinks: false,
 		verboseLogging: false,
 	},
 	fileNameSync: {
@@ -213,6 +222,10 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 	},
 	frontmatterAutomation: normalizeFrontmatterAutomationSettings(undefined),
 	projectRouting: normalizeProjectRoutingSettings(undefined),
+	relatedDocumentWorkflow: {
+		enabled: false,
+		targetSubfolderPath: 'related',
+	},
 	sameFolderNote: {
 		enabled: false,
 	},
@@ -288,6 +301,10 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 				settings?.relatedLinks?.missingLinkGracePeriodSeconds,
 				DEFAULT_SETTINGS.relatedLinks.missingLinkGracePeriodSeconds,
 			),
+			recognizeProjectMarkdownLinks: normalizeBoolean(
+				settings?.relatedLinks?.recognizeProjectMarkdownLinks,
+				DEFAULT_SETTINGS.relatedLinks.recognizeProjectMarkdownLinks,
+			),
 			verboseLogging: normalizeBoolean(settings?.relatedLinks?.verboseLogging, DEFAULT_SETTINGS.relatedLinks.verboseLogging),
 		},
 		fileNameSync: {
@@ -304,6 +321,16 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 		},
 		frontmatterAutomation: normalizeFrontmatterAutomationSettings(settings?.frontmatterAutomation),
 		projectRouting: normalizeProjectRoutingSettings(settings?.projectRouting),
+		relatedDocumentWorkflow: {
+			enabled: normalizeBoolean(
+				settings?.relatedDocumentWorkflow?.enabled,
+				DEFAULT_SETTINGS.relatedDocumentWorkflow.enabled,
+			),
+			targetSubfolderPath: normalizeProjectSubfolderPath(
+				settings?.relatedDocumentWorkflow?.targetSubfolderPath,
+				DEFAULT_SETTINGS.relatedDocumentWorkflow.targetSubfolderPath,
+			),
+		},
 		sameFolderNote: {
 			enabled: normalizeBoolean(settings?.sameFolderNote?.enabled, DEFAULT_SETTINGS.sameFolderNote.enabled),
 		},
@@ -500,6 +527,11 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				id: 'metadata',
 				label: strings.settingsTabMetadata,
 			},
+			{
+				description: strings.settingsTabRelationsDesc,
+				id: 'relations',
+				label: strings.settingsTabRelations,
+			},
 		];
 	}
 
@@ -625,10 +657,15 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				break;
 			case 'metadata':
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderFileNameSyncSettingsSection(panelBodyEl);
+				});
+				break;
+			case 'relations':
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderRelatedLinksSettingsSection(panelBodyEl);
 				});
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
-					this.renderFileNameSyncSettingsSection(panelBodyEl);
+					this.renderProjectMarkdownRelationSettingsSection(panelBodyEl);
 				});
 				break;
 			case 'automation':
@@ -647,6 +684,9 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			case 'workflow':
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderFileContentMoveSettingsSection(panelBodyEl);
+				});
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderRelatedDocumentWorkflowSettingsSection(panelBodyEl);
 				});
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderSameFolderNoteSettingsSection(panelBodyEl);
@@ -995,6 +1035,26 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 	}
 
+	private renderProjectMarkdownRelationSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveRelatedLinksSettings = async () => this.saveSettingsFor('relatedLinks');
+
+		new Setting(containerEl)
+			.setName(strings.projectMarkdownRelationsHeading)
+			.setDesc(strings.projectMarkdownRelationsDesc)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.recognizeProjectMarkdownLinksName)
+			.setDesc(strings.recognizeProjectMarkdownLinksDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.relatedLinks.recognizeProjectMarkdownLinks)
+				.onChange(async (value) => {
+					this.plugin.settings.relatedLinks.recognizeProjectMarkdownLinks = value;
+					await saveRelatedLinksSettings();
+				}));
+	}
+
 	private renderFileNameSyncSettingsSection(containerEl: HTMLElement): void {
 		const strings = getSettingsLocalization();
 		const saveFileNameSyncSettings = async () => this.saveSettingsFor('fileNameSync');
@@ -1191,12 +1251,51 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 	}
 
+	private renderRelatedDocumentWorkflowSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveRelatedDocumentWorkflowSettings = async () => this.saveSettingsFor('relatedDocumentWorkflow');
+
+		new Setting(containerEl)
+			.setName(strings.relatedDocumentWorkflowHeading)
+			.setDesc(strings.relatedDocumentWorkflowDesc)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.relatedDocumentWorkflowEnableName)
+			.setDesc(strings.relatedDocumentWorkflowEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.relatedDocumentWorkflow.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.relatedDocumentWorkflow.enabled = value;
+					await saveRelatedDocumentWorkflowSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.relatedDocumentWorkflowTargetSubfolderPathName)
+			.setDesc(strings.relatedDocumentWorkflowTargetSubfolderPathDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.relatedDocumentWorkflowTargetSubfolderPathPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.relatedDocumentWorkflow.targetSubfolderPath,
+					normalize: (value) => normalizeProjectSubfolderPath(
+						value,
+						this.plugin.settings.relatedDocumentWorkflow.targetSubfolderPath,
+					),
+					onCommit: (value) => {
+						this.plugin.settings.relatedDocumentWorkflow.targetSubfolderPath = value;
+					},
+					refreshFeatures: ['relatedDocumentWorkflow'],
+				});
+			});
+	}
+
 	private renderProjectRoutingRuleListSection(
 		containerEl: HTMLElement,
 		options: ProjectRoutingRuleListSectionOptions,
 	): void {
 		const strings = getSettingsLocalization();
-		const saveProjectRoutingSettings = async () => this.saveSettingsFor('projectRouting');
+		const refreshFeatures: readonly RefreshableFeatureId[] = options.refreshFeatures ?? ['projectRouting'];
+		const saveProjectRoutingSettings = async () => this.saveSettingsFor(...refreshFeatures);
 
 		new Setting(containerEl)
 			.setName(options.headingName)
@@ -1397,7 +1496,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 	private renderProjectRecognitionSettingsSection(containerEl: HTMLElement): void {
 		const strings = getSettingsLocalization();
-		const saveProjectRoutingSettings = async () => this.saveSettingsFor('projectRouting');
+		const saveProjectRoutingSettings = async () => this.saveSettingsFor('projectRouting', 'relatedLinks');
 
 		new Setting(containerEl)
 			.setName(strings.projectRoutingProjectRuleHeading)
@@ -1436,6 +1535,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			removeRuleButton: strings.projectRoutingProjectFileRemoveRuleButton,
 			removeRuleDesc: strings.projectRoutingProjectFileRemoveRuleDesc,
 			removeRuleName: strings.projectRoutingProjectFileRemoveRuleName,
+			refreshFeatures: ['projectRouting', 'relatedLinks'],
 			ruleLabel: strings.projectRoutingProjectFileRuleLabel,
 			setRules: (rules) => {
 				this.plugin.settings.projectRouting.projectFileRules = rules;

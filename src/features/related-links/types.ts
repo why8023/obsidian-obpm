@@ -22,4 +22,5 @@ export interface RelatedLinksState {
 	version: typeof RELATED_LINKS_STATE_VERSION;
 	sourceTargetsByPath: Record<string, string[]>;
 	managedTargets: string[];
+	projectMarkdownLinksBySourcePath: Record<string, string[]>;
 }

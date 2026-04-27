@@ -6,6 +6,7 @@ import {FileContentMoveFeature} from './features/file-content-move/file-content-
 import {FileNameSyncFeature} from './features/file-name-sync/file-name-sync-feature';
 import {FrontmatterAutomationFeature} from './features/frontmatter-automation/frontmatter-automation-feature';
 import {ProjectRoutingFeature} from './features/project-routing/project-routing-feature';
+import {RelatedDocumentWorkflowFeature} from './features/related-document-workflow/related-document-workflow-feature';
 import {RelatedLinksFeature} from './features/related-links/related-links-feature';
 import {SameFolderNoteFeature} from './features/same-folder-note/same-folder-note-feature';
 import {normalizeRelatedLinksState} from './features/related-links/related-links-state-store';
@@ -27,6 +28,7 @@ export default class OBPMPlugin extends Plugin {
 	private fileNameSyncFeature: FileNameSyncFeature | null = null;
 	private frontmatterAutomationFeature: FrontmatterAutomationFeature | null = null;
 	private projectRoutingFeature: ProjectRoutingFeature | null = null;
+	private relatedDocumentWorkflowFeature: RelatedDocumentWorkflowFeature | null = null;
 	private relatedLinksFeature: RelatedLinksFeature | null = null;
 
 	async onload() {
@@ -48,17 +50,15 @@ export default class OBPMPlugin extends Plugin {
 		this.addChild(this.frontmatterAutomationFeature);
 		this.projectRoutingFeature = new ProjectRoutingFeature(this);
 		this.addChild(this.projectRoutingFeature);
+		this.relatedDocumentWorkflowFeature = new RelatedDocumentWorkflowFeature(this);
+		this.addChild(this.relatedDocumentWorkflowFeature);
 		this.addChild(new SameFolderNoteFeature(this));
 
 		this.addCommand({
 			id: 'sync-related-frontmatter-links',
 			name: 'Full sync related frontmatter links',
 			callback: async () => {
-				if (!this.relatedLinksFeature) {
-					return;
-				}
-
-				await this.relatedLinksFeature.runFullSync();
+				await this.runRelatedLinksFullSync();
 			},
 		});
 
@@ -90,6 +90,14 @@ export default class OBPMPlugin extends Plugin {
 	async saveRelatedLinksState(state: RelatedLinksState): Promise<void> {
 		this.relatedLinksState = normalizeRelatedLinksState(state);
 		await this.persistPluginData();
+	}
+
+	async runRelatedLinksFullSync(): Promise<void> {
+		if (!this.relatedLinksFeature) {
+			return;
+		}
+
+		await this.relatedLinksFeature.runFullSync();
 	}
 
 	debugLog(message: string, details?: unknown) {
@@ -153,6 +161,11 @@ export default class OBPMPlugin extends Plugin {
 				case 'frontmatterAutomation':
 					if (this.frontmatterAutomationFeature) {
 						refreshTasks.push(this.frontmatterAutomationFeature.refresh());
+					}
+					break;
+				case 'relatedDocumentWorkflow':
+					if (this.relatedDocumentWorkflowFeature) {
+						refreshTasks.push(this.relatedDocumentWorkflowFeature.refresh());
 					}
 					break;
 			}

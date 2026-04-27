@@ -1,4 +1,6 @@
-import {App, CachedMetadata, FrontMatterCache, normalizePath, parseYaml, TFile} from 'obsidian';
+import {App, CachedMetadata, FrontMatterCache, LinkCache, normalizePath, parseYaml, TFile} from 'obsidian';
+import {ProjectFileRecognitionOptions, isProjectFile} from '../project-routing/project-resolver';
+import {MANAGED_LINK_TITLE} from './managed-link-protocol';
 import {DesiredLinksByTarget, DesiredLinkTreesByTarget, DesiredTargetLink, DesiredTargetLinkNode, SourceContribution} from './types';
 
 export interface SourceIndex {
@@ -10,6 +12,11 @@ interface SourceIndexContentFallbackOptions {
 	fallbackSourcePaths: ReadonlySet<string>;
 	onFallbackError?: (file: TFile, error: unknown) => void;
 	readFile?: (file: TFile) => Promise<string>;
+}
+
+interface ProjectMarkdownLinkContributionOptions {
+	displayProperty: string;
+	projectFileRecognition: ProjectFileRecognitionOptions;
 }
 
 export function buildFullSourceIndex(
@@ -100,6 +107,33 @@ export function buildDesiredLinksByTarget(contributions: Iterable<SourceContribu
 	return desiredLinksByTarget;
 }
 
+export function buildProjectMarkdownLinkContributions(
+	app: App,
+	options: ProjectMarkdownLinkContributionOptions,
+): SourceContribution[] {
+	const contributions: SourceContribution[] = [];
+
+	for (const file of app.vault.getMarkdownFiles()) {
+		if (!isProjectFile(app, file, options.projectFileRecognition)) {
+			continue;
+		}
+
+		const cache = app.metadataCache.getFileCache(file);
+		const targetPaths = getMarkdownBodyLinkTargetPaths(app, file, cache?.links);
+		if (targetPaths.length === 0) {
+			continue;
+		}
+
+		contributions.push({
+			displayText: getDisplayText(file, cache?.frontmatter, options.displayProperty),
+			sourcePath: file.path,
+			targetPaths,
+		});
+	}
+
+	return contributions.sort((left, right) => left.sourcePath.localeCompare(right.sourcePath));
+}
+
 export function buildDesiredLinkTreesByTarget(
 	contributions: Iterable<SourceContribution>,
 	rootTargetPaths?: ReadonlySet<string>,
@@ -177,6 +211,36 @@ export function buildSourceContribution(
 		sourcePath: file.path,
 		targetPaths: [...targetPaths].sort((left, right) => left.localeCompare(right)),
 	};
+}
+
+function getMarkdownBodyLinkTargetPaths(
+	app: App,
+	sourceFile: TFile,
+	links: readonly LinkCache[] | undefined,
+): string[] {
+	if (!links || links.length === 0) {
+		return [];
+	}
+
+	const targetPaths = new Set<string>();
+	for (const link of links) {
+		if (isManagedRelatedLink(link)) {
+			continue;
+		}
+
+		const targetFile = resolveRelationTargetFile(app, link.link, sourceFile.path);
+		if (!targetFile || targetFile.path === sourceFile.path || targetFile.extension !== 'md') {
+			continue;
+		}
+
+		targetPaths.add(targetFile.path);
+	}
+
+	return [...targetPaths].sort((left, right) => left.localeCompare(right));
+}
+
+function isManagedRelatedLink(link: LinkCache): boolean {
+	return link.original.includes(MANAGED_LINK_TITLE);
 }
 
 function buildDesiredLinkTreeChildren(
