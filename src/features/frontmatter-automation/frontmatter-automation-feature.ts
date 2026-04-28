@@ -9,6 +9,10 @@ import {ensureFileInProjectFolder} from './project-placement-action';
 const DEFAULT_FLUSH_DELAY_MS = 200;
 const EMPTY_FRONTMATTER_SNAPSHOT: FrontmatterSnapshot = Object.freeze({});
 const OWN_WRITE_TTL_MS = 5000;
+const UNAVAILABLE_FRONTMATTER_SNAPSHOT = Symbol('unavailable-frontmatter-snapshot');
+
+type AvailableFrontmatterSnapshot = FrontmatterSnapshot | null;
+type MetadataCacheSnapshot = AvailableFrontmatterSnapshot | typeof UNAVAILABLE_FRONTMATTER_SNAPSHOT;
 
 interface PendingMetadataChange {
 	file: TFile;
@@ -181,7 +185,11 @@ export class FrontmatterAutomationFeature extends Component {
 			return;
 		}
 
-		const snapshot = createFrontmatterSnapshot(cache?.frontmatter);
+		const snapshot = createSnapshotFromMetadataCache(cache);
+		if (snapshot === UNAVAILABLE_FRONTMATTER_SNAPSHOT) {
+			return;
+		}
+
 		const pendingOwnWrite = this.pendingOwnWrites.get(file.path);
 		if (pendingOwnWrite) {
 			if (pendingOwnWrite.expiresAt <= Date.now()) {
@@ -340,7 +348,12 @@ export class FrontmatterAutomationFeature extends Component {
 
 	private primeSnapshotsFromMetadataCache(): void {
 		for (const file of this.plugin.app.vault.getMarkdownFiles()) {
-			this.setStableSnapshot(file.path, createFrontmatterSnapshot(this.plugin.app.metadataCache.getFileCache(file)?.frontmatter));
+			const snapshot = createSnapshotFromMetadataCache(this.plugin.app.metadataCache.getFileCache(file));
+			if (snapshot === UNAVAILABLE_FRONTMATTER_SNAPSHOT) {
+				continue;
+			}
+
+			this.setStableSnapshot(file.path, snapshot);
 		}
 	}
 
@@ -394,4 +407,12 @@ function moveMapValue<T>(map: Map<string, T>, fromPath: string, toPath: string):
 
 	map.delete(fromPath);
 	map.set(toPath, value);
+}
+
+function createSnapshotFromMetadataCache(cache: CachedMetadata | null): MetadataCacheSnapshot {
+	if (cache === null) {
+		return UNAVAILABLE_FRONTMATTER_SNAPSHOT;
+	}
+
+	return createFrontmatterSnapshot(cache.frontmatter);
 }
