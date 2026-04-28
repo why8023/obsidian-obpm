@@ -9,7 +9,7 @@ OBPM is an Obsidian community plugin that bundles several workflow improvements 
 - Bases group fold: Add collapse and expand controls to grouped native Bases table views and optionally remember the collapsed state per file and view.
 - Related frontmatter links: Keep backlinks in sync by inserting managed markdown links into the notes referenced by a frontmatter property, with optional project-link relation recognition.
 - File name sync: Rename markdown files to match a frontmatter property, with configurable invalid-character replacement and basename length limits.
-- Related document workflow: Run a command to move documents associated with project files into a configured project subfolder.
+- Related document workflow: Run a command to move documents associated with project files into a configured project subfolder when they are outside the project folder, with an undo command for the last move batch.
 - Same-folder note: Add a file-menu action that creates a new markdown note next to the selected file.
 
 ## Requirements
@@ -71,7 +71,7 @@ npm run lint
 - **Bases top tabs** controls tab placement, layout, icon display, overflow behavior, and remembered view state.
 - **Relations** configures the source relation property, optional display property, project Markdown link recognition, and verbose logging.
 - **File names from property** configures the property used for renaming plus file-name sanitization rules.
-- **Related document workflow** configures the command that moves project-related documents into a project subfolder.
+- **Related document workflow** configures the command that moves project-related documents from outside a project folder into a project subfolder, plus the undo command for the last move batch.
 - **Create note in same folder** enables the context-menu command for creating adjacent notes.
 
 ## Release workflow

@@ -23,6 +23,12 @@ const files: RelatedDocumentWorkflowFileInfo[] = [
 		path: 'Refs/Reference.md',
 	},
 	{
+		isProject: false,
+		name: 'Local.md',
+		parentPath: 'Projects/Alpha/docs',
+		path: 'Projects/Alpha/docs/Local.md',
+	},
+	{
 		isProject: true,
 		name: 'Other.md',
 		parentPath: 'Projects/Beta',
@@ -104,5 +110,22 @@ describe('buildRelatedDocumentMovePlans', () => {
 		});
 
 		assert.equal(result.plans[0]?.targetPath, 'Projects/Alpha/related/Task 1.md');
+	});
+
+	it('skips documents that are already anywhere inside the project folder', () => {
+		const result = buildRelatedDocumentMovePlans({
+			files,
+			pathExists: () => false,
+			relationState: {
+				projectMarkdownLinksBySourcePath: {
+					'Projects/Alpha/Project.md': ['Projects/Alpha/docs/Local.md'],
+				},
+				sourceTargetsByPath: {},
+			},
+			targetSubfolderPath: 'related',
+		});
+
+		assert.deepEqual(result.plans, []);
+		assert.equal(result.stats.alreadyInProjectFolderCount, 1);
 	});
 });

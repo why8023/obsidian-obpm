@@ -18,6 +18,7 @@ export interface RelatedDocumentMovePlan {
 }
 
 export interface RelatedDocumentMovePlanStats {
+	alreadyInProjectFolderCount: number;
 	alreadyInTargetCount: number;
 	ambiguousDocumentCount: number;
 	missingEndpointCount: number;
@@ -41,6 +42,7 @@ export function buildRelatedDocumentMovePlans(options: RelatedDocumentMovePlanOp
 	const filesByPath = new Map(options.files.map((file) => [file.path, file] as const));
 	const projectPathsByDocumentPath = new Map<string, Set<string>>();
 	const stats: RelatedDocumentMovePlanStats = {
+		alreadyInProjectFolderCount: 0,
 		alreadyInTargetCount: 0,
 		ambiguousDocumentCount: 0,
 		missingEndpointCount: 0,
@@ -93,6 +95,11 @@ export function buildRelatedDocumentMovePlans(options: RelatedDocumentMovePlanOp
 		const projectFile = projectPath ? filesByPath.get(projectPath) : null;
 		if (!documentFile || !projectFile) {
 			stats.missingEndpointCount += 1;
+			continue;
+		}
+
+		if (isPathInsideFolderPath(documentFile.path, projectFile.parentPath)) {
+			stats.alreadyInProjectFolderCount += 1;
 			continue;
 		}
 

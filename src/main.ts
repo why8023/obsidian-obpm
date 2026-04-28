@@ -7,6 +7,10 @@ import {FileNameSyncFeature} from './features/file-name-sync/file-name-sync-feat
 import {FrontmatterAutomationFeature} from './features/frontmatter-automation/frontmatter-automation-feature';
 import {ProjectRoutingFeature} from './features/project-routing/project-routing-feature';
 import {RelatedDocumentWorkflowFeature} from './features/related-document-workflow/related-document-workflow-feature';
+import {
+	normalizeRelatedDocumentWorkflowUndoBatch,
+	RelatedDocumentWorkflowUndoBatch,
+} from './features/related-document-workflow/related-document-workflow-history';
 import {RelatedLinksFeature} from './features/related-links/related-links-feature';
 import {SameFolderNoteFeature} from './features/same-folder-note/same-folder-note-feature';
 import {normalizeRelatedLinksState} from './features/related-links/related-links-state-store';
@@ -15,11 +19,13 @@ import {RefreshableFeatureId, SaveSettingsOptions} from './save-settings-options
 import {normalizePluginSettings, OBPMPluginSettingTab, OBPMPluginSettings} from './settings';
 
 interface OBPMPluginData extends Partial<OBPMPluginSettings> {
+	relatedDocumentWorkflowUndoBatch?: unknown;
 	relatedLinksState?: unknown;
 }
 
 export default class OBPMPlugin extends Plugin {
 	settings: OBPMPluginSettings;
+	private relatedDocumentWorkflowUndoBatch: RelatedDocumentWorkflowUndoBatch | null = null;
 	private relatedLinksState: RelatedLinksState = normalizeRelatedLinksState(null);
 	private basesFileRevealFeature: BasesFileRevealFeature | null = null;
 	private basesGroupFoldFeature: BasesGroupFoldFeature | null = null;
@@ -68,6 +74,9 @@ export default class OBPMPlugin extends Plugin {
 	async loadSettings() {
 		const loadedData = await this.loadData() as OBPMPluginData | null;
 		this.settings = normalizePluginSettings(loadedData);
+		this.relatedDocumentWorkflowUndoBatch = normalizeRelatedDocumentWorkflowUndoBatch(
+			loadedData?.relatedDocumentWorkflowUndoBatch,
+		);
 		this.relatedLinksState = normalizeRelatedLinksState(loadedData?.relatedLinksState);
 	}
 
@@ -98,6 +107,15 @@ export default class OBPMPlugin extends Plugin {
 		}
 
 		await this.relatedLinksFeature.runFullSync();
+	}
+
+	getRelatedDocumentWorkflowUndoBatch(): RelatedDocumentWorkflowUndoBatch | null {
+		return normalizeRelatedDocumentWorkflowUndoBatch(this.relatedDocumentWorkflowUndoBatch);
+	}
+
+	async saveRelatedDocumentWorkflowUndoBatch(batch: RelatedDocumentWorkflowUndoBatch | null): Promise<void> {
+		this.relatedDocumentWorkflowUndoBatch = normalizeRelatedDocumentWorkflowUndoBatch(batch);
+		await this.persistPluginData();
 	}
 
 	debugLog(message: string, details?: unknown) {
@@ -181,6 +199,7 @@ export default class OBPMPlugin extends Plugin {
 	private async persistPluginData(): Promise<void> {
 		await this.saveData({
 			...this.settings,
+			relatedDocumentWorkflowUndoBatch: this.relatedDocumentWorkflowUndoBatch,
 			relatedLinksState: this.relatedLinksState,
 		});
 	}
