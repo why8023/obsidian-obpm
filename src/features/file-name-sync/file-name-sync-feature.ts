@@ -10,6 +10,7 @@ interface PendingFileUpdate {
 export class FileNameSyncFeature extends Component {
 	private readonly pendingFileUpdates = new Map<string, PendingFileUpdate>();
 	private readonly pendingOwnRenames = new Map<string, string>();
+	private eventListenersRegistered = false;
 	private flushTimer: number | null = null;
 	private hasInitialized = false;
 	private workQueue = Promise.resolve();
@@ -19,29 +20,8 @@ export class FileNameSyncFeature extends Component {
 	}
 
 	onload() {
-		this.registerEvent(this.plugin.app.metadataCache.on('changed', (file, _data, cache) => {
-			this.queueFileUpdate(file, cache);
-		}));
-
-		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
-			if (this.isMarkdownFile(file)) {
-				this.queueFileUpdate(file);
-			}
-		}));
-
-		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
-			if (!this.isMarkdownFile(file)) {
-				return;
-			}
-
-			if (this.shouldIgnoreOwnRename(file, oldPath)) {
-				return;
-			}
-
-			this.queueFileUpdate(file);
-		}));
-
 		this.plugin.app.workspace.onLayoutReady(() => {
+			this.ensureEventListenersRegistered();
 			void this.refresh();
 		});
 	}
@@ -80,6 +60,35 @@ export class FileNameSyncFeature extends Component {
 				this.handleError(error);
 			}
 		});
+	}
+
+	private ensureEventListenersRegistered(): void {
+		if (this.eventListenersRegistered) {
+			return;
+		}
+
+		this.eventListenersRegistered = true;
+		this.registerEvent(this.plugin.app.metadataCache.on('changed', (file, _data, cache) => {
+			this.queueFileUpdate(file, cache);
+		}));
+
+		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
+			if (this.isMarkdownFile(file)) {
+				this.queueFileUpdate(file);
+			}
+		}));
+
+		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
+			if (!this.isMarkdownFile(file)) {
+				return;
+			}
+
+			if (this.shouldIgnoreOwnRename(file, oldPath)) {
+				return;
+			}
+
+			this.queueFileUpdate(file);
+		}));
 	}
 
 	private queueFileUpdate(file: TFile, cache: CachedMetadata | null = this.plugin.app.metadataCache.getFileCache(file)) {

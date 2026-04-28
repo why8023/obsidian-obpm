@@ -3,16 +3,17 @@ import OBPMPlugin from '../../main';
 import {ProjectFileRecognitionOptions} from '../project-routing/project-resolver';
 import {FrontmatterAutomationService} from './frontmatter-automation-service';
 import {FrontmatterAutomationProjectMoveAction, FrontmatterSnapshot} from './frontmatter-automation-types';
-import {areFrontmatterSnapshotsEqual, createFrontmatterSnapshot} from './frontmatter-automation-utils';
+import {
+	UNAVAILABLE_FRONTMATTER_SNAPSHOT,
+	areFrontmatterSnapshotsEqual,
+	createFrontmatterSnapshot,
+	createFrontmatterSnapshotFromMetadataCache,
+} from './frontmatter-automation-utils';
 import {ensureFileInProjectFolder} from './project-placement-action';
 
 const DEFAULT_FLUSH_DELAY_MS = 200;
 const EMPTY_FRONTMATTER_SNAPSHOT: FrontmatterSnapshot = Object.freeze({});
 const OWN_WRITE_TTL_MS = 5000;
-const UNAVAILABLE_FRONTMATTER_SNAPSHOT = Symbol('unavailable-frontmatter-snapshot');
-
-type AvailableFrontmatterSnapshot = FrontmatterSnapshot | null;
-type MetadataCacheSnapshot = AvailableFrontmatterSnapshot | typeof UNAVAILABLE_FRONTMATTER_SNAPSHOT;
 
 interface PendingMetadataChange {
 	file: TFile;
@@ -34,6 +35,7 @@ export class FrontmatterAutomationFeature extends Component {
 	private readonly service = new FrontmatterAutomationService();
 	private readonly stableSnapshots = new Map<string, FrontmatterSnapshot>();
 	private flushTimer: number | null = null;
+	private eventListenersRegistered = false;
 	private stateGeneration = 0;
 
 	constructor(private readonly plugin: OBPMPlugin) {
@@ -41,23 +43,8 @@ export class FrontmatterAutomationFeature extends Component {
 	}
 
 	onload() {
-		this.registerEvent(this.plugin.app.metadataCache.on('changed', (file, _data, cache) => {
-			this.handleMetadataChanged(file, cache);
-		}));
-
-		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
-			this.handleFileCreated(file);
-		}));
-
-		this.registerEvent(this.plugin.app.vault.on('delete', (file) => {
-			this.handleFileDeleted(file);
-		}));
-
-		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
-			this.handleFileRenamed(file, oldPath);
-		}));
-
 		this.plugin.app.workspace.onLayoutReady(() => {
+			this.ensureEventListenersRegistered();
 			void this.refresh();
 		});
 	}
@@ -117,6 +104,29 @@ export class FrontmatterAutomationFeature extends Component {
 		return nextTask;
 	}
 
+	private ensureEventListenersRegistered(): void {
+		if (this.eventListenersRegistered) {
+			return;
+		}
+
+		this.eventListenersRegistered = true;
+		this.registerEvent(this.plugin.app.metadataCache.on('changed', (file, _data, cache) => {
+			this.handleMetadataChanged(file, cache);
+		}));
+
+		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
+			this.handleFileCreated(file);
+		}));
+
+		this.registerEvent(this.plugin.app.vault.on('delete', (file) => {
+			this.handleFileDeleted(file);
+		}));
+
+		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
+			this.handleFileRenamed(file, oldPath);
+		}));
+	}
+
 	private async flushPendingWork(): Promise<void> {
 		if (!this.isEnabled()) {
 			this.pendingMetadataChanges.clear();
@@ -146,7 +156,12 @@ export class FrontmatterAutomationFeature extends Component {
 			return;
 		}
 
-		this.setStableSnapshot(file.path, createFrontmatterSnapshot(this.plugin.app.metadataCache.getFileCache(file)?.frontmatter));
+		const snapshot = createFrontmatterSnapshotFromMetadataCache(this.plugin.app.metadataCache.getFileCache(file));
+		if (snapshot === UNAVAILABLE_FRONTMATTER_SNAPSHOT) {
+			return;
+		}
+
+		this.setStableSnapshot(file.path, snapshot);
 	}
 
 	private handleFileDeleted(file: TAbstractFile): void {
@@ -185,7 +200,7 @@ export class FrontmatterAutomationFeature extends Component {
 			return;
 		}
 
-		const snapshot = createSnapshotFromMetadataCache(cache);
+		const snapshot = createFrontmatterSnapshotFromMetadataCache(cache);
 		if (snapshot === UNAVAILABLE_FRONTMATTER_SNAPSHOT) {
 			return;
 		}
@@ -348,7 +363,7 @@ export class FrontmatterAutomationFeature extends Component {
 
 	private primeSnapshotsFromMetadataCache(): void {
 		for (const file of this.plugin.app.vault.getMarkdownFiles()) {
-			const snapshot = createSnapshotFromMetadataCache(this.plugin.app.metadataCache.getFileCache(file));
+			const snapshot = createFrontmatterSnapshotFromMetadataCache(this.plugin.app.metadataCache.getFileCache(file));
 			if (snapshot === UNAVAILABLE_FRONTMATTER_SNAPSHOT) {
 				continue;
 			}
@@ -407,12 +422,4 @@ function moveMapValue<T>(map: Map<string, T>, fromPath: string, toPath: string):
 
 	map.delete(fromPath);
 	map.set(toPath, value);
-}
-
-function createSnapshotFromMetadataCache(cache: CachedMetadata | null): MetadataCacheSnapshot {
-	if (cache === null) {
-		return UNAVAILABLE_FRONTMATTER_SNAPSHOT;
-	}
-
-	return createFrontmatterSnapshot(cache.frontmatter);
 }

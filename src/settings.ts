@@ -1,4 +1,4 @@
-import {App, Notice, PluginSettingTab, Setting} from 'obsidian';
+import {App, Notice, PluginSettingTab, Setting, ToggleComponent} from 'obsidian';
 import OBPMPlugin from './main';
 import {
 	DEFAULT_FILE_NAME_MAX_LENGTH,
@@ -1773,21 +1773,16 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					text: `${rule.triggerField || strings.frontmatterAutomationTriggerFieldPlaceholder} -> ${actionTypeLabel}`,
 				});
 				const headerActionsEl = headerEl.createDiv({cls: 'obpm-automation-rule-card-actions'});
-				const enabledInputEl = headerActionsEl.createEl('input', {
-					attr: {
-						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationRuleEnabledName}`,
-						type: 'checkbox',
-					},
-				});
-				enabledInputEl.checked = rule.enabled;
-				enabledInputEl.addEventListener('change', () => {
-					void (async () => {
+				const enabledToggle = new ToggleComponent(headerActionsEl)
+					.setValue(rule.enabled)
+					.setTooltip(strings.frontmatterAutomationRuleEnabledDesc)
+					.onChange(async (enabled) => {
 						await updateRule((currentRule) => ({
 							...currentRule,
-							enabled: enabledInputEl.checked,
+							enabled,
 						}));
-					})();
-				});
+					});
+				enabledToggle.toggleEl.setAttribute('aria-label', `${ruleLabel} ${strings.frontmatterAutomationRuleEnabledName}`);
 				const removeButtonEl = headerActionsEl.createEl('button', {
 					cls: 'mod-warning',
 					text: options.removeRuleButton,

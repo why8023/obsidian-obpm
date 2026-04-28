@@ -1,5 +1,13 @@
 import {FrontmatterAutomationAction, FrontmatterSnapshot} from './frontmatter-automation-types';
 
+export const UNAVAILABLE_FRONTMATTER_SNAPSHOT = Symbol('unavailable-frontmatter-snapshot');
+
+export interface FrontmatterMetadataCacheLike {
+	frontmatter?: Record<string, unknown> | null;
+}
+
+export type MetadataCacheSnapshot = FrontmatterSnapshot | null | typeof UNAVAILABLE_FRONTMATTER_SNAPSHOT;
+
 export function areFrontmatterSnapshotsEqual(
 	left: FrontmatterSnapshot | null,
 	right: FrontmatterSnapshot | null,
@@ -26,6 +34,16 @@ export function createFrontmatterSnapshot(frontmatter: Record<string, unknown> |
 	}
 
 	return snapshot;
+}
+
+export function createFrontmatterSnapshotFromMetadataCache(
+	cache: FrontmatterMetadataCacheLike | null,
+): MetadataCacheSnapshot {
+	if (cache === null) {
+		return UNAVAILABLE_FRONTMATTER_SNAPSHOT;
+	}
+
+	return createFrontmatterSnapshot(cache.frontmatter);
 }
 
 export function createSnapshotWithAppliedActions(

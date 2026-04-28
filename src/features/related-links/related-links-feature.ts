@@ -65,6 +65,7 @@ export class RelatedLinksFeature extends Component {
 	private flushTimer: number | null = null;
 	private fullSyncQueued = false;
 	private hasInitialized = false;
+	private eventListenersRegistered = false;
 	private pendingFullSyncAfterMetadataResolved = false;
 	private missingLinkGraceTimer: number | null = null;
 	private workQueue = Promise.resolve();
@@ -75,31 +76,8 @@ export class RelatedLinksFeature extends Component {
 	}
 
 	onload() {
-		this.registerEvent(this.plugin.app.metadataCache.on('changed', (file, data, cache) => {
-			this.queueChangedFile(file, data, cache);
-		}));
-
-		this.registerEvent(this.plugin.app.metadataCache.on('deleted', (file, prevCache) => {
-			this.queueDeletedFile(file, prevCache);
-		}));
-
-		this.registerEvent(this.plugin.app.metadataCache.on('resolved', () => {
-			this.handleMetadataResolved();
-		}));
-
-		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
-			if (this.isMarkdownFile(file)) {
-				this.queueCreatedFile(file);
-			}
-		}));
-
-		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
-			if (this.isMarkdownFile(file)) {
-				this.queueRenamedFile(file, oldPath);
-			}
-		}));
-
 		this.plugin.app.workspace.onLayoutReady(() => {
+			this.ensureEventListenersRegistered();
 			void this.refresh();
 		});
 	}
@@ -167,6 +145,37 @@ export class RelatedLinksFeature extends Component {
 				this.handleError(error, options.notifyOnError ?? true);
 			}
 		});
+	}
+
+	private ensureEventListenersRegistered(): void {
+		if (this.eventListenersRegistered) {
+			return;
+		}
+
+		this.eventListenersRegistered = true;
+		this.registerEvent(this.plugin.app.metadataCache.on('changed', (file, data, cache) => {
+			this.queueChangedFile(file, data, cache);
+		}));
+
+		this.registerEvent(this.plugin.app.metadataCache.on('deleted', (file, prevCache) => {
+			this.queueDeletedFile(file, prevCache);
+		}));
+
+		this.registerEvent(this.plugin.app.metadataCache.on('resolved', () => {
+			this.handleMetadataResolved();
+		}));
+
+		this.registerEvent(this.plugin.app.vault.on('create', (file) => {
+			if (this.isMarkdownFile(file)) {
+				this.queueCreatedFile(file);
+			}
+		}));
+
+		this.registerEvent(this.plugin.app.vault.on('rename', (file, oldPath) => {
+			if (this.isMarkdownFile(file)) {
+				this.queueRenamedFile(file, oldPath);
+			}
+		}));
 	}
 
 	private queueChangedFile(file: TFile, data: string, cache: CachedMetadata | null) {
