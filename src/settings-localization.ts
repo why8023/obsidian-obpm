@@ -67,6 +67,41 @@ export interface SettingsLocalization {
 	relatedDocumentWorkflowTargetSubfolderPathName: string;
 	relatedDocumentWorkflowTargetSubfolderPathDesc: string;
 	relatedDocumentWorkflowTargetSubfolderPathPlaceholder: string;
+	pinnedProjectHeading: string;
+	pinnedProjectDesc: string;
+	pinnedProjectEnableName: string;
+	pinnedProjectEnableDesc: string;
+	pinnedProjectCurrentName: string;
+	pinnedProjectCurrentDesc: (projectPath: string) => string;
+	pinnedProjectNoCurrentDesc: string;
+	pinnedProjectClearButton: string;
+	pinnedProjectLinkModeName: string;
+	pinnedProjectLinkModeDesc: string;
+	pinnedProjectLinkModeFrontmatterLabel: string;
+	pinnedProjectLinkModeProjectSectionLabel: string;
+	pinnedProjectSectionHeadingName: string;
+	pinnedProjectSectionHeadingDesc: string;
+	pinnedProjectSectionHeadingPlaceholder: string;
+	pinnedProjectIncludeRulesHeading: string;
+	pinnedProjectIncludeRulesDesc: string;
+	pinnedProjectIncludeRuleLabel: (index: number) => string;
+	pinnedProjectNoIncludeRules: string;
+	pinnedProjectAddIncludeRuleName: string;
+	pinnedProjectAddIncludeRuleDesc: string;
+	pinnedProjectAddIncludeRuleButton: string;
+	pinnedProjectRemoveIncludeRuleName: string;
+	pinnedProjectRemoveIncludeRuleDesc: string;
+	pinnedProjectRemoveIncludeRuleButton: string;
+	pinnedProjectExcludeRulesHeading: string;
+	pinnedProjectExcludeRulesDesc: string;
+	pinnedProjectExcludeRuleLabel: (index: number) => string;
+	pinnedProjectNoExcludeRules: string;
+	pinnedProjectAddExcludeRuleName: string;
+	pinnedProjectAddExcludeRuleDesc: string;
+	pinnedProjectAddExcludeRuleButton: string;
+	pinnedProjectRemoveExcludeRuleName: string;
+	pinnedProjectRemoveExcludeRuleDesc: string;
+	pinnedProjectRemoveExcludeRuleButton: string;
 	relatedLinksHeading: string;
 	enableRelatedLinksName: string;
 	enableRelatedLinksDesc: string;
@@ -286,6 +321,41 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	relatedDocumentWorkflowTargetSubfolderPathName: 'Target subfolder path',
 	relatedDocumentWorkflowTargetSubfolderPathDesc: 'Move related documents into this child folder under the project folder. Leave empty to use the project folder itself.',
 	relatedDocumentWorkflowTargetSubfolderPathPlaceholder: 'related',
+	pinnedProjectHeading: 'Pinned project links',
+	pinnedProjectDesc: 'Bind new related markdown files to one pinned project.',
+	pinnedProjectEnableName: 'Enable pinned project links',
+	pinnedProjectEnableDesc: 'When a project is pinned, new related markdown files are automatically linked to it.',
+	pinnedProjectCurrentName: 'Pinned project',
+	pinnedProjectCurrentDesc: (projectPath) => `Current pinned project: ${projectPath}`,
+	pinnedProjectNoCurrentDesc: 'No project is pinned. Use the command palette or a project file menu to pin one.',
+	pinnedProjectClearButton: 'Clear',
+	pinnedProjectLinkModeName: 'Link mode',
+	pinnedProjectLinkModeDesc: 'Choose where the automatic project relation is written.',
+	pinnedProjectLinkModeFrontmatterLabel: 'Relation property',
+	pinnedProjectLinkModeProjectSectionLabel: 'Project section',
+	pinnedProjectSectionHeadingName: 'Project section heading',
+	pinnedProjectSectionHeadingDesc: 'When using project-section mode, insert links under the first matching level-2 heading in the pinned project file.',
+	pinnedProjectSectionHeadingPlaceholder: 'related',
+	pinnedProjectIncludeRulesHeading: 'Include rules',
+	pinnedProjectIncludeRulesDesc: 'When empty, every new markdown file is included. When configured, a new file must match at least one include rule.',
+	pinnedProjectIncludeRuleLabel: (index) => `Include rule ${index}`,
+	pinnedProjectNoIncludeRules: 'No include rules are configured, so all new markdown files are included unless excluded below.',
+	pinnedProjectAddIncludeRuleName: 'Add include rule',
+	pinnedProjectAddIncludeRuleDesc: 'Append a frontmatter rule that allows pinned-project linking.',
+	pinnedProjectAddIncludeRuleButton: 'Add rule',
+	pinnedProjectRemoveIncludeRuleName: 'Remove this include rule',
+	pinnedProjectRemoveIncludeRuleDesc: 'Delete this pinned-project include rule.',
+	pinnedProjectRemoveIncludeRuleButton: 'Remove rule',
+	pinnedProjectExcludeRulesHeading: 'Exclude rules',
+	pinnedProjectExcludeRulesDesc: 'A new file matching any exclude rule is never linked to the pinned project.',
+	pinnedProjectExcludeRuleLabel: (index) => `Exclude rule ${index}`,
+	pinnedProjectNoExcludeRules: 'No exclude rules are configured.',
+	pinnedProjectAddExcludeRuleName: 'Add exclude rule',
+	pinnedProjectAddExcludeRuleDesc: 'Append a frontmatter rule that blocks pinned-project linking.',
+	pinnedProjectAddExcludeRuleButton: 'Add rule',
+	pinnedProjectRemoveExcludeRuleName: 'Remove this exclude rule',
+	pinnedProjectRemoveExcludeRuleDesc: 'Delete this pinned-project exclude rule.',
+	pinnedProjectRemoveExcludeRuleButton: 'Remove rule',
 	relatedLinksHeading: 'Related frontmatter links',
 	enableRelatedLinksName: 'Enable related frontmatter links',
 	enableRelatedLinksDesc: 'Automatically add this note into the notes referenced by a frontmatter property.',
@@ -506,6 +576,41 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	relatedDocumentWorkflowTargetSubfolderPathName: '目标子目录路径',
 	relatedDocumentWorkflowTargetSubfolderPathDesc: '把关联文档移动到项目文件夹下的这个子目录中。留空则使用项目文件夹本身。',
 	relatedDocumentWorkflowTargetSubfolderPathPlaceholder: 'related',
+	pinnedProjectHeading: '固定项目关联',
+	pinnedProjectDesc: '把后续新建的相关 Markdown 文件自动绑定到一个固定项目。',
+	pinnedProjectEnableName: '启用固定项目关联',
+	pinnedProjectEnableDesc: '当存在固定项目时，后续新建的相关 Markdown 文件会自动链接到这个项目。',
+	pinnedProjectCurrentName: '当前固定项目',
+	pinnedProjectCurrentDesc: (projectPath) => `当前固定项目：${projectPath}`,
+	pinnedProjectNoCurrentDesc: '当前没有固定项目。可通过命令面板或项目文件右键菜单固定项目。',
+	pinnedProjectClearButton: '清除',
+	pinnedProjectLinkModeName: '关联写入方式',
+	pinnedProjectLinkModeDesc: '选择自动项目关联写到哪里。',
+	pinnedProjectLinkModeFrontmatterLabel: '关联属性',
+	pinnedProjectLinkModeProjectSectionLabel: '项目章节',
+	pinnedProjectSectionHeadingName: '项目章节标题',
+	pinnedProjectSectionHeadingDesc: '使用项目章节模式时，把链接插入固定项目文件中第一个匹配的二级标题下。',
+	pinnedProjectSectionHeadingPlaceholder: 'related',
+	pinnedProjectIncludeRulesHeading: '包含规则',
+	pinnedProjectIncludeRulesDesc: '留空时包含所有新建 Markdown 文件。配置后，新文件必须命中至少一条包含规则才会关联。',
+	pinnedProjectIncludeRuleLabel: (index) => `包含规则 ${index}`,
+	pinnedProjectNoIncludeRules: '当前没有包含规则，因此所有新建 Markdown 文件都会被包含，除非被下面的排除规则命中。',
+	pinnedProjectAddIncludeRuleName: '添加包含规则',
+	pinnedProjectAddIncludeRuleDesc: '添加一条允许固定项目关联的 frontmatter 规则。',
+	pinnedProjectAddIncludeRuleButton: '添加规则',
+	pinnedProjectRemoveIncludeRuleName: '删除这条包含规则',
+	pinnedProjectRemoveIncludeRuleDesc: '从列表中移除这条固定项目包含规则。',
+	pinnedProjectRemoveIncludeRuleButton: '删除规则',
+	pinnedProjectExcludeRulesHeading: '排除规则',
+	pinnedProjectExcludeRulesDesc: '新文件命中任意排除规则时，不会关联到固定项目。',
+	pinnedProjectExcludeRuleLabel: (index) => `排除规则 ${index}`,
+	pinnedProjectNoExcludeRules: '当前没有排除规则。',
+	pinnedProjectAddExcludeRuleName: '添加排除规则',
+	pinnedProjectAddExcludeRuleDesc: '添加一条阻止固定项目关联的 frontmatter 规则。',
+	pinnedProjectAddExcludeRuleButton: '添加规则',
+	pinnedProjectRemoveExcludeRuleName: '删除这条排除规则',
+	pinnedProjectRemoveExcludeRuleDesc: '从列表中移除这条固定项目排除规则。',
+	pinnedProjectRemoveExcludeRuleButton: '删除规则',
 	relatedLinksHeading: '关联属性链接',
 	enableRelatedLinksName: '启用关联属性链接',
 	enableRelatedLinksDesc: '当某个属性引用了其他笔记时，自动把当前笔记回填到那些被引用笔记里。',
