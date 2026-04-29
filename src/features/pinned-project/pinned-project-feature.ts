@@ -1,5 +1,6 @@
 import {CachedMetadata, Component, Menu, Notice, TAbstractFile, TFile} from 'obsidian';
 import OBPMPlugin from '../../main';
+import {getExpectedFileNameSyncPath} from '../file-name-sync/file-name-sync-utils';
 import {PendingProjectRoutingQueue} from '../project-routing/pending-queue';
 import {
 	appendUniqueRelationLinkValue,
@@ -274,6 +275,17 @@ export class PinnedProjectFeature extends Component {
 			return;
 		}
 
+		const expectedRenamePath = this.getExpectedFileNameSyncPath(file, cache);
+		if (expectedRenamePath) {
+			const retryDelayMs = this.pendingQueue.defer(filePath);
+			this.debugLog('Deferred pinned relation target linking because file-name sync is expected to rename the file.', {
+				expectedRenamePath,
+				filePath,
+				retryDelayMs,
+			});
+			return;
+		}
+
 		this.processingPaths.add(filePath);
 		try {
 			await this.appendLinkToRelationProperty(file, targetFile);
@@ -297,6 +309,29 @@ export class PinnedProjectFeature extends Component {
 		return getPinnedProjectRuleDecision(cache, {
 			excludeRules: this.plugin.settings.pinnedRelationTarget.excludeRules,
 			includeRules: this.plugin.settings.pinnedRelationTarget.includeRules,
+		});
+	}
+
+	private getExpectedFileNameSyncPath(file: TFile, cache: CachedMetadata | null): string | null {
+		if (!this.plugin.settings.fileNameSync.enabled) {
+			return null;
+		}
+
+		return getExpectedFileNameSyncPath({
+			file: {
+				basename: file.basename,
+				extension: file.extension,
+				parentPath: file.parent?.path ?? '',
+				path: file.path,
+			},
+			frontmatter: cache?.frontmatter,
+			invalidCharacterReplacement: this.plugin.settings.fileNameSync.invalidCharacterReplacement,
+			maxLength: this.plugin.settings.fileNameSync.maxFileNameLength,
+			pathExists: (candidatePath) => {
+				const existingFile = this.plugin.app.vault.getAbstractFileByPath(candidatePath);
+				return Boolean(existingFile && existingFile.path !== file.path);
+			},
+			propertyName: this.plugin.settings.fileNameSync.propertyName,
 		});
 	}
 

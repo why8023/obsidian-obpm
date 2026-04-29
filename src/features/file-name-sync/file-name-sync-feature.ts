@@ -1,6 +1,6 @@
-import {CachedMetadata, Component, Notice, normalizePath, TAbstractFile, TFile} from 'obsidian';
+import {CachedMetadata, Component, Notice, TAbstractFile, TFile} from 'obsidian';
 import OBPMPlugin from '../../main';
-import {getFileNamePropertyValue, sanitizeFileBasename} from './file-name-sync-utils';
+import {getExpectedFileNameSyncPath} from './file-name-sync-utils';
 
 interface PendingFileUpdate {
 	cache: CachedMetadata | null;
@@ -141,26 +141,23 @@ export class FileNameSyncFeature extends Component {
 	}
 
 	private async syncFileName(file: TFile, cache: CachedMetadata | null = this.plugin.app.metadataCache.getFileCache(file)) {
-		const propertyName = this.plugin.settings.fileNameSync.propertyName.trim();
-		if (!propertyName) {
-			return;
-		}
-
-		const propertyValue = getFileNamePropertyValue(cache?.frontmatter, propertyName);
-		if (!propertyValue) {
-			return;
-		}
-
-		const nextBasename = sanitizeFileBasename(propertyValue, {
+		const nextPath = getExpectedFileNameSyncPath({
+			file: {
+				basename: file.basename,
+				extension: file.extension,
+				parentPath: file.parent?.path ?? '',
+				path: file.path,
+			},
+			frontmatter: cache?.frontmatter,
 			invalidCharacterReplacement: this.plugin.settings.fileNameSync.invalidCharacterReplacement,
 			maxLength: this.plugin.settings.fileNameSync.maxFileNameLength,
+			pathExists: (candidatePath) => {
+				const existingFile = this.plugin.app.vault.getAbstractFileByPath(candidatePath);
+				return Boolean(existingFile && existingFile.path !== file.path);
+			},
+			propertyName: this.plugin.settings.fileNameSync.propertyName,
 		});
-		if (!nextBasename || nextBasename === file.basename) {
-			return;
-		}
-
-		const nextPath = this.buildTargetPath(file, nextBasename);
-		if (nextPath === file.path) {
+		if (!nextPath) {
 			return;
 		}
 
@@ -169,8 +166,7 @@ export class FileNameSyncFeature extends Component {
 			console.warn('[OBPM] Skipped file name sync because the target path already exists.', {
 				currentPath: file.path,
 				nextPath,
-				propertyName,
-				propertyValue,
+				propertyName: this.plugin.settings.fileNameSync.propertyName,
 			});
 			return;
 		}
@@ -182,12 +178,6 @@ export class FileNameSyncFeature extends Component {
 			this.pendingOwnRenames.delete(file.path);
 			throw error;
 		}
-	}
-
-	private buildTargetPath(file: TFile, nextBasename: string): string {
-		const parentPath = file.parent?.path ?? '';
-		const nextFileName = `${nextBasename}.${file.extension}`;
-		return parentPath ? normalizePath(`${parentPath}/${nextFileName}`) : nextFileName;
 	}
 
 	private shouldIgnoreOwnRename(file: TFile, oldPath: string): boolean {

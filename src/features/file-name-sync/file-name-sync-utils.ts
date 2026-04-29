@@ -1,4 +1,4 @@
-import {FrontMatterCache} from 'obsidian';
+import type {FrontMatterCache} from 'obsidian';
 
 export const DEFAULT_FILE_NAME_MAX_LENGTH = 50;
 export const MIN_FILE_NAME_MAX_LENGTH = 10;
@@ -11,6 +11,18 @@ const INVALID_FILE_NAME_CHARACTERS = new Set(['<', '>', ':', '"', '/', '\\', '|'
 export interface FileNameSanitizationOptions {
 	invalidCharacterReplacement: string;
 	maxLength: number;
+}
+
+export interface ExpectedFileNameSyncPathOptions extends FileNameSanitizationOptions {
+	file: {
+		basename: string;
+		extension: string;
+		parentPath: string;
+		path: string;
+	};
+	frontmatter: FrontMatterCache | undefined;
+	pathExists: (path: string) => boolean;
+	propertyName: string;
 }
 
 export function getFileNamePropertyValue(frontmatter: FrontMatterCache | undefined, property: string): string | null {
@@ -27,6 +39,36 @@ export function getFileNamePropertyValue(frontmatter: FrontMatterCache | undefin
 	}
 
 	return null;
+}
+
+export function getExpectedFileNameSyncPath(options: ExpectedFileNameSyncPathOptions): string | null {
+	const propertyName = options.propertyName.trim();
+	if (!propertyName) {
+		return null;
+	}
+
+	const propertyValue = getFileNamePropertyValue(options.frontmatter, propertyName);
+	if (!propertyValue) {
+		return null;
+	}
+
+	const nextBasename = sanitizeFileBasename(propertyValue, {
+		invalidCharacterReplacement: options.invalidCharacterReplacement,
+		maxLength: options.maxLength,
+	});
+	if (!nextBasename || nextBasename === options.file.basename) {
+		return null;
+	}
+
+	const nextFileName = `${nextBasename}.${options.file.extension}`;
+	const nextPath = options.file.parentPath
+		? normalizeVaultPath(`${options.file.parentPath}/${nextFileName}`)
+		: nextFileName;
+	if (nextPath === options.file.path) {
+		return null;
+	}
+
+	return options.pathExists(nextPath) ? null : nextPath;
 }
 
 export function sanitizeFileBasename(value: string, options: FileNameSanitizationOptions): string | null {
@@ -89,6 +131,10 @@ function flattenFrontmatterValues(value: unknown): string[] {
 	}
 
 	return [];
+}
+
+function normalizeVaultPath(path: string): string {
+	return path.replace(/\\/g, '/').replace(/\/{2,}/g, '/');
 }
 
 function trimTrailingUnsafeCharacters(value: string): string {
