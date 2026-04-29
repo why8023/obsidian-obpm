@@ -2,26 +2,14 @@ import {CachedMetadata, Component, Menu, Notice, TAbstractFile, TFile} from 'obs
 import OBPMPlugin from '../../main';
 import {PendingProjectRoutingQueue} from '../project-routing/pending-queue';
 import {
-	isProjectFile,
-	ProjectFileRecognitionOptions,
-	resolveCurrentProject,
-} from '../project-routing/project-resolver';
-import {getDisplayText} from '../related-links/source-index';
-import {
 	appendUniqueRelationLinkValue,
-	buildProjectWikilinkValue,
+	buildTargetWikilinkValue,
 } from './frontmatter-relation';
-import {
-	buildMarkdownListItemForWikilink,
-	getHeadingSectionContent,
-	insertListItemIntoHeadingSection,
-	wikilinkSectionContainsPath,
-} from './markdown-section';
 import {getPinnedProjectLocalization} from './pinned-project-localization';
 import {getPinnedProjectRuleDecision, PinnedProjectRuleDecision} from './pinned-project-rules';
 import {PinnedProjectStatusBar} from './pinned-project-status-bar';
 
-const FEATURE_ID = 'pinned-project';
+const FEATURE_ID = 'pinned-relation-target';
 const MAX_PENDING_FILE_AGE_MS = 120000;
 const PROCESS_DELAY_MS = 1200;
 
@@ -41,29 +29,29 @@ export class PinnedProjectFeature extends Component {
 
 	onload() {
 		this.plugin.addCommand({
-			id: 'pin-current-project',
+			id: 'pin-current-file-as-relation-target',
 			name: this.localization.pinCommandName,
 			callback: async () => {
-				const projectFile = this.getCurrentProjectFile();
-				if (!projectFile) {
-					new Notice(this.localization.noProjectNotice);
+				const targetFile = this.getCurrentMarkdownFile();
+				if (!targetFile) {
+					new Notice(this.localization.noTargetNotice);
 					return;
 				}
 
-				await this.pinProject(projectFile);
+				await this.pinTarget(targetFile);
 			},
 		});
 
 		this.plugin.addCommand({
-			id: 'clear-pinned-project',
+			id: 'clear-pinned-relation-target',
 			name: this.localization.clearCommandName,
 			callback: async () => {
-				await this.clearPinnedProject(true);
+				await this.clearPinnedTarget(true);
 			},
 		});
 
 		this.registerEvent(this.plugin.app.workspace.on('file-menu', (menu, file) => {
-			this.registerProjectFileMenuItem(menu, file);
+			this.registerTargetFileMenuItem(menu, file);
 		}));
 
 		this.registerEvent(this.plugin.app.workspace.on('files-menu', (menu, files) => {
@@ -76,7 +64,7 @@ export class PinnedProjectFeature extends Component {
 				return;
 			}
 
-			this.registerProjectFileMenuItem(menu, selectedFile);
+			this.registerTargetFileMenuItem(menu, selectedFile);
 		}));
 
 		this.plugin.app.workspace.onLayoutReady(() => {
@@ -126,12 +114,18 @@ export class PinnedProjectFeature extends Component {
 		}));
 	}
 
-	private registerProjectFileMenuItem(menu: Menu, file: TAbstractFile): void {
+	private registerTargetFileMenuItem(menu: Menu, file: TAbstractFile): void {
 		if (!(file instanceof TFile) || file.extension !== 'md') {
 			return;
 		}
 
-		if (!isProjectFile(this.plugin.app, file, this.getProjectFileRecognitionOptions())) {
+		if (this.isPinnedTargetFile(file)) {
+			menu.addItem((item) => item
+				.setTitle(this.localization.unpinMenuItemLabel)
+				.setIcon('pin-off')
+				.onClick(() => {
+					void this.clearPinnedTarget(true);
+				}));
 			return;
 		}
 
@@ -139,7 +133,7 @@ export class PinnedProjectFeature extends Component {
 			.setTitle(this.localization.pinMenuItemLabel)
 			.setIcon('pin')
 			.onClick(() => {
-				void this.pinProject(file);
+				void this.pinTarget(file);
 			}));
 	}
 
@@ -149,7 +143,7 @@ export class PinnedProjectFeature extends Component {
 		}
 
 		this.pendingQueue.add(file.path);
-		this.debugLog('Queued created markdown file for pinned-project linking.', {
+		this.debugLog('Queued created markdown file for pinned relation target linking.', {
 			filePath: file.path,
 		});
 		this.scheduleFlush();
@@ -161,7 +155,7 @@ export class PinnedProjectFeature extends Component {
 		}
 
 		this.pendingQueue.markReadyForImmediateRetry(file.path);
-		this.debugLog('Metadata changed for pending pinned-project file.', {
+		this.debugLog('Metadata changed for pending pinned relation target file.', {
 			filePath: file.path,
 		});
 		this.scheduleFlush();
@@ -173,16 +167,16 @@ export class PinnedProjectFeature extends Component {
 			this.scheduleFlush();
 		}
 
-		if (oldPath !== this.plugin.settings.pinnedProject.projectPath || !(file instanceof TFile)) {
+		if (oldPath !== this.plugin.settings.pinnedRelationTarget.targetPath || !(file instanceof TFile)) {
 			return;
 		}
 
-		this.plugin.settings.pinnedProject.projectPath = file.path;
+		this.plugin.settings.pinnedRelationTarget.targetPath = file.path;
 		void this.plugin.saveSettings({
 			refreshFeatures: false,
 		});
 		this.statusBar.refresh();
-		this.debugLog('Updated pinned project path after rename.', {
+		this.debugLog('Updated pinned relation target path after rename.', {
 			nextPath: file.path,
 			oldPath,
 		});
@@ -191,11 +185,11 @@ export class PinnedProjectFeature extends Component {
 	private handleFileDeleted(file: TAbstractFile): void {
 		this.pendingQueue.remove(file.path);
 		this.processingPaths.delete(file.path);
-		if (file.path !== this.plugin.settings.pinnedProject.projectPath) {
+		if (file.path !== this.plugin.settings.pinnedRelationTarget.targetPath) {
 			return;
 		}
 
-		void this.clearPinnedProject(false);
+		void this.clearPinnedTarget(false);
 	}
 
 	private shouldQueueFile(file: TAbstractFile): file is TFile {
@@ -203,7 +197,7 @@ export class PinnedProjectFeature extends Component {
 			return false;
 		}
 
-		return file.path !== this.plugin.settings.pinnedProject.projectPath;
+		return file.path !== this.plugin.settings.pinnedRelationTarget.targetPath;
 	}
 
 	private async flushPendingWork(): Promise<void> {
@@ -247,16 +241,16 @@ export class PinnedProjectFeature extends Component {
 			return;
 		}
 
-		const projectFile = this.getPinnedProjectFile();
-		if (!projectFile) {
+		const targetFile = this.getPinnedTargetFile();
+		if (!targetFile) {
 			this.pendingQueue.clear();
 			this.processingPaths.clear();
-			await this.clearPinnedProject(false);
-			new Notice(this.localization.projectMissingNotice);
+			await this.clearPinnedTarget(false);
+			new Notice(this.localization.targetMissingNotice);
 			return;
 		}
 
-		if (projectFile.path === file.path) {
+		if (targetFile.path === file.path) {
 			this.pendingQueue.remove(filePath);
 			return;
 		}
@@ -265,7 +259,7 @@ export class PinnedProjectFeature extends Component {
 		const decision = this.getPendingDecision(cache);
 		if (decision === 'defer') {
 			const retryDelayMs = this.pendingQueue.defer(filePath);
-			this.debugLog('Deferred pinned-project linking until metadata is ready.', {
+			this.debugLog('Deferred pinned relation target linking until metadata is ready.', {
 				filePath,
 				retryDelayMs,
 			});
@@ -274,7 +268,7 @@ export class PinnedProjectFeature extends Component {
 
 		if (decision === 'skip') {
 			this.pendingQueue.remove(filePath);
-			this.debugLog('Skipped pinned-project linking for this file.', {
+			this.debugLog('Skipped pinned relation target linking for this file.', {
 				filePath,
 			});
 			return;
@@ -282,14 +276,14 @@ export class PinnedProjectFeature extends Component {
 
 		this.processingPaths.add(filePath);
 		try {
-			await this.linkFileToPinnedProject(file, projectFile, cache);
+			await this.appendLinkToRelationProperty(file, targetFile);
 			this.pendingQueue.remove(filePath);
 			this.pendingQueue.remove(file.path);
 		} catch (error) {
-			console.error('[OBPM] Failed to link a new file to the pinned project.', {
+			console.error('[OBPM] Failed to link a new file to the pinned relation target.', {
 				error,
 				filePath: file.path,
-				projectPath: projectFile.path,
+				targetPath: targetFile.path,
 			});
 			new Notice(this.localization.linkFailureNotice);
 			this.pendingQueue.remove(filePath);
@@ -301,34 +295,25 @@ export class PinnedProjectFeature extends Component {
 
 	private getPendingDecision(cache: CachedMetadata | null): PinnedProjectRuleDecision {
 		return getPinnedProjectRuleDecision(cache, {
-			excludeRules: this.plugin.settings.pinnedProject.excludeRules,
-			includeRules: this.plugin.settings.pinnedProject.includeRules,
+			excludeRules: this.plugin.settings.pinnedRelationTarget.excludeRules,
+			includeRules: this.plugin.settings.pinnedRelationTarget.includeRules,
 		});
 	}
 
-	private async linkFileToPinnedProject(file: TFile, projectFile: TFile, cache: CachedMetadata | null): Promise<void> {
-		if (this.plugin.settings.pinnedProject.linkMode === 'project-section') {
-			await this.appendLinkToProjectSection(file, projectFile, cache);
-			return;
-		}
-
-		await this.appendLinkToRelationProperty(file, projectFile);
-	}
-
-	private async appendLinkToRelationProperty(file: TFile, projectFile: TFile): Promise<void> {
+	private async appendLinkToRelationProperty(file: TFile, targetFile: TFile): Promise<void> {
 		const relationProperty = this.plugin.settings.relatedLinks.relationProperty.trim();
 		if (!relationProperty) {
-			throw new Error('Cannot append pinned project relation because relationProperty is empty.');
+			throw new Error('Cannot append pinned relation target because relationProperty is empty.');
 		}
 
-		const projectLinkValue = buildProjectWikilinkValue(projectFile.path);
+		const targetLinkValue = buildTargetWikilinkValue(targetFile.path);
 		let changed = false;
 		await this.plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
 			const frontmatterRecord = frontmatter as Record<string, unknown>;
 			const appendResult = appendUniqueRelationLinkValue(
 				frontmatterRecord[relationProperty],
-				projectLinkValue,
-				projectFile.path,
+				targetLinkValue,
+				targetFile.path,
 			);
 			if (!appendResult.changed) {
 				return;
@@ -338,98 +323,61 @@ export class PinnedProjectFeature extends Component {
 			changed = true;
 		});
 
-		this.debugLog(changed ? 'Added pinned project to relation property.' : 'Relation property already included pinned project.', {
+		this.debugLog(changed ? 'Added pinned relation target to relation property.' : 'Relation property already included pinned relation target.', {
 			filePath: file.path,
-			projectPath: projectFile.path,
+			targetPath: targetFile.path,
 			relationProperty,
 		});
 	}
 
-	private async appendLinkToProjectSection(file: TFile, projectFile: TFile, cache: CachedMetadata | null): Promise<void> {
-		const sectionHeading = this.plugin.settings.pinnedProject.sectionHeading;
-		const currentContent = await this.plugin.app.vault.read(projectFile);
-		const existingSectionContent = getHeadingSectionContent(currentContent, sectionHeading);
-		if (existingSectionContent && wikilinkSectionContainsPath(existingSectionContent, file.path)) {
-			this.debugLog('Project section already includes a link to the new file.', {
-				filePath: file.path,
-				projectPath: projectFile.path,
-				sectionHeading,
-			});
-			return;
-		}
-
-		const displayText = getDisplayText(
-			file,
-			cache?.frontmatter,
-			this.plugin.settings.relatedLinks.displayProperty.trim(),
-		);
-		const listItem = buildMarkdownListItemForWikilink(file.path, displayText);
-		const nextContent = insertListItemIntoHeadingSection(currentContent, sectionHeading, listItem);
-		if (nextContent === currentContent) {
-			return;
-		}
-
-		await this.plugin.app.vault.modify(projectFile, nextContent);
-		this.debugLog('Inserted pinned-project link into project section.', {
-			filePath: file.path,
-			projectPath: projectFile.path,
-			sectionHeading,
-		});
-	}
-
-	private getCurrentProjectFile(): TFile | null {
+	private getCurrentMarkdownFile(): TFile | null {
 		const activeFile = this.plugin.app.workspace.getActiveFile();
-		const resolution = resolveCurrentProject(this.plugin.app, activeFile, this.getProjectFileRecognitionOptions());
-		return resolution.kind === 'project' ? resolution.candidate.file : null;
+		return activeFile instanceof TFile && activeFile.extension === 'md' ? activeFile : null;
 	}
 
-	private getPinnedProjectFile(): TFile | null {
-		const projectPath = this.plugin.settings.pinnedProject.projectPath;
-		if (!projectPath) {
+	private getPinnedTargetFile(): TFile | null {
+		const targetPath = this.plugin.settings.pinnedRelationTarget.targetPath;
+		if (!targetPath) {
 			return null;
 		}
 
-		const projectFile = this.plugin.app.vault.getAbstractFileByPath(projectPath);
-		return projectFile instanceof TFile && projectFile.extension === 'md' ? projectFile : null;
+		const targetFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
+		return targetFile instanceof TFile && targetFile.extension === 'md' ? targetFile : null;
 	}
 
-	private getProjectFileRecognitionOptions(): ProjectFileRecognitionOptions {
-		return {
-			projectFileRules: this.plugin.settings.projectRouting.projectFileRules,
-			projectSubfolderPath: this.plugin.settings.projectRouting.projectSubfolderPath,
-			recognizeFilenameMatchesFolderAsProject:
-				this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject,
-		};
+	private isPinnedTargetFile(file: TFile): boolean {
+		return this.plugin.settings.pinnedRelationTarget.enabled
+			&& this.plugin.settings.pinnedRelationTarget.targetPath === file.path;
 	}
 
-	private async pinProject(projectFile: TFile): Promise<void> {
-		this.plugin.settings.pinnedProject.enabled = true;
-		this.plugin.settings.pinnedProject.projectPath = projectFile.path;
+	private async pinTarget(targetFile: TFile): Promise<void> {
+		this.plugin.settings.pinnedRelationTarget.enabled = true;
+		this.plugin.settings.pinnedRelationTarget.targetPath = targetFile.path;
 		await this.plugin.saveSettings({
-			refreshFeatures: ['pinnedProject'],
+			refreshFeatures: ['pinnedRelationTarget'],
 		});
-		new Notice(this.localization.pinNotice(projectFile.basename));
-		this.debugLog('Pinned project.', {
-			projectPath: projectFile.path,
+		new Notice(this.localization.pinNotice(targetFile.basename));
+		this.debugLog('Pinned relation target.', {
+			targetPath: targetFile.path,
 		});
 	}
 
-	private async clearPinnedProject(showNotice: boolean): Promise<void> {
-		const hadPinnedProject = Boolean(this.plugin.settings.pinnedProject.projectPath);
-		this.plugin.settings.pinnedProject.enabled = false;
-		this.plugin.settings.pinnedProject.projectPath = '';
+	private async clearPinnedTarget(showNotice: boolean): Promise<void> {
+		const hadPinnedTarget = Boolean(this.plugin.settings.pinnedRelationTarget.targetPath);
+		this.plugin.settings.pinnedRelationTarget.enabled = false;
+		this.plugin.settings.pinnedRelationTarget.targetPath = '';
 		await this.plugin.saveSettings({
-			refreshFeatures: ['pinnedProject'],
+			refreshFeatures: ['pinnedRelationTarget'],
 		});
-		if (showNotice && hadPinnedProject) {
+		if (showNotice && hadPinnedTarget) {
 			new Notice(this.localization.clearNotice);
 		}
-		this.debugLog('Cleared pinned project.');
+		this.debugLog('Cleared pinned relation target.');
 	}
 
 	private isEnabled(): boolean {
-		return this.plugin.settings.pinnedProject.enabled
-			&& this.plugin.settings.pinnedProject.projectPath.length > 0;
+		return this.plugin.settings.pinnedRelationTarget.enabled
+			&& this.plugin.settings.pinnedRelationTarget.targetPath.length > 0;
 	}
 
 	private scheduleFlush(delayMs = PROCESS_DELAY_MS): void {

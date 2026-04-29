@@ -128,4 +128,62 @@ describe('buildRelatedDocumentMovePlans', () => {
 		assert.deepEqual(result.plans, []);
 		assert.equal(result.stats.alreadyInProjectFolderCount, 1);
 	});
+
+	it('moves the source document into the project subfolder when it relates to a non-project file inside the project folder', () => {
+		const result = buildRelatedDocumentMovePlans({
+			files: [
+				...files,
+				{
+					isProject: false,
+					name: 'Nested task.md',
+					parentPath: 'Projects/Alpha/tasks/deep',
+					path: 'Projects/Alpha/tasks/deep/Nested task.md',
+				},
+			],
+			pathExists: () => false,
+			relationState: {
+				projectMarkdownLinksBySourcePath: {},
+				sourceTargetsByPath: {
+					'Inbox/Task.md': ['Projects/Alpha/tasks/deep/Nested task.md'],
+				},
+			},
+			targetSubfolderPath: 'related',
+		});
+
+		assert.deepEqual(result.plans, [{
+			projectPath: 'Projects/Alpha/Project.md',
+			sourcePath: 'Inbox/Task.md',
+			targetFolderPath: 'Projects/Alpha/related',
+			targetPath: 'Projects/Alpha/related/Task.md',
+		}]);
+	});
+
+	it('moves the outside target document when a non-project file inside the project folder relates to it', () => {
+		const result = buildRelatedDocumentMovePlans({
+			files: [
+				...files,
+				{
+					isProject: false,
+					name: 'Nested task.md',
+					parentPath: 'Projects/Alpha/tasks/deep',
+					path: 'Projects/Alpha/tasks/deep/Nested task.md',
+				},
+			],
+			pathExists: () => false,
+			relationState: {
+				projectMarkdownLinksBySourcePath: {},
+				sourceTargetsByPath: {
+					'Projects/Alpha/tasks/deep/Nested task.md': ['Refs/Reference.md'],
+				},
+			},
+			targetSubfolderPath: 'related',
+		});
+
+		assert.deepEqual(result.plans, [{
+			projectPath: 'Projects/Alpha/Project.md',
+			sourcePath: 'Refs/Reference.md',
+			targetFolderPath: 'Projects/Alpha/related',
+			targetPath: 'Projects/Alpha/related/Reference.md',
+		}]);
+	});
 });

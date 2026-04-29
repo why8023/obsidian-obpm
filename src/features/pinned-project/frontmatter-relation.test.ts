@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 import {
 	appendUniqueRelationLinkValue,
-	buildProjectWikilinkValue,
+	buildTargetWikilinkValue,
 } from './frontmatter-relation';
 
 describe('appendUniqueRelationLinkValue', () => {
-	it('creates an array with the pinned project link for an empty relation value', () => {
+	it('creates an array with the pinned target link for an empty relation value', () => {
 		const result = appendUniqueRelationLinkValue(
 			undefined,
 			'[[Projects/Alpha/Alpha]]',
@@ -18,7 +18,7 @@ describe('appendUniqueRelationLinkValue', () => {
 		assert.deepEqual(result.value, ['[[Projects/Alpha/Alpha]]']);
 	});
 
-	it('appends the pinned project link while preserving existing relation values', () => {
+	it('appends the pinned target link while preserving existing relation values', () => {
 		const result = appendUniqueRelationLinkValue(
 			'[[Projects/Beta/Beta]]',
 			'[[Projects/Alpha/Alpha]]',
@@ -32,7 +32,7 @@ describe('appendUniqueRelationLinkValue', () => {
 		]);
 	});
 
-	it('does not duplicate an existing pinned project relation', () => {
+	it('does not duplicate an existing pinned target relation', () => {
 		const currentValue = [
 			'[[Projects/Alpha/Alpha|Alpha project]]',
 			'[[Projects/Beta/Beta]]',
@@ -48,10 +48,10 @@ describe('appendUniqueRelationLinkValue', () => {
 	});
 });
 
-describe('buildProjectWikilinkValue', () => {
+describe('buildTargetWikilinkValue', () => {
 	it('builds a vault-path wikilink without the markdown extension', () => {
 		assert.equal(
-			buildProjectWikilinkValue('Projects/Alpha/Alpha.md'),
+			buildTargetWikilinkValue('Projects/Alpha/Alpha.md'),
 			'[[Projects/Alpha/Alpha]]',
 		);
 	});

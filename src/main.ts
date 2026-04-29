@@ -20,6 +20,7 @@ import {RefreshableFeatureId, SaveSettingsOptions} from './save-settings-options
 import {normalizePluginSettings, OBPMPluginSettingTab, OBPMPluginSettings} from './settings';
 
 interface OBPMPluginData extends Partial<OBPMPluginSettings> {
+	pinnedProject?: unknown;
 	relatedDocumentWorkflowUndoBatch?: unknown;
 	relatedLinksState?: unknown;
 }
@@ -34,7 +35,7 @@ export default class OBPMPlugin extends Plugin {
 	private fileContentMoveFeature: FileContentMoveFeature | null = null;
 	private fileNameSyncFeature: FileNameSyncFeature | null = null;
 	private frontmatterAutomationFeature: FrontmatterAutomationFeature | null = null;
-	private pinnedProjectFeature: PinnedProjectFeature | null = null;
+	private pinnedRelationTargetFeature: PinnedProjectFeature | null = null;
 	private projectRoutingFeature: ProjectRoutingFeature | null = null;
 	private relatedDocumentWorkflowFeature: RelatedDocumentWorkflowFeature | null = null;
 	private relatedLinksFeature: RelatedLinksFeature | null = null;
@@ -58,8 +59,8 @@ export default class OBPMPlugin extends Plugin {
 		this.addChild(this.frontmatterAutomationFeature);
 		this.projectRoutingFeature = new ProjectRoutingFeature(this);
 		this.addChild(this.projectRoutingFeature);
-		this.pinnedProjectFeature = new PinnedProjectFeature(this);
-		this.addChild(this.pinnedProjectFeature);
+		this.pinnedRelationTargetFeature = new PinnedProjectFeature(this);
+		this.addChild(this.pinnedRelationTargetFeature);
 		this.relatedDocumentWorkflowFeature = new RelatedDocumentWorkflowFeature(this);
 		this.addChild(this.relatedDocumentWorkflowFeature);
 		this.addChild(new SameFolderNoteFeature(this));
@@ -190,9 +191,9 @@ export default class OBPMPlugin extends Plugin {
 						refreshTasks.push(this.relatedDocumentWorkflowFeature.refresh());
 					}
 					break;
-				case 'pinnedProject':
-					if (this.pinnedProjectFeature) {
-						refreshTasks.push(this.pinnedProjectFeature.refresh());
+				case 'pinnedRelationTarget':
+					if (this.pinnedRelationTargetFeature) {
+						refreshTasks.push(this.pinnedRelationTargetFeature.refresh());
 					}
 					break;
 			}

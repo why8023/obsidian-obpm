@@ -31,6 +31,11 @@ export interface RelatedDocumentMovePlanResult {
 	stats: RelatedDocumentMovePlanStats;
 }
 
+interface ProjectContext {
+	projectFolderPath: string;
+	projectPath: string;
+}
+
 interface RelatedDocumentMovePlanOptions {
 	files: readonly RelatedDocumentWorkflowFileInfo[];
 	pathExists: (path: string) => boolean;
@@ -40,6 +45,7 @@ interface RelatedDocumentMovePlanOptions {
 
 export function buildRelatedDocumentMovePlans(options: RelatedDocumentMovePlanOptions): RelatedDocumentMovePlanResult {
 	const filesByPath = new Map(options.files.map((file) => [file.path, file] as const));
+	const projectContextsByFilePath = buildProjectContextsByFilePath(options.files);
 	const projectPathsByDocumentPath = new Map<string, Set<string>>();
 	const stats: RelatedDocumentMovePlanStats = {
 		alreadyInProjectFolderCount: 0,
@@ -62,13 +68,31 @@ export function buildRelatedDocumentMovePlans(options: RelatedDocumentMovePlanOp
 			return;
 		}
 
-		if (!sourceFile.isProject && !targetFile.isProject) {
+		const sourceProjectContexts = projectContextsByFilePath.get(sourceFile.path) ?? [];
+		const targetProjectContexts = projectContextsByFilePath.get(targetFile.path) ?? [];
+		if (sourceProjectContexts.length === 0 && targetProjectContexts.length === 0) {
 			stats.noProjectRelationCount += 1;
 			return;
 		}
 
-		const projectPath = sourceFile.isProject ? sourceFile.path : targetFile.path;
-		const documentPath = sourceFile.isProject ? targetFile.path : sourceFile.path;
+		const relationContext = resolveRelationProjectContext({
+			sourceFile,
+			sourceProjectContexts,
+			targetFile,
+			targetProjectContexts,
+		});
+		if (relationContext.kind === 'already-in-project') {
+			stats.alreadyInProjectFolderCount += 1;
+			return;
+		}
+
+		if (relationContext.kind === 'ambiguous') {
+			stats.ambiguousDocumentCount += 1;
+			return;
+		}
+
+		const projectPath = relationContext.projectContext.projectPath;
+		const documentPath = relationContext.documentPath;
 		let projectPaths = projectPathsByDocumentPath.get(documentPath);
 		if (!projectPaths) {
 			projectPaths = new Set<string>();
@@ -124,6 +148,75 @@ export function buildRelatedDocumentMovePlans(options: RelatedDocumentMovePlanOp
 	}
 
 	return {plans, stats};
+}
+
+function buildProjectContextsByFilePath(
+	files: readonly RelatedDocumentWorkflowFileInfo[],
+): Map<string, ProjectContext[]> {
+	const projectFiles = files.filter((file) => file.isProject);
+	const contextsByFilePath = new Map<string, ProjectContext[]>();
+
+	for (const file of files) {
+		if (file.isProject) {
+			contextsByFilePath.set(file.path, [{
+				projectFolderPath: file.parentPath,
+				projectPath: file.path,
+			}]);
+			continue;
+		}
+
+		const contexts = projectFiles
+			.filter((projectFile) => isPathInsideFolderPath(file.path, projectFile.parentPath))
+			.map((projectFile) => ({
+				projectFolderPath: projectFile.parentPath,
+				projectPath: projectFile.path,
+			}));
+		contextsByFilePath.set(file.path, contexts);
+	}
+
+	return contextsByFilePath;
+}
+
+function resolveRelationProjectContext(options: {
+	sourceFile: RelatedDocumentWorkflowFileInfo;
+	sourceProjectContexts: readonly ProjectContext[];
+	targetFile: RelatedDocumentWorkflowFileInfo;
+	targetProjectContexts: readonly ProjectContext[];
+}):
+	| {
+		documentPath: string;
+		kind: 'move';
+		projectContext: ProjectContext;
+	}
+	| {
+		kind: 'already-in-project';
+	}
+	| {
+		kind: 'ambiguous';
+	} {
+	if (options.sourceProjectContexts.length === 1 && options.targetProjectContexts.length === 0) {
+		return {
+			documentPath: options.targetFile.path,
+			kind: 'move',
+			projectContext: options.sourceProjectContexts[0]!,
+		};
+	}
+
+	if (options.sourceProjectContexts.length === 0 && options.targetProjectContexts.length === 1) {
+		return {
+			documentPath: options.sourceFile.path,
+			kind: 'move',
+			projectContext: options.targetProjectContexts[0]!,
+		};
+	}
+
+	if (options.sourceProjectContexts.length === 1 && options.targetProjectContexts.length === 1) {
+		return options.sourceProjectContexts[0]?.projectPath === options.targetProjectContexts[0]?.projectPath
+			? {kind: 'already-in-project'}
+			: {kind: 'ambiguous'};
+	}
+
+	return {kind: 'ambiguous'};
 }
 
 function collectRelations(

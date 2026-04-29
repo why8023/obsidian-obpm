@@ -8,7 +8,7 @@ export type RefreshableFeatureId =
 	| 'projectRouting'
 	| 'frontmatterAutomation'
 	| 'relatedDocumentWorkflow'
-	| 'pinnedProject';
+	| 'pinnedRelationTarget';
 
 export interface SaveSettingsOptions {
 	refreshFeatures?: false | readonly RefreshableFeatureId[];

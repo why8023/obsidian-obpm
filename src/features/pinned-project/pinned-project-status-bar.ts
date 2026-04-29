@@ -18,19 +18,19 @@ export class PinnedProjectStatusBar {
 	}
 
 	refresh(): void {
-		const projectPath = this.plugin.settings.pinnedProject.projectPath;
-		if (!this.plugin.settings.pinnedProject.enabled || !projectPath) {
+		const targetPath = this.plugin.settings.pinnedRelationTarget.targetPath;
+		if (!this.plugin.settings.pinnedRelationTarget.enabled || !targetPath) {
 			this.destroy();
 			return;
 		}
 
 		const itemEl = this.ensureItem();
-		const projectFile = this.plugin.app.vault.getAbstractFileByPath(projectPath);
-		if (projectFile instanceof TFile) {
+		const targetFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
+		if (targetFile instanceof TFile) {
 			this.applyItemState(
 				itemEl,
-				this.localization.statusText(projectFile.basename),
-				this.localization.statusTooltip(projectFile.path),
+				this.localization.statusText(targetFile.basename),
+				this.localization.statusTooltip(targetFile.path),
 			);
 			return;
 		}
@@ -38,7 +38,7 @@ export class PinnedProjectStatusBar {
 		this.applyItemState(
 			itemEl,
 			this.localization.statusMissingText,
-			this.localization.statusMissingTooltip(projectPath),
+			this.localization.statusMissingTooltip(targetPath),
 		);
 	}
 

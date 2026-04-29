@@ -27,12 +27,18 @@ import {
 	normalizeProjectRoutingSettings,
 } from './features/project-routing/settings';
 import {FrontmatterMatchRule, ProjectRoutingSettings} from './features/project-routing/types';
+import {
+	createDefaultPinnedRelationTargetRule,
+	DEFAULT_PINNED_RELATION_TARGET_SETTINGS,
+	normalizePinnedRelationTargetSettings,
+	PinnedRelationTargetSettings,
+	PinnedRelationTargetSettingsInput,
+} from './features/pinned-project/pinned-relation-target-settings';
 import {RefreshableFeatureId} from './save-settings-options';
 import {getSettingsLocalization, SettingsLocalization} from './settings-localization';
 
 export type BasesTopTabsPlacement = 'above-toolbar' | 'inside-toolbar';
 export type BasesTopTabsOrientation = 'horizontal' | 'vertical';
-export type PinnedProjectLinkMode = 'frontmatter-property' | 'project-section';
 
 const DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS = 8;
 const MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS = 50;
@@ -41,7 +47,6 @@ const DEFAULT_RELATED_LINKS_INBOX_HEADING = 'Inbox';
 const DEFAULT_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 5;
 const MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 30;
 const MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 0;
-const DEFAULT_PINNED_PROJECT_SECTION_HEADING = 'related';
 
 interface CommittedTextSettingControl {
 	inputEl: HTMLInputElement;
@@ -141,15 +146,6 @@ export interface RelatedDocumentWorkflowSettings {
 	targetSubfolderPath: string;
 }
 
-export interface PinnedProjectSettings {
-	enabled: boolean;
-	excludeRules: FrontmatterMatchRule[];
-	includeRules: FrontmatterMatchRule[];
-	linkMode: PinnedProjectLinkMode;
-	projectPath: string;
-	sectionHeading: string;
-}
-
 interface FrontmatterAutomationRuleListSectionOptions {
 	addRuleButton: string;
 	addRuleDesc: string;
@@ -183,7 +179,7 @@ export interface OBPMPluginSettings {
 	frontmatterAutomation: FrontmatterAutomationSettings;
 	projectRouting: ProjectRoutingSettings;
 	relatedDocumentWorkflow: RelatedDocumentWorkflowSettings;
-	pinnedProject: PinnedProjectSettings;
+	pinnedRelationTarget: PinnedRelationTargetSettings;
 	sameFolderNote: SameFolderNoteSettings;
 }
 
@@ -238,20 +234,15 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		enabled: false,
 		targetSubfolderPath: 'related',
 	},
-	pinnedProject: {
-		enabled: false,
-		excludeRules: [],
-		includeRules: [],
-		linkMode: 'frontmatter-property',
-		projectPath: '',
-		sectionHeading: DEFAULT_PINNED_PROJECT_SECTION_HEADING,
-	},
+	pinnedRelationTarget: DEFAULT_PINNED_RELATION_TARGET_SETTINGS,
 	sameFolderNote: {
 		enabled: false,
 	},
 };
 
-export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | null | undefined): OBPMPluginSettings {
+export function normalizePluginSettings(
+	settings: (Partial<OBPMPluginSettings> & PinnedRelationTargetSettingsInput) | null | undefined,
+): OBPMPluginSettings {
 	return {
 		basesFileReveal: {
 			enabled: normalizeBoolean(settings?.basesFileReveal?.enabled, DEFAULT_SETTINGS.basesFileReveal.enabled),
@@ -351,20 +342,7 @@ export function normalizePluginSettings(settings: Partial<OBPMPluginSettings> | 
 				DEFAULT_SETTINGS.relatedDocumentWorkflow.targetSubfolderPath,
 			),
 		},
-		pinnedProject: {
-			enabled: normalizeBoolean(settings?.pinnedProject?.enabled, DEFAULT_SETTINGS.pinnedProject.enabled),
-			excludeRules: normalizePinnedProjectRules(settings?.pinnedProject?.excludeRules),
-			includeRules: normalizePinnedProjectRules(settings?.pinnedProject?.includeRules),
-			linkMode: normalizePinnedProjectLinkMode(
-				settings?.pinnedProject?.linkMode,
-				DEFAULT_SETTINGS.pinnedProject.linkMode,
-			),
-			projectPath: normalizeText(settings?.pinnedProject?.projectPath, DEFAULT_SETTINGS.pinnedProject.projectPath),
-			sectionHeading: normalizeRequiredText(
-				settings?.pinnedProject?.sectionHeading,
-				DEFAULT_SETTINGS.pinnedProject.sectionHeading,
-			),
-		},
+		pinnedRelationTarget: normalizePinnedRelationTargetSettings(settings),
 		sameFolderNote: {
 			enabled: normalizeBoolean(settings?.sameFolderNote?.enabled, DEFAULT_SETTINGS.sameFolderNote.enabled),
 		},
@@ -390,45 +368,6 @@ function normalizeBasesTopTabsPlacement(value: unknown, fallback: BasesTopTabsPl
 
 function normalizeBasesTopTabsOrientation(value: unknown, fallback: BasesTopTabsOrientation): BasesTopTabsOrientation {
 	return value === 'vertical' || value === 'horizontal' ? value : fallback;
-}
-
-function normalizePinnedProjectLinkMode(value: unknown, fallback: PinnedProjectLinkMode): PinnedProjectLinkMode {
-	return value === 'frontmatter-property' || value === 'project-section' ? value : fallback;
-}
-
-function normalizePinnedProjectRules(value: unknown): FrontmatterMatchRule[] {
-	if (!Array.isArray(value)) {
-		return [];
-	}
-
-	return value
-		.map((rule) => normalizePinnedProjectRule(rule))
-		.filter((rule): rule is FrontmatterMatchRule => rule !== null);
-}
-
-function normalizePinnedProjectRule(value: unknown): FrontmatterMatchRule | null {
-	if (!isObjectRecord(value)) {
-		return null;
-	}
-
-	const key = normalizeText(value.key, '');
-	if (!key) {
-		return null;
-	}
-
-	const matchMode = normalizeFrontmatterMatchMode(value.matchMode);
-	if (matchMode === 'key-value-equals') {
-		return {
-			key,
-			matchMode,
-			value: normalizeText(value.value, ''),
-		};
-	}
-
-	return {
-		key,
-		matchMode,
-	};
 }
 
 function normalizeBasesTopTabsMaxVisibleTabs(value: unknown, fallback: number): number {
@@ -562,13 +501,6 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), max);
-}
-
-function createDefaultPinnedProjectRule(): FrontmatterMatchRule {
-	return {
-		key: 'obpm_type',
-		matchMode: 'key-exists',
-	};
 }
 
 export class OBPMPluginSettingTab extends PluginSettingTab {
@@ -769,7 +701,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					this.renderRelatedDocumentWorkflowSettingsSection(panelBodyEl);
 				});
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
-					this.renderPinnedProjectSettingsSection(panelBodyEl);
+					this.renderPinnedRelationTargetSettingsSection(panelBodyEl);
 				});
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderSameFolderNoteSettingsSection(panelBodyEl);
@@ -1372,10 +1304,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			});
 	}
 
-	private renderPinnedProjectSettingsSection(containerEl: HTMLElement): void {
+	private renderPinnedRelationTargetSettingsSection(containerEl: HTMLElement): void {
 		const strings = getSettingsLocalization();
-		const savePinnedProjectSettings = async () => this.saveSettingsFor('pinnedProject');
-		const pinnedProjectPath = this.plugin.settings.pinnedProject.projectPath;
+		const savePinnedRelationTargetSettings = async () => this.saveSettingsFor('pinnedRelationTarget');
+		const targetPath = this.plugin.settings.pinnedRelationTarget.targetPath;
 
 		new Setting(containerEl)
 			.setName(strings.pinnedProjectHeading)
@@ -1386,76 +1318,46 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			.setName(strings.pinnedProjectEnableName)
 			.setDesc(strings.pinnedProjectEnableDesc)
 			.addToggle((toggle) => toggle
-				.setValue(this.plugin.settings.pinnedProject.enabled)
+				.setValue(this.plugin.settings.pinnedRelationTarget.enabled)
 				.onChange(async (value) => {
-					this.plugin.settings.pinnedProject.enabled = value;
-					await savePinnedProjectSettings();
+					this.plugin.settings.pinnedRelationTarget.enabled = value;
+					await savePinnedRelationTargetSettings();
 				}));
 
-		const currentProjectSetting = new Setting(containerEl)
+		const currentTargetSetting = new Setting(containerEl)
 			.setName(strings.pinnedProjectCurrentName)
 			.setDesc(
-				pinnedProjectPath
-					? strings.pinnedProjectCurrentDesc(pinnedProjectPath)
+				targetPath
+					? strings.pinnedProjectCurrentDesc(targetPath)
 					: strings.pinnedProjectNoCurrentDesc,
 			);
-		if (pinnedProjectPath) {
-			currentProjectSetting.addButton((button) => button
+		if (targetPath) {
+			currentTargetSetting.addButton((button) => button
 				.setButtonText(strings.pinnedProjectClearButton)
 				.onClick(async () => {
-					this.plugin.settings.pinnedProject.enabled = false;
-					this.plugin.settings.pinnedProject.projectPath = '';
-					await savePinnedProjectSettings();
+					this.plugin.settings.pinnedRelationTarget.enabled = false;
+					this.plugin.settings.pinnedRelationTarget.targetPath = '';
+					await savePinnedRelationTargetSettings();
 					this.display();
 				}));
 		}
-
-		new Setting(containerEl)
-			.setName(strings.pinnedProjectLinkModeName)
-			.setDesc(strings.pinnedProjectLinkModeDesc)
-			.addDropdown((dropdown) => dropdown
-				.addOption('frontmatter-property', strings.pinnedProjectLinkModeFrontmatterLabel)
-				.addOption('project-section', strings.pinnedProjectLinkModeProjectSectionLabel)
-				.setValue(this.plugin.settings.pinnedProject.linkMode)
-				.onChange(async (value) => {
-					this.plugin.settings.pinnedProject.linkMode = normalizePinnedProjectLinkMode(
-						value,
-						this.plugin.settings.pinnedProject.linkMode,
-					);
-					await savePinnedProjectSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName(strings.pinnedProjectSectionHeadingName)
-			.setDesc(strings.pinnedProjectSectionHeadingDesc)
-			.addText((text) => {
-				text.setPlaceholder(strings.pinnedProjectSectionHeadingPlaceholder);
-				return this.bindCommittedTextSetting(text, {
-					initialValue: this.plugin.settings.pinnedProject.sectionHeading,
-					normalize: (value) => normalizeRequiredText(value, DEFAULT_SETTINGS.pinnedProject.sectionHeading),
-					onCommit: (value) => {
-						this.plugin.settings.pinnedProject.sectionHeading = value;
-					},
-					refreshFeatures: ['pinnedProject'],
-				});
-			});
 
 		this.renderProjectRoutingRuleListSection(containerEl, {
 			addRuleButton: strings.pinnedProjectAddIncludeRuleButton,
 			addRuleDesc: strings.pinnedProjectAddIncludeRuleDesc,
 			addRuleName: strings.pinnedProjectAddIncludeRuleName,
-			createRule: createDefaultPinnedProjectRule,
-			getRules: () => this.plugin.settings.pinnedProject.includeRules,
+			createRule: createDefaultPinnedRelationTargetRule,
+			getRules: () => this.plugin.settings.pinnedRelationTarget.includeRules,
 			headingDesc: strings.pinnedProjectIncludeRulesDesc,
 			headingName: strings.pinnedProjectIncludeRulesHeading,
 			noRulesText: strings.pinnedProjectNoIncludeRules,
-			refreshFeatures: ['pinnedProject'],
+			refreshFeatures: ['pinnedRelationTarget'],
 			removeRuleButton: strings.pinnedProjectRemoveIncludeRuleButton,
 			removeRuleDesc: strings.pinnedProjectRemoveIncludeRuleDesc,
 			removeRuleName: strings.pinnedProjectRemoveIncludeRuleName,
 			ruleLabel: strings.pinnedProjectIncludeRuleLabel,
 			setRules: (rules) => {
-				this.plugin.settings.pinnedProject.includeRules = rules;
+				this.plugin.settings.pinnedRelationTarget.includeRules = rules;
 			},
 		});
 
@@ -1463,18 +1365,18 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			addRuleButton: strings.pinnedProjectAddExcludeRuleButton,
 			addRuleDesc: strings.pinnedProjectAddExcludeRuleDesc,
 			addRuleName: strings.pinnedProjectAddExcludeRuleName,
-			createRule: createDefaultPinnedProjectRule,
-			getRules: () => this.plugin.settings.pinnedProject.excludeRules,
+			createRule: createDefaultPinnedRelationTargetRule,
+			getRules: () => this.plugin.settings.pinnedRelationTarget.excludeRules,
 			headingDesc: strings.pinnedProjectExcludeRulesDesc,
 			headingName: strings.pinnedProjectExcludeRulesHeading,
 			noRulesText: strings.pinnedProjectNoExcludeRules,
-			refreshFeatures: ['pinnedProject'],
+			refreshFeatures: ['pinnedRelationTarget'],
 			removeRuleButton: strings.pinnedProjectRemoveExcludeRuleButton,
 			removeRuleDesc: strings.pinnedProjectRemoveExcludeRuleDesc,
 			removeRuleName: strings.pinnedProjectRemoveExcludeRuleName,
 			ruleLabel: strings.pinnedProjectExcludeRuleLabel,
 			setRules: (rules) => {
-				this.plugin.settings.pinnedProject.excludeRules = rules;
+				this.plugin.settings.pinnedRelationTarget.excludeRules = rules;
 			},
 		});
 	}

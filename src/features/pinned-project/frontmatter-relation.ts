@@ -5,10 +5,10 @@ export interface RelationAppendResult {
 
 export function appendUniqueRelationLinkValue(
 	currentValue: unknown,
-	projectLinkValue: string,
-	projectPath: string,
+	targetLinkValue: string,
+	targetPath: string,
 ): RelationAppendResult {
-	if (relationValueContainsProjectLink(currentValue, projectPath)) {
+	if (relationValueContainsTargetLink(currentValue, targetPath)) {
 		return {
 			changed: false,
 			value: currentValue,
@@ -18,12 +18,12 @@ export function appendUniqueRelationLinkValue(
 	const nextItems = getRelationValueItems(currentValue);
 	return {
 		changed: true,
-		value: [...nextItems, projectLinkValue],
+		value: [...nextItems, targetLinkValue],
 	};
 }
 
-export function buildProjectWikilinkValue(projectPath: string): string {
-	const linkpath = stripMarkdownExtension(projectPath.replace(/\\/g, '/').replace(/^\/+/, ''));
+export function buildTargetWikilinkValue(targetPath: string): string {
+	const linkpath = stripMarkdownExtension(targetPath.replace(/\\/g, '/').replace(/^\/+/, ''));
 	return `[[${linkpath}]]`;
 }
 
@@ -48,9 +48,9 @@ function getRelationValueItems(value: unknown): unknown[] {
 	return entries;
 }
 
-function relationValueContainsProjectLink(value: unknown, projectPath: string): boolean {
-	const projectTarget = normalizeComparableLinkpath(projectPath);
-	const projectBasename = getBasenameWithoutMarkdownExtension(projectPath);
+function relationValueContainsTargetLink(value: unknown, targetPath: string): boolean {
+	const targetLinkpath = normalizeComparableLinkpath(targetPath);
+	const targetBasename = getBasenameWithoutMarkdownExtension(targetPath);
 	const values = Array.isArray(value) ? value : [value];
 
 	return values.some((entry) => {
@@ -64,7 +64,7 @@ function relationValueContainsProjectLink(value: unknown, projectPath: string): 
 		}
 
 		const normalizedLinkpath = normalizeComparableLinkpath(linkpath);
-		return normalizedLinkpath === projectTarget || normalizedLinkpath === projectBasename;
+		return normalizedLinkpath === targetLinkpath || normalizedLinkpath === targetBasename;
 	});
 }
 
