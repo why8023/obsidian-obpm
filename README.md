@@ -73,7 +73,7 @@ npm run lint
 - **Relations** configures the source relation property, optional display property, project Markdown link recognition, and verbose logging.
 - **File names from property** configures the property used for renaming plus file-name sanitization rules.
 - **Related document workflow** configures the command that moves project-related documents from outside a project folder into a project subfolder, including relations to non-project files already inside that project folder, plus the undo command for the last move batch.
-- **Pinned relation target** configures the active pinned Markdown target and optional include/exclude frontmatter rules. Matching new files are linked to the pinned target through the relation property.
+- **Pinned relation target** configures the active pinned Markdown target and optional include/exclude frontmatter or file path rules. Matching new files are linked to the pinned target through the relation property.
 - **Create note in same folder** enables the context-menu command for creating adjacent notes.
 
 ## Release workflow
