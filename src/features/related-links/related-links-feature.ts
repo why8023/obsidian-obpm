@@ -716,7 +716,8 @@ export class RelatedLinksFeature extends Component {
 					this.plugin.debugLog(message, details);
 				},
 				desiredLinkTree,
-				inboxHeading: this.plugin.settings.relatedLinks.inboxHeading,
+				linkSectionHeading: this.plugin.settings.relatedLinks.linkSectionHeading,
+				linkSectionHeadingLevel: this.plugin.settings.relatedLinks.linkSectionHeadingLevel,
 				resolveManagedSourcePath: (link) => this.resolveManagedSourcePath(link, targetFile),
 				resolveSourceFile: (sourcePath) => this.resolveSourceFile(sourcePath),
 				shouldDeferMissingLinkInsertion: (link, currentTargetFile) =>
@@ -728,7 +729,8 @@ export class RelatedLinksFeature extends Component {
 					this.plugin.debugLog(message, details);
 				},
 				desiredLinks,
-				inboxHeading: this.plugin.settings.relatedLinks.inboxHeading,
+				linkSectionHeading: this.plugin.settings.relatedLinks.linkSectionHeading,
+				linkSectionHeadingLevel: this.plugin.settings.relatedLinks.linkSectionHeadingLevel,
 				resolveManagedSourcePath: (link) => this.resolveManagedSourcePath(link, targetFile),
 				resolveSourceFile: (sourcePath) => this.resolveSourceFile(sourcePath),
 				shouldDeferMissingLinkInsertion: (link, currentTargetFile) =>

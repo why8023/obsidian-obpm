@@ -1,4 +1,4 @@
-import {normalizePath, TFile} from 'obsidian';
+import type {TFile} from 'obsidian';
 
 export const MANAGED_LINK_TITLE = 'obpm:related-link:v1';
 
@@ -100,7 +100,7 @@ export function resolveMarkdownDestinationCandidates(destination: string, target
 	const targetDirectory = getParentDirectory(targetFile.path);
 
 	const addCandidate = (candidate: string) => {
-		const normalizedCandidate = normalizePath(candidate);
+		const normalizedCandidate = normalizeVaultPath(candidate);
 		if (!normalizedCandidate || seenCandidates.has(normalizedCandidate)) {
 			return;
 		}
@@ -109,7 +109,7 @@ export function resolveMarkdownDestinationCandidates(destination: string, target
 		candidates.push(normalizedCandidate);
 
 		if (!/\.[^./]+$/.test(normalizedCandidate)) {
-			const markdownCandidate = normalizePath(`${normalizedCandidate}.md`);
+			const markdownCandidate = normalizeVaultPath(`${normalizedCandidate}.md`);
 			if (seenCandidates.has(markdownCandidate)) {
 				return;
 			}
@@ -215,6 +215,25 @@ function encodeMarkdownDestination(value: string): string {
 function getParentDirectory(path: string): string {
 	const lastSlashIndex = path.lastIndexOf('/');
 	return lastSlashIndex >= 0 ? path.slice(0, lastSlashIndex) : '';
+}
+
+function normalizeVaultPath(path: string): string {
+	const segments: string[] = [];
+
+	for (const segment of path.replace(/\\/g, '/').split('/')) {
+		if (!segment || segment === '.') {
+			continue;
+		}
+
+		if (segment === '..') {
+			segments.pop();
+			continue;
+		}
+
+		segments.push(segment);
+	}
+
+	return segments.join('/');
 }
 
 function getSharedSegmentCount(left: string[], right: string[]): number {

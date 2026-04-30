@@ -45,7 +45,10 @@ export type BasesTopTabsOrientation = 'horizontal' | 'vertical';
 const DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS = 8;
 const MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS = 50;
 const MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS = 0;
-const DEFAULT_RELATED_LINKS_INBOX_HEADING = 'Inbox';
+const DEFAULT_RELATED_LINKS_SECTION_HEADING = 'Related';
+const DEFAULT_RELATED_LINKS_SECTION_HEADING_LEVEL = 2;
+const MAX_RELATED_LINKS_SECTION_HEADING_LEVEL = 6;
+const MIN_RELATED_LINKS_SECTION_HEADING_LEVEL = 1;
 const DEFAULT_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 5;
 const MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 30;
 const MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 0;
@@ -99,12 +102,17 @@ export interface RelatedLinksSettings {
 	enabled: boolean;
 	relationProperty: string;
 	displayProperty: string;
-	inboxHeading: string;
+	linkSectionHeading: string;
+	linkSectionHeadingLevel: number;
 	includeInheritedLinks: boolean;
 	missingLinkGracePeriodSeconds: number;
 	recognizeProjectMarkdownLinks: boolean;
 	verboseLogging: boolean;
 }
+
+type RelatedLinksSettingsInput = Partial<RelatedLinksSettings> & {
+	inboxHeading?: unknown;
+};
 
 export interface BasesFileRevealSettings {
 	enabled: boolean;
@@ -233,7 +241,8 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		enabled: false,
 		relationProperty: 'obpm_related',
 		displayProperty: 'obpm_title',
-		inboxHeading: DEFAULT_RELATED_LINKS_INBOX_HEADING,
+		linkSectionHeading: DEFAULT_RELATED_LINKS_SECTION_HEADING,
+		linkSectionHeadingLevel: DEFAULT_RELATED_LINKS_SECTION_HEADING_LEVEL,
 		includeInheritedLinks: false,
 		missingLinkGracePeriodSeconds: DEFAULT_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS,
 		recognizeProjectMarkdownLinks: false,
@@ -260,6 +269,8 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 export function normalizePluginSettings(
 	settings: (Partial<OBPMPluginSettings> & PinnedRelationTargetSettingsInput) | null | undefined,
 ): OBPMPluginSettings {
+	const relatedLinksInput = settings?.relatedLinks as RelatedLinksSettingsInput | undefined;
+
 	return {
 		basesFileReveal: {
 			enabled: normalizeBoolean(settings?.basesFileReveal?.enabled, DEFAULT_SETTINGS.basesFileReveal.enabled),
@@ -314,26 +325,30 @@ export function normalizePluginSettings(
 			),
 		},
 		relatedLinks: {
-			enabled: normalizeBoolean(settings?.relatedLinks?.enabled, DEFAULT_SETTINGS.relatedLinks.enabled),
-			relationProperty: normalizeText(settings?.relatedLinks?.relationProperty, DEFAULT_SETTINGS.relatedLinks.relationProperty),
-			displayProperty: normalizeText(settings?.relatedLinks?.displayProperty, DEFAULT_SETTINGS.relatedLinks.displayProperty),
-			inboxHeading: normalizeRequiredText(
-				settings?.relatedLinks?.inboxHeading,
-				DEFAULT_SETTINGS.relatedLinks.inboxHeading,
+			enabled: normalizeBoolean(relatedLinksInput?.enabled, DEFAULT_SETTINGS.relatedLinks.enabled),
+			relationProperty: normalizeText(relatedLinksInput?.relationProperty, DEFAULT_SETTINGS.relatedLinks.relationProperty),
+			displayProperty: normalizeText(relatedLinksInput?.displayProperty, DEFAULT_SETTINGS.relatedLinks.displayProperty),
+			linkSectionHeading: normalizeRequiredText(
+				relatedLinksInput?.linkSectionHeading ?? relatedLinksInput?.inboxHeading,
+				DEFAULT_SETTINGS.relatedLinks.linkSectionHeading,
+			),
+			linkSectionHeadingLevel: normalizeRelatedLinksSectionHeadingLevel(
+				relatedLinksInput?.linkSectionHeadingLevel,
+				DEFAULT_SETTINGS.relatedLinks.linkSectionHeadingLevel,
 			),
 			includeInheritedLinks: normalizeBoolean(
-				settings?.relatedLinks?.includeInheritedLinks,
+				relatedLinksInput?.includeInheritedLinks,
 				DEFAULT_SETTINGS.relatedLinks.includeInheritedLinks,
 			),
 			missingLinkGracePeriodSeconds: normalizeRelatedLinksMissingLinkGracePeriodSeconds(
-				settings?.relatedLinks?.missingLinkGracePeriodSeconds,
+				relatedLinksInput?.missingLinkGracePeriodSeconds,
 				DEFAULT_SETTINGS.relatedLinks.missingLinkGracePeriodSeconds,
 			),
 			recognizeProjectMarkdownLinks: normalizeBoolean(
-				settings?.relatedLinks?.recognizeProjectMarkdownLinks,
+				relatedLinksInput?.recognizeProjectMarkdownLinks,
 				DEFAULT_SETTINGS.relatedLinks.recognizeProjectMarkdownLinks,
 			),
-			verboseLogging: normalizeBoolean(settings?.relatedLinks?.verboseLogging, DEFAULT_SETTINGS.relatedLinks.verboseLogging),
+			verboseLogging: normalizeBoolean(relatedLinksInput?.verboseLogging, DEFAULT_SETTINGS.relatedLinks.verboseLogging),
 		},
 		fileNameSync: {
 			enabled: normalizeBoolean(settings?.fileNameSync?.enabled, DEFAULT_SETTINGS.fileNameSync.enabled),
@@ -396,6 +411,21 @@ function normalizeBasesTopTabsMaxVisibleTabs(value: unknown, fallback: number): 
 		const parsedValue = Number.parseInt(value, 10);
 		if (Number.isInteger(parsedValue)) {
 			return clamp(parsedValue, MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS, MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS);
+		}
+	}
+
+	return fallback;
+}
+
+function normalizeRelatedLinksSectionHeadingLevel(value: unknown, fallback: number): number {
+	if (typeof value === 'number' && Number.isInteger(value)) {
+		return clamp(value, MIN_RELATED_LINKS_SECTION_HEADING_LEVEL, MAX_RELATED_LINKS_SECTION_HEADING_LEVEL);
+	}
+
+	if (typeof value === 'string' && value.trim().length > 0) {
+		const parsedValue = Number.parseInt(value, 10);
+		if (Number.isInteger(parsedValue)) {
+			return clamp(parsedValue, MIN_RELATED_LINKS_SECTION_HEADING_LEVEL, MAX_RELATED_LINKS_SECTION_HEADING_LEVEL);
 		}
 	}
 
@@ -994,18 +1024,45 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName(strings.inboxHeadingName)
-			.setDesc(strings.inboxHeadingDesc)
+			.setName(strings.linkSectionHeadingName)
+			.setDesc(strings.linkSectionHeadingDesc)
 			.addText((text) => {
-				text.setPlaceholder(strings.inboxHeadingPlaceholder);
+				text.setPlaceholder(strings.linkSectionHeadingPlaceholder);
 				return this.bindCommittedTextSetting(text, {
-					initialValue: this.plugin.settings.relatedLinks.inboxHeading,
-					normalize: (value) => normalizeRequiredText(value, DEFAULT_SETTINGS.relatedLinks.inboxHeading),
+					initialValue: this.plugin.settings.relatedLinks.linkSectionHeading,
+					normalize: (value) => normalizeRequiredText(value, DEFAULT_SETTINGS.relatedLinks.linkSectionHeading),
 					onCommit: (value) => {
-						this.plugin.settings.relatedLinks.inboxHeading = value;
+						this.plugin.settings.relatedLinks.linkSectionHeading = value;
 					},
 					refreshFeatures: ['relatedLinks'],
 				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.linkSectionHeadingLevelName)
+			.setDesc(strings.linkSectionHeadingLevelDesc(
+				MIN_RELATED_LINKS_SECTION_HEADING_LEVEL,
+				MAX_RELATED_LINKS_SECTION_HEADING_LEVEL,
+				DEFAULT_RELATED_LINKS_SECTION_HEADING_LEVEL,
+			))
+			.addDropdown((dropdown) => {
+				for (
+					let level = MIN_RELATED_LINKS_SECTION_HEADING_LEVEL;
+					level <= MAX_RELATED_LINKS_SECTION_HEADING_LEVEL;
+					level += 1
+				) {
+					dropdown.addOption(level.toString(), strings.linkSectionHeadingLevelOption(level));
+				}
+
+				return dropdown
+					.setValue(this.plugin.settings.relatedLinks.linkSectionHeadingLevel.toString())
+					.onChange(async (value) => {
+						this.plugin.settings.relatedLinks.linkSectionHeadingLevel = normalizeRelatedLinksSectionHeadingLevel(
+							value,
+							DEFAULT_SETTINGS.relatedLinks.linkSectionHeadingLevel,
+						);
+						await saveRelatedLinksSettings();
+					});
 			});
 
 		new Setting(containerEl)

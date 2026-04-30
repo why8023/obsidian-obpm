@@ -112,9 +112,12 @@ export interface SettingsLocalization {
 	displayPropertyName: string;
 	displayPropertyDesc: string;
 	displayPropertyPlaceholder: string;
-	inboxHeadingName: string;
-	inboxHeadingDesc: string;
-	inboxHeadingPlaceholder: string;
+	linkSectionHeadingName: string;
+	linkSectionHeadingDesc: string;
+	linkSectionHeadingPlaceholder: string;
+	linkSectionHeadingLevelName: string;
+	linkSectionHeadingLevelDesc: (min: number, max: number, defaultValue: number) => string;
+	linkSectionHeadingLevelOption: (level: number) => string;
 	includeInheritedRelatedLinksName: string;
 	includeInheritedRelatedLinksDesc: string;
 	projectMarkdownRelationsHeading: string;
@@ -256,7 +259,7 @@ export interface SettingsLocalization {
 
 const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	settingsPageTitle: 'OBPM settings',
-	settingsPageDesc: 'Browse OBPM features by scenario. Tabs reduce scrolling, and each card keeps related options together.',
+	settingsPageDesc: 'OBPM organizes project notes, related documents, and Bases workflows inside your Obsidian vault.',
 	settingsTabBases: 'Bases',
 	settingsTabBasesDesc: 'Enhancements for native Bases views, including file reveal, group folding, and persistent top tabs.',
 	settingsTabMetadata: 'Properties',
@@ -367,9 +370,13 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	displayPropertyName: 'Display property',
 	displayPropertyDesc: 'Frontmatter property used as the link label. Falls back to the file name when empty.',
 	displayPropertyPlaceholder: 'Enter display property',
-	inboxHeadingName: 'Inbox heading',
-	inboxHeadingDesc: 'Missing related links are inserted as list items under the first matching level-2 heading.',
-	inboxHeadingPlaceholder: 'Enter Inbox heading',
+	linkSectionHeadingName: 'Link section',
+	linkSectionHeadingDesc: 'Heading text used for inserting missing managed related links.',
+	linkSectionHeadingPlaceholder: 'Enter link section heading',
+	linkSectionHeadingLevelName: 'Link section heading level',
+	linkSectionHeadingLevelDesc: (min, max, defaultValue) =>
+		`Markdown heading level used for the link section. Range: ${min}-${max}. Default: ${defaultValue}.`,
+	linkSectionHeadingLevelOption: (level) => `H${level}`,
 	includeInheritedRelatedLinksName: 'Include inherited related links',
 	includeInheritedRelatedLinksDesc: 'Nest upstream sources under their source note when rebuilding managed related-link lists.',
 	projectMarkdownRelationsHeading: 'Project Markdown link relations',
@@ -512,7 +519,7 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 
 const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	settingsPageTitle: 'OBPM 设置',
-	settingsPageDesc: '按使用场景浏览 OBPM 功能。通过标签分组减少滚动距离，也让相关选项保持在同一块里。',
+	settingsPageDesc: 'OBPM 用于在 Obsidian 库中组织项目笔记、关联文档和 Bases 工作流。',
 	settingsTabBases: 'Bases',
 	settingsTabBasesDesc: '集中管理原生 Bases 视图相关增强，包括文件定位、分组折叠和顶部 Tabs。',
 	settingsTabMetadata: '属性',
@@ -623,9 +630,13 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	displayPropertyName: '显示属性名',
 	displayPropertyDesc: '用作链接显示文本的属性名。留空时回退为文件名。',
 	displayPropertyPlaceholder: '输入显示属性名',
-	inboxHeadingName: 'Inbox 标题',
-	inboxHeadingDesc: '缺失的关联链接会以列表项形式插入到第一个匹配的二级标题下。',
-	inboxHeadingPlaceholder: '输入 Inbox 标题',
+	linkSectionHeadingName: '链接区',
+	linkSectionHeadingDesc: '缺失的托管关联链接会插入到这个标题下。',
+	linkSectionHeadingPlaceholder: '输入链接区标题',
+	linkSectionHeadingLevelName: '链接区标题层级',
+	linkSectionHeadingLevelDesc: (min, max, defaultValue) =>
+		`设置链接区使用几级 Markdown 标题。范围：${min}-${max}。默认值：${defaultValue}。`,
+	linkSectionHeadingLevelOption: (level) => `${level} 级标题`,
 	includeInheritedRelatedLinksName: '包含继承关联链接',
 	includeInheritedRelatedLinksDesc: '重建托管关联链接列表时，将上游来源按源笔记层级嵌套插入。',
 	projectMarkdownRelationsHeading: '项目 Markdown 链接关联',

@@ -1,11 +1,12 @@
-import {TFile} from 'obsidian';
+import type {TFile} from 'obsidian';
 import {buildManagedMarkdownLink, buildRelativeMarkdownDestination, extractManagedInlineLinks, ManagedInlineLink} from './managed-link-protocol';
 import {DesiredTargetLink, DesiredTargetLinkNode} from './types';
 
 interface TargetSyncOptions {
 	debugLog?: (message: string, details?: unknown) => void;
 	desiredLinks: Map<string, DesiredTargetLink>;
-	inboxHeading: string;
+	linkSectionHeading: string;
+	linkSectionHeadingLevel: number;
 	resolveManagedSourcePath: (link: ManagedInlineLink, targetFile: TFile) => string | null;
 	resolveSourceFile: (sourcePath: string) => TFile | null;
 	shouldDeferMissingLinkInsertion?: (link: DesiredTargetLink, targetFile: TFile) => boolean;
@@ -16,7 +17,8 @@ interface TargetSyncOptions {
 interface TargetTreeSyncOptions {
 	debugLog?: (message: string, details?: unknown) => void;
 	desiredLinkTree: DesiredTargetLinkNode[];
-	inboxHeading: string;
+	linkSectionHeading: string;
+	linkSectionHeadingLevel: number;
 	resolveManagedSourcePath: (link: ManagedInlineLink, targetFile: TFile) => string | null;
 	resolveSourceFile: (sourcePath: string) => TFile | null;
 	shouldDeferMissingLinkInsertion?: (link: DesiredTargetLink, targetFile: TFile) => boolean;
@@ -44,7 +46,7 @@ interface SectionRange {
 interface ManagedLinkSyncResolution {
 	canonicalDestination: string | null;
 	desiredLink: DesiredTargetLink | null;
-	isInInboxSection: boolean;
+	isInLinkSection: boolean;
 	managedLink: ManagedInlineLink;
 	sourceFile: TFile | null;
 	sourcePath: string | null;
@@ -89,7 +91,10 @@ interface ManagedTreeBlockRange {
 	start: number;
 }
 
-const DEFAULT_INBOX_HEADING = 'Inbox';
+const DEFAULT_LINK_SECTION_HEADING = 'Related';
+const DEFAULT_LINK_SECTION_HEADING_LEVEL = 2;
+const MAX_LINK_SECTION_HEADING_LEVEL = 6;
+const MIN_LINK_SECTION_HEADING_LEVEL = 1;
 const HEADING_LINE_PATTERN = /^(?: {0,3})(#{1,6})[ \t]+(.*)$/gm;
 const MANAGED_TREE_INDENT = '    ';
 const MANAGED_TREE_INDENT_WIDTH = 4;
@@ -103,12 +108,18 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 	const ignoredManagedTreeBlockRanges = findExistingManagedTreeBlockRanges(content);
 	const managedLinks = extractManagedInlineLinks(content)
 		.filter((managedLink) => !isIndexInContentRanges(managedLink.start, ignoredManagedTreeBlockRanges));
-	const normalizedInboxHeading = normalizeInboxHeading(options.inboxHeading);
+	const normalizedLinkSectionHeading = normalizeLinkSectionHeading(options.linkSectionHeading);
+	const normalizedLinkSectionHeadingLevel = normalizeLinkSectionHeadingLevel(options.linkSectionHeadingLevel);
 	const headings = parseMarkdownHeadings(content);
-	const inboxSection = findExistingInboxSection(content, headings, normalizedInboxHeading);
+	const linkSection = findExistingLinkSection(
+		content,
+		headings,
+		normalizedLinkSectionHeading,
+		normalizedLinkSectionHeadingLevel,
+	);
 	const managedLinkResolutions = managedLinks.map((managedLink) => resolveManagedLinkSyncResolution(
 		managedLink,
-		inboxSection,
+		linkSection,
 		options,
 	));
 	const preferredManagedLinksBySourcePath = buildPreferredManagedLinksBySourcePath(managedLinkResolutions);
@@ -151,8 +162,8 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 			lastIndex = removalRange.end;
 			hasRemovedLinks = true;
 			options.debugLog?.(
-				managedLinkResolution.isInInboxSection
-					? 'Removed duplicate managed link while preferring a non-Inbox occurrence.'
+				managedLinkResolution.isInLinkSection
+					? 'Removed duplicate managed link while preferring a non-link-section occurrence.'
 					: 'Removed duplicate managed link while keeping the preferred occurrence.',
 				{
 					sourcePath,
@@ -242,7 +253,8 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 		if (options.shouldDeferMissingLinkInsertion?.(missingLink, options.targetFile)) {
 			deferredMissingSourcePaths.add(missingLink.sourcePath);
 			options.debugLog?.('Deferred missing managed link while its grace period is still active.', {
-				inboxHeading: normalizedInboxHeading,
+				linkSectionHeading: normalizedLinkSectionHeading,
+				linkSectionHeadingLevel: normalizedLinkSectionHeadingLevel,
 				sourcePath: missingLink.sourcePath,
 				targetPath: options.targetFile.path,
 			});
@@ -251,16 +263,18 @@ export function syncManagedLinksInContent(content: string, options: TargetSyncOp
 
 		const destination = buildRelativeMarkdownDestination(sourceFile, options.targetFile);
 		const linkLine = buildManagedMarkdownListItem(missingLink.displayText, destination);
-		finalContent = insertLinkLineIntoInboxSection(
+		finalContent = insertLinkLineIntoLinkSection(
 			finalContent,
 			linkLine,
-			options.inboxHeading,
+			options.linkSectionHeading,
+			options.linkSectionHeadingLevel,
 		);
 		satisfiedDesiredSourcePaths.add(missingLink.sourcePath);
 		options.debugLog?.('Appended missing managed link.', {
 			destination,
 			displayText: missingLink.displayText,
-			inboxHeading: normalizedInboxHeading,
+			linkSectionHeading: normalizedLinkSectionHeading,
+			linkSectionHeadingLevel: normalizedLinkSectionHeadingLevel,
 			sourcePath: missingLink.sourcePath,
 			targetPath: options.targetFile.path,
 		});
@@ -309,10 +323,11 @@ export function syncManagedLinkTreeInContent(content: string, options: TargetTre
 		: content;
 
 	if (managedBlock.length > 0) {
-		finalContent = insertLinkBlockIntoInboxSection(
+		finalContent = insertLinkBlockIntoLinkSection(
 			finalContent,
 			managedBlock,
-			options.inboxHeading,
+			options.linkSectionHeading,
+			options.linkSectionHeadingLevel,
 		);
 	}
 
@@ -325,7 +340,7 @@ export function syncManagedLinkTreeInContent(content: string, options: TargetTre
 
 function resolveManagedLinkSyncResolution(
 	managedLink: ManagedInlineLink,
-	inboxSection: SectionRange | null,
+	linkSection: SectionRange | null,
 	options: TargetSyncOptions,
 ): ManagedLinkSyncResolution {
 	const sourcePath = options.resolveManagedSourcePath(managedLink, options.targetFile);
@@ -333,7 +348,7 @@ function resolveManagedLinkSyncResolution(
 		return {
 			canonicalDestination: null,
 			desiredLink: null,
-			isInInboxSection: isManagedLinkInSection(managedLink, inboxSection),
+			isInLinkSection: isManagedLinkInSection(managedLink, linkSection),
 			managedLink,
 			sourceFile: null,
 			sourcePath: null,
@@ -346,7 +361,7 @@ function resolveManagedLinkSyncResolution(
 	return {
 		canonicalDestination: sourceFile ? buildRelativeMarkdownDestination(sourceFile, options.targetFile) : null,
 		desiredLink,
-		isInInboxSection: isManagedLinkInSection(managedLink, inboxSection),
+		isInLinkSection: isManagedLinkInSection(managedLink, linkSection),
 		managedLink,
 		sourceFile,
 		sourcePath,
@@ -380,8 +395,8 @@ function shouldPreferManagedLinkResolution(
 	candidate: ManagedLinkSyncResolution,
 	currentPreferred: ManagedLinkSyncResolution,
 ): boolean {
-	if (candidate.isInInboxSection !== currentPreferred.isInInboxSection) {
-		return !candidate.isInInboxSection;
+	if (candidate.isInLinkSection !== currentPreferred.isInLinkSection) {
+		return !candidate.isInLinkSection;
 	}
 
 	return candidate.managedLink.start < currentPreferred.managedLink.start;
@@ -712,10 +727,21 @@ function buildPreservedManagedTreeContent(
 	};
 }
 
-function insertLinkLineIntoInboxSection(content: string, linkLine: string, inboxHeading: string): string {
-	const normalizedInboxHeading = normalizeInboxHeading(inboxHeading);
+function insertLinkLineIntoLinkSection(
+	content: string,
+	linkLine: string,
+	linkSectionHeading: string,
+	linkSectionHeadingLevel: number,
+): string {
+	const normalizedLinkSectionHeading = normalizeLinkSectionHeading(linkSectionHeading);
+	const normalizedLinkSectionHeadingLevel = normalizeLinkSectionHeadingLevel(linkSectionHeadingLevel);
 	const headings = parseMarkdownHeadings(content);
-	const existingSection = findExistingInboxSection(content, headings, normalizedInboxHeading);
+	const existingSection = findExistingLinkSection(
+		content,
+		headings,
+		normalizedLinkSectionHeading,
+		normalizedLinkSectionHeadingLevel,
+	);
 	if (existingSection) {
 		const sectionContent = content.slice(existingSection.contentStart, existingSection.end);
 		const nextSectionContent = appendListLineToSection(sectionContent, linkLine);
@@ -726,17 +752,34 @@ function insertLinkLineIntoInboxSection(content: string, linkLine: string, inbox
 
 	const bodyStart = getBodyStart(content);
 	const firstBodyHeading = headings.find((heading) => heading.start >= bodyStart) ?? null;
-	const insertAt = firstBodyHeading?.level === 1
-		? getInboxInsertionIndexWithinFirstH1(content, headings, firstBodyHeading)
+	const insertAt = firstBodyHeading?.level === 1 && normalizedLinkSectionHeadingLevel > 1
+		? getLinkSectionInsertionIndexWithinFirstH1(content, headings, firstBodyHeading, normalizedLinkSectionHeadingLevel)
 		: bodyStart;
 
-	return insertNewInboxSection(content, insertAt, normalizedInboxHeading, linkLine);
+	return insertNewLinkSection(
+		content,
+		insertAt,
+		normalizedLinkSectionHeading,
+		normalizedLinkSectionHeadingLevel,
+		linkLine,
+	);
 }
 
-function insertLinkBlockIntoInboxSection(content: string, linkBlock: string, inboxHeading: string): string {
-	const normalizedInboxHeading = normalizeInboxHeading(inboxHeading);
+function insertLinkBlockIntoLinkSection(
+	content: string,
+	linkBlock: string,
+	linkSectionHeading: string,
+	linkSectionHeadingLevel: number,
+): string {
+	const normalizedLinkSectionHeading = normalizeLinkSectionHeading(linkSectionHeading);
+	const normalizedLinkSectionHeadingLevel = normalizeLinkSectionHeadingLevel(linkSectionHeadingLevel);
 	const headings = parseMarkdownHeadings(content);
-	const existingSection = findExistingInboxSection(content, headings, normalizedInboxHeading);
+	const existingSection = findExistingLinkSection(
+		content,
+		headings,
+		normalizedLinkSectionHeading,
+		normalizedLinkSectionHeadingLevel,
+	);
 	if (existingSection) {
 		const sectionContent = content.slice(existingSection.contentStart, existingSection.end);
 		const nextSectionContent = appendListBlockToSection(sectionContent, linkBlock);
@@ -747,11 +790,17 @@ function insertLinkBlockIntoInboxSection(content: string, linkBlock: string, inb
 
 	const bodyStart = getBodyStart(content);
 	const firstBodyHeading = headings.find((heading) => heading.start >= bodyStart) ?? null;
-	const insertAt = firstBodyHeading?.level === 1
-		? getInboxInsertionIndexWithinFirstH1(content, headings, firstBodyHeading)
+	const insertAt = firstBodyHeading?.level === 1 && normalizedLinkSectionHeadingLevel > 1
+		? getLinkSectionInsertionIndexWithinFirstH1(content, headings, firstBodyHeading, normalizedLinkSectionHeadingLevel)
 		: bodyStart;
 
-	return insertNewInboxSection(content, insertAt, normalizedInboxHeading, linkBlock.trimEnd());
+	return insertNewLinkSection(
+		content,
+		insertAt,
+		normalizedLinkSectionHeading,
+		normalizedLinkSectionHeadingLevel,
+		linkBlock.trimEnd(),
+	);
 }
 
 function appendListLineToSection(sectionContent: string, linkLine: string): string {
@@ -786,10 +835,17 @@ function endsWithListItem(content: string): boolean {
 	return /^[ \t]*[-*+][ \t]+/.test(lastLine);
 }
 
-function insertNewInboxSection(content: string, insertAt: number, inboxHeading: string, linkLine: string): string {
+function insertNewLinkSection(
+	content: string,
+	insertAt: number,
+	linkSectionHeading: string,
+	linkSectionHeadingLevel: number,
+	linkLine: string,
+): string {
 	const prefix = getBlockPrefix(content, insertAt);
 	const suffix = getBlockSuffix(content, insertAt);
-	const block = `## ${inboxHeading}\n${linkLine}\n`;
+	const headingMarker = '#'.repeat(linkSectionHeadingLevel);
+	const block = `${headingMarker} ${linkSectionHeading}\n${linkLine}\n`;
 
 	return content.slice(0, insertAt) + prefix + block + suffix + content.slice(insertAt);
 }
@@ -815,29 +871,31 @@ function getBlockSuffix(content: string, insertAt: number): string {
 	return content.startsWith('\n', insertAt) ? '' : '\n';
 }
 
-function findExistingInboxSection(
+function findExistingLinkSection(
 	content: string,
 	headings: MarkdownHeading[],
-	inboxHeading: string,
+	linkSectionHeading: string,
+	linkSectionHeadingLevel: number,
 ): SectionRange | null {
 	for (const [index, heading] of headings.entries()) {
-		if (heading.level !== 2 || heading.text !== inboxHeading) {
+		if (heading.level !== linkSectionHeadingLevel || heading.text !== linkSectionHeading) {
 			continue;
 		}
 
 		return {
 			contentStart: heading.end,
-			end: findSectionEnd(content, headings, index, 2),
+			end: findSectionEnd(content, headings, index, linkSectionHeadingLevel),
 		};
 	}
 
 	return null;
 }
 
-function getInboxInsertionIndexWithinFirstH1(
+function getLinkSectionInsertionIndexWithinFirstH1(
 	content: string,
 	headings: MarkdownHeading[],
 	firstHeading: MarkdownHeading,
+	linkSectionHeadingLevel: number,
 ): number {
 	const firstHeadingIndex = headings.findIndex((heading) => heading.start === firstHeading.start);
 	if (firstHeadingIndex < 0) {
@@ -856,7 +914,7 @@ function getInboxInsertionIndexWithinFirstH1(
 			break;
 		}
 
-		if (heading.level === 2) {
+		if (heading.level === linkSectionHeadingLevel) {
 			return heading.start;
 		}
 	}
@@ -970,9 +1028,28 @@ function getLineEndIndex(content: string, index: number): number {
 	return nextLineBreak >= 0 ? nextLineBreak : content.length;
 }
 
-function normalizeInboxHeading(value: string): string {
+function normalizeLinkSectionHeading(value: string): string {
 	const normalized = value.trim();
-	return normalized.length > 0 ? normalized : DEFAULT_INBOX_HEADING;
+	return normalized.length > 0 ? normalized : DEFAULT_LINK_SECTION_HEADING;
+}
+
+function normalizeLinkSectionHeadingLevel(value: unknown): number {
+	if (typeof value === 'number' && Number.isInteger(value)) {
+		return clamp(value, MIN_LINK_SECTION_HEADING_LEVEL, MAX_LINK_SECTION_HEADING_LEVEL);
+	}
+
+	if (typeof value === 'string' && value.trim().length > 0) {
+		const parsedValue = Number.parseInt(value, 10);
+		if (Number.isInteger(parsedValue)) {
+			return clamp(parsedValue, MIN_LINK_SECTION_HEADING_LEVEL, MAX_LINK_SECTION_HEADING_LEVEL);
+		}
+	}
+
+	return DEFAULT_LINK_SECTION_HEADING_LEVEL;
+}
+
+function clamp(value: number, min: number, max: number): number {
+	return Math.min(Math.max(value, min), max);
 }
 
 function normalizeContentAfterRemoval(content: string): string {
