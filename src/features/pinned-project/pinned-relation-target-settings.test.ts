@@ -33,17 +33,62 @@ describe('normalizePinnedRelationTargetSettings', () => {
 				{
 					key: 'archived',
 					matchMode: 'key-exists',
+					source: 'frontmatter',
 				},
 			],
 			includeRules: [
 				{
 					key: 'kind',
 					matchMode: 'key-value-equals',
+					source: 'frontmatter',
 					value: 'capture',
 				},
 			],
 			targetPath: 'Projects/Alpha/Tasks/Task.md',
 		});
+	});
+
+	it('normalizes path rules and drops empty path rules', () => {
+		const settings = normalizePinnedRelationTargetSettings({
+			pinnedRelationTarget: {
+				enabled: true,
+				excludeRules: [
+					{
+						matchMode: 'path-glob',
+						source: 'path',
+						value: '**/archive/**',
+					},
+					{
+						matchMode: 'path-contains',
+						source: 'path',
+						value: '   ',
+					},
+				],
+				includeRules: [
+					{
+						matchMode: 'path-starts-with',
+						source: 'path',
+						value: '\\0_inbox\\',
+					},
+				],
+				targetPath: 'Projects/Alpha/Tasks/Task.md',
+			},
+		});
+
+		assert.deepEqual(settings.excludeRules, [
+			{
+				matchMode: 'path-glob',
+				source: 'path',
+				value: '**/archive/**',
+			},
+		]);
+		assert.deepEqual(settings.includeRules, [
+			{
+				matchMode: 'path-starts-with',
+				source: 'path',
+				value: '0_inbox/',
+			},
+		]);
 	});
 
 	it('prefers an existing pinned relation target setting over the legacy pinned project setting', () => {

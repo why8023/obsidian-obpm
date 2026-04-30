@@ -257,7 +257,7 @@ export class PinnedProjectFeature extends Component {
 		}
 
 		const cache = this.plugin.app.metadataCache.getFileCache(file);
-		const decision = this.getPendingDecision(cache);
+		const decision = this.getPendingDecision(file, cache);
 		if (decision === 'defer') {
 			const retryDelayMs = this.pendingQueue.defer(filePath);
 			this.debugLog('Deferred pinned relation target linking until metadata is ready.', {
@@ -305,9 +305,10 @@ export class PinnedProjectFeature extends Component {
 		}
 	}
 
-	private getPendingDecision(cache: CachedMetadata | null): PinnedProjectRuleDecision {
+	private getPendingDecision(file: TFile, cache: CachedMetadata | null): PinnedProjectRuleDecision {
 		return getPinnedProjectRuleDecision(cache, {
 			excludeRules: this.plugin.settings.pinnedRelationTarget.excludeRules,
+			filePath: file.path,
 			includeRules: this.plugin.settings.pinnedRelationTarget.includeRules,
 		});
 	}

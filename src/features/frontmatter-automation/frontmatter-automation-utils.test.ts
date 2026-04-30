@@ -12,6 +12,10 @@ describe('createFrontmatterSnapshotFromMetadataCache', () => {
 			createFrontmatterSnapshotFromMetadataCache(null),
 			UNAVAILABLE_FRONTMATTER_SNAPSHOT,
 		);
+		assert.equal(
+			createFrontmatterSnapshotFromMetadataCache(undefined),
+			UNAVAILABLE_FRONTMATTER_SNAPSHOT,
+		);
 		assert.equal(createFrontmatterSnapshotFromMetadataCache({}), null);
 	});
 

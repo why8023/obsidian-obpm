@@ -37,9 +37,9 @@ export function createFrontmatterSnapshot(frontmatter: Record<string, unknown> |
 }
 
 export function createFrontmatterSnapshotFromMetadataCache(
-	cache: FrontmatterMetadataCacheLike | null,
+	cache: FrontmatterMetadataCacheLike | null | undefined,
 ): MetadataCacheSnapshot {
-	if (cache === null) {
+	if (cache === null || cache === undefined) {
 		return UNAVAILABLE_FRONTMATTER_SNAPSHOT;
 	}
 

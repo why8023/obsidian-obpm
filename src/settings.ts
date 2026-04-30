@@ -31,6 +31,8 @@ import {
 	createDefaultPinnedRelationTargetRule,
 	DEFAULT_PINNED_RELATION_TARGET_SETTINGS,
 	normalizePinnedRelationTargetSettings,
+	normalizePinnedRelationTargetPathMatchMode,
+	PinnedRelationTargetRule,
 	PinnedRelationTargetSettings,
 	PinnedRelationTargetSettingsInput,
 } from './features/pinned-project/pinned-relation-target-settings';
@@ -76,6 +78,21 @@ interface ProjectRoutingRuleListSectionOptions {
 	refreshFeatures?: readonly RefreshableFeatureId[];
 	ruleLabel: (index: number) => string;
 	setRules: (rules: FrontmatterMatchRule[]) => void;
+}
+
+interface PinnedRelationTargetRuleListSectionOptions {
+	addRuleButton: string;
+	addRuleDesc: string;
+	addRuleName: string;
+	getRules: () => PinnedRelationTargetRule[];
+	headingDesc: string;
+	headingName: string;
+	noRulesText: string;
+	removeRuleButton: string;
+	removeRuleDesc: string;
+	removeRuleName: string;
+	ruleLabel: (index: number) => string;
+	setRules: (rules: PinnedRelationTargetRule[]) => void;
 }
 
 export interface RelatedLinksSettings {
@@ -1342,16 +1359,14 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 		}
 
-		this.renderProjectRoutingRuleListSection(containerEl, {
+		this.renderPinnedRelationTargetRuleListSection(containerEl, {
 			addRuleButton: strings.pinnedProjectAddIncludeRuleButton,
 			addRuleDesc: strings.pinnedProjectAddIncludeRuleDesc,
 			addRuleName: strings.pinnedProjectAddIncludeRuleName,
-			createRule: createDefaultPinnedRelationTargetRule,
 			getRules: () => this.plugin.settings.pinnedRelationTarget.includeRules,
 			headingDesc: strings.pinnedProjectIncludeRulesDesc,
 			headingName: strings.pinnedProjectIncludeRulesHeading,
 			noRulesText: strings.pinnedProjectNoIncludeRules,
-			refreshFeatures: ['pinnedRelationTarget'],
 			removeRuleButton: strings.pinnedProjectRemoveIncludeRuleButton,
 			removeRuleDesc: strings.pinnedProjectRemoveIncludeRuleDesc,
 			removeRuleName: strings.pinnedProjectRemoveIncludeRuleName,
@@ -1361,16 +1376,14 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			},
 		});
 
-		this.renderProjectRoutingRuleListSection(containerEl, {
+		this.renderPinnedRelationTargetRuleListSection(containerEl, {
 			addRuleButton: strings.pinnedProjectAddExcludeRuleButton,
 			addRuleDesc: strings.pinnedProjectAddExcludeRuleDesc,
 			addRuleName: strings.pinnedProjectAddExcludeRuleName,
-			createRule: createDefaultPinnedRelationTargetRule,
 			getRules: () => this.plugin.settings.pinnedRelationTarget.excludeRules,
 			headingDesc: strings.pinnedProjectExcludeRulesDesc,
 			headingName: strings.pinnedProjectExcludeRulesHeading,
 			noRulesText: strings.pinnedProjectNoExcludeRules,
-			refreshFeatures: ['pinnedRelationTarget'],
 			removeRuleButton: strings.pinnedProjectRemoveExcludeRuleButton,
 			removeRuleDesc: strings.pinnedProjectRemoveExcludeRuleDesc,
 			removeRuleName: strings.pinnedProjectRemoveExcludeRuleName,
@@ -1378,6 +1391,302 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			setRules: (rules) => {
 				this.plugin.settings.pinnedRelationTarget.excludeRules = rules;
 			},
+		});
+	}
+
+	private renderPinnedRelationTargetRuleListSection(
+		containerEl: HTMLElement,
+		options: PinnedRelationTargetRuleListSectionOptions,
+	): void {
+		const strings = getSettingsLocalization();
+		const savePinnedRelationTargetSettings = async () => this.saveSettingsFor('pinnedRelationTarget');
+
+		new Setting(containerEl)
+			.setName(options.headingName)
+			.setDesc(options.headingDesc)
+			.setHeading();
+
+		const rules = options.getRules();
+		if (rules.length === 0) {
+			containerEl.createEl('p', {
+				cls: 'setting-item-description',
+				text: options.noRulesText,
+			});
+		} else {
+			const tableWrapEl = containerEl.createDiv({cls: 'obpm-rule-table-wrap'});
+			const tableEl = tableWrapEl.createEl('table', {cls: 'obpm-rule-table obpm-rule-table-pinned-target'});
+			const headerRowEl = tableEl.createEl('thead').createEl('tr');
+			headerRowEl.createEl('th', {text: '#'});
+			headerRowEl.createEl('th', {text: strings.pinnedProjectRuleSourceName});
+			headerRowEl.createEl('th', {text: strings.pinnedProjectRuleKeyOrPathName});
+			headerRowEl.createEl('th', {text: options.removeRuleButton});
+
+			const bodyEl = tableEl.createEl('tbody');
+			rules.forEach((rule, index) => {
+				const rowEl = bodyEl.createEl('tr');
+				rowEl.createEl('td', {
+					cls: 'obpm-rule-table-index',
+					text: String(index + 1),
+				});
+
+				const sourceSelectEl = rowEl.createEl('td').createEl('select', {
+					attr: {
+						'aria-label': `${options.ruleLabel(index + 1)} ${strings.pinnedProjectRuleSourceName}`,
+					},
+					cls: 'obpm-rule-table-select',
+				});
+				sourceSelectEl.createEl('option', {
+					attr: {value: 'frontmatter'},
+					text: strings.pinnedProjectRuleSourceFrontmatterLabel,
+				});
+				sourceSelectEl.createEl('option', {
+					attr: {value: 'path'},
+					text: strings.pinnedProjectRuleSourcePathLabel,
+				});
+				sourceSelectEl.value = rule.source;
+
+				const conditionCellEl = rowEl.createEl('td');
+				const conditionEl = conditionCellEl.createDiv({
+					cls: rule.source === 'path'
+						? 'obpm-pinned-rule-condition is-path-rule'
+						: 'obpm-pinned-rule-condition',
+				});
+
+				const keyOrPathInputEl = conditionEl.createEl('input', {
+					attr: {
+						'aria-label': `${options.ruleLabel(index + 1)} ${strings.pinnedProjectRuleKeyOrPathName}`,
+						placeholder: rule.source === 'path'
+							? strings.pinnedProjectRulePathPlaceholder
+							: strings.projectRoutingRuleKeyPlaceholder,
+						type: 'text',
+					},
+					cls: 'obpm-rule-table-input',
+					value: rule.source === 'path' ? rule.value : rule.key,
+				});
+
+				const matchModeSelectEl = conditionEl.createEl('select', {
+					attr: {
+						'aria-label': `${options.ruleLabel(index + 1)} ${strings.projectRoutingRuleMatchModeName}`,
+					},
+					cls: 'obpm-rule-table-select',
+				});
+				if (rule.source === 'path') {
+					matchModeSelectEl.createEl('option', {
+						attr: {value: 'path-contains'},
+						text: strings.pinnedProjectPathMatchModeContainsLabel,
+					});
+					matchModeSelectEl.createEl('option', {
+						attr: {value: 'path-starts-with'},
+						text: strings.pinnedProjectPathMatchModeStartsWithLabel,
+					});
+					matchModeSelectEl.createEl('option', {
+						attr: {value: 'path-glob'},
+						text: strings.pinnedProjectPathMatchModeGlobLabel,
+					});
+				} else {
+					matchModeSelectEl.createEl('option', {
+						attr: {value: 'key-exists'},
+						text: strings.projectRoutingMatchModeKeyExistsLabel,
+					});
+					matchModeSelectEl.createEl('option', {
+						attr: {value: 'key-value-equals'},
+						text: strings.projectRoutingMatchModeKeyValueEqualsLabel,
+					});
+				}
+				matchModeSelectEl.value = rule.matchMode;
+
+				const valueInputEl = conditionEl.createEl('input', {
+					attr: {
+						'aria-label': `${options.ruleLabel(index + 1)} ${strings.projectRoutingRuleValueName}`,
+						placeholder: strings.projectRoutingRuleValuePlaceholder,
+						type: 'text',
+					},
+					cls: 'obpm-rule-table-input',
+					value: rule.source === 'frontmatter' ? rule.value ?? '' : '',
+				});
+				valueInputEl.disabled = rule.source === 'path' || rule.matchMode !== 'key-value-equals';
+				valueInputEl.hidden = rule.source === 'path';
+
+				const commitKeyOrPath = async () => {
+					const nextRules = [...options.getRules()];
+					const currentRule = nextRules[index] ?? rule;
+					const nextValue = keyOrPathInputEl.value.trim()
+						|| (currentRule.source === 'path' ? currentRule.value : currentRule.key);
+					keyOrPathInputEl.value = nextValue;
+					if (currentRule.source === 'path') {
+						if (currentRule.value === nextValue) {
+							return;
+						}
+
+						nextRules[index] = {
+							...currentRule,
+							value: nextValue,
+						};
+					} else {
+						if (currentRule.key === nextValue) {
+							return;
+						}
+
+						nextRules[index] = {
+							...currentRule,
+							key: nextValue,
+						};
+					}
+
+					options.setRules(nextRules);
+					await savePinnedRelationTargetSettings();
+				};
+
+				const commitValue = async () => {
+					if (valueInputEl.disabled) {
+						return;
+					}
+
+					const nextValue = valueInputEl.value.trim();
+					valueInputEl.value = nextValue;
+					const nextRules = [...options.getRules()];
+					const currentRule = nextRules[index] ?? rule;
+					if (currentRule.source !== 'frontmatter'
+						|| currentRule.matchMode !== 'key-value-equals'
+						|| currentRule.value === nextValue) {
+						return;
+					}
+
+					nextRules[index] = {
+						...currentRule,
+						value: nextValue,
+					};
+					options.setRules(nextRules);
+					await savePinnedRelationTargetSettings();
+				};
+
+				keyOrPathInputEl.addEventListener('change', () => {
+					void commitKeyOrPath();
+				});
+				keyOrPathInputEl.addEventListener('keydown', (event) => {
+					if (event.key !== 'Enter') {
+						return;
+					}
+
+					event.preventDefault();
+					void commitKeyOrPath();
+				});
+				valueInputEl.addEventListener('change', () => {
+					void commitValue();
+				});
+				valueInputEl.addEventListener('keydown', (event) => {
+					if (event.key !== 'Enter') {
+						return;
+					}
+
+					event.preventDefault();
+					void commitValue();
+				});
+
+				sourceSelectEl.addEventListener('change', () => {
+					void (async () => {
+						const nextRules = [...options.getRules()];
+						const currentRule = nextRules[index] ?? rule;
+						if (sourceSelectEl.value === currentRule.source) {
+							return;
+						}
+
+						nextRules[index] = sourceSelectEl.value === 'path'
+							? {
+								matchMode: 'path-contains',
+								source: 'path',
+								value: currentRule.source === 'frontmatter' ? currentRule.key : currentRule.value,
+							}
+							: createDefaultPinnedRelationTargetRule();
+						options.setRules(nextRules);
+						await savePinnedRelationTargetSettings();
+						this.display();
+					})();
+				});
+
+				matchModeSelectEl.addEventListener('change', () => {
+					void (async () => {
+						const nextRules = [...options.getRules()];
+						const currentRule = nextRules[index] ?? rule;
+						if (currentRule.source === 'path') {
+							const nextMatchMode = normalizePinnedRelationTargetPathMatchMode(
+								matchModeSelectEl.value,
+								currentRule.matchMode,
+							);
+							if (currentRule.matchMode === nextMatchMode) {
+								return;
+							}
+
+							nextRules[index] = {
+								...currentRule,
+								matchMode: nextMatchMode,
+							};
+						} else {
+							const nextMatchMode = normalizeFrontmatterMatchMode(matchModeSelectEl.value, currentRule.matchMode);
+							nextRules[index] = nextMatchMode === 'key-value-equals'
+								? {
+									...currentRule,
+									matchMode: nextMatchMode,
+									value: currentRule.value ?? valueInputEl.value.trim(),
+								}
+								: {
+									key: currentRule.key,
+									matchMode: nextMatchMode,
+									source: 'frontmatter',
+								};
+							valueInputEl.disabled = nextMatchMode !== 'key-value-equals';
+							if (valueInputEl.disabled) {
+								valueInputEl.value = '';
+							}
+						}
+
+						options.setRules(nextRules);
+						await savePinnedRelationTargetSettings();
+					})();
+				});
+
+				const actionCellEl = rowEl.createEl('td', {cls: 'obpm-rule-table-action'});
+				const removeButtonEl = actionCellEl.createEl('button', {
+					cls: 'mod-warning',
+					text: options.removeRuleButton,
+				});
+				removeButtonEl.type = 'button';
+				removeButtonEl.setAttr('aria-label', `${options.removeRuleName}: ${options.ruleLabel(index + 1)}`);
+				removeButtonEl.setAttr('title', options.removeRuleDesc);
+				removeButtonEl.addEventListener('click', () => {
+					void (async () => {
+						const nextRules = [...options.getRules()];
+						nextRules.splice(index, 1);
+						options.setRules(nextRules);
+						await savePinnedRelationTargetSettings();
+						this.display();
+					})();
+				});
+			});
+		}
+
+		const footerEl = containerEl.createDiv({cls: 'obpm-rule-table-footer'});
+		const footerTextEl = footerEl.createDiv({cls: 'obpm-rule-table-footer-text'});
+		footerTextEl.createDiv({
+			cls: 'obpm-rule-table-footer-name',
+			text: options.addRuleName,
+		});
+		footerTextEl.createDiv({
+			cls: 'obpm-rule-table-footer-desc',
+			text: options.addRuleDesc,
+		});
+
+		const addButtonEl = footerEl.createEl('button', {text: options.addRuleButton});
+		addButtonEl.type = 'button';
+		addButtonEl.addEventListener('click', () => {
+			void (async () => {
+				options.setRules([
+					...options.getRules(),
+					createDefaultPinnedRelationTargetRule(),
+				]);
+				await savePinnedRelationTargetSettings();
+				this.display();
+			})();
 		});
 	}
 

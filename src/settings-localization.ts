@@ -95,6 +95,14 @@ export interface SettingsLocalization {
 	pinnedProjectRemoveExcludeRuleName: string;
 	pinnedProjectRemoveExcludeRuleDesc: string;
 	pinnedProjectRemoveExcludeRuleButton: string;
+	pinnedProjectRuleSourceName: string;
+	pinnedProjectRuleSourceFrontmatterLabel: string;
+	pinnedProjectRuleSourcePathLabel: string;
+	pinnedProjectRuleKeyOrPathName: string;
+	pinnedProjectRulePathPlaceholder: string;
+	pinnedProjectPathMatchModeContainsLabel: string;
+	pinnedProjectPathMatchModeStartsWithLabel: string;
+	pinnedProjectPathMatchModeGlobLabel: string;
 	relatedLinksHeading: string;
 	enableRelatedLinksName: string;
 	enableRelatedLinksDesc: string;
@@ -327,7 +335,7 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	pinnedProjectIncludeRuleLabel: (index) => `Include rule ${index}`,
 	pinnedProjectNoIncludeRules: 'No include rules are configured, so all new markdown files are included unless excluded below.',
 	pinnedProjectAddIncludeRuleName: 'Add include rule',
-	pinnedProjectAddIncludeRuleDesc: 'Append a frontmatter rule that allows pinned-target linking.',
+	pinnedProjectAddIncludeRuleDesc: 'Append a frontmatter or file path rule that allows pinned-target linking.',
 	pinnedProjectAddIncludeRuleButton: 'Add rule',
 	pinnedProjectRemoveIncludeRuleName: 'Remove this include rule',
 	pinnedProjectRemoveIncludeRuleDesc: 'Delete this pinned-target include rule.',
@@ -337,11 +345,19 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	pinnedProjectExcludeRuleLabel: (index) => `Exclude rule ${index}`,
 	pinnedProjectNoExcludeRules: 'No exclude rules are configured.',
 	pinnedProjectAddExcludeRuleName: 'Add exclude rule',
-	pinnedProjectAddExcludeRuleDesc: 'Append a frontmatter rule that blocks pinned-target linking.',
+	pinnedProjectAddExcludeRuleDesc: 'Append a frontmatter or file path rule that blocks pinned-target linking.',
 	pinnedProjectAddExcludeRuleButton: 'Add rule',
 	pinnedProjectRemoveExcludeRuleName: 'Remove this exclude rule',
 	pinnedProjectRemoveExcludeRuleDesc: 'Delete this pinned-target exclude rule.',
 	pinnedProjectRemoveExcludeRuleButton: 'Remove rule',
+	pinnedProjectRuleSourceName: 'Rule type',
+	pinnedProjectRuleSourceFrontmatterLabel: 'Frontmatter',
+	pinnedProjectRuleSourcePathLabel: 'File path',
+	pinnedProjectRuleKeyOrPathName: 'Rule condition',
+	pinnedProjectRulePathPlaceholder: 'Example: 0_inbox/ or **/archive/**',
+	pinnedProjectPathMatchModeContainsLabel: 'Path contains',
+	pinnedProjectPathMatchModeStartsWithLabel: 'Path starts with',
+	pinnedProjectPathMatchModeGlobLabel: 'Path matches glob',
 	relatedLinksHeading: 'Related frontmatter links',
 	enableRelatedLinksName: 'Enable related frontmatter links',
 	enableRelatedLinksDesc: 'Automatically add this note into the notes referenced by a frontmatter property.',
@@ -575,7 +591,7 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	pinnedProjectIncludeRuleLabel: (index) => `包含规则 ${index}`,
 	pinnedProjectNoIncludeRules: '当前没有包含规则，因此所有新建 Markdown 文件都会被包含，除非被下面的排除规则命中。',
 	pinnedProjectAddIncludeRuleName: '添加包含规则',
-	pinnedProjectAddIncludeRuleDesc: '添加一条允许固定目标关联的 frontmatter 规则。',
+	pinnedProjectAddIncludeRuleDesc: '添加一条允许固定目标关联的 frontmatter 或文件路径规则。',
 	pinnedProjectAddIncludeRuleButton: '添加规则',
 	pinnedProjectRemoveIncludeRuleName: '删除这条包含规则',
 	pinnedProjectRemoveIncludeRuleDesc: '从列表中移除这条固定目标包含规则。',
@@ -585,11 +601,19 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	pinnedProjectExcludeRuleLabel: (index) => `排除规则 ${index}`,
 	pinnedProjectNoExcludeRules: '当前没有排除规则。',
 	pinnedProjectAddExcludeRuleName: '添加排除规则',
-	pinnedProjectAddExcludeRuleDesc: '添加一条阻止固定目标关联的 frontmatter 规则。',
+	pinnedProjectAddExcludeRuleDesc: '添加一条阻止固定目标关联的 frontmatter 或文件路径规则。',
 	pinnedProjectAddExcludeRuleButton: '添加规则',
 	pinnedProjectRemoveExcludeRuleName: '删除这条排除规则',
 	pinnedProjectRemoveExcludeRuleDesc: '从列表中移除这条固定目标排除规则。',
 	pinnedProjectRemoveExcludeRuleButton: '删除规则',
+	pinnedProjectRuleSourceName: '规则类型',
+	pinnedProjectRuleSourceFrontmatterLabel: 'Frontmatter',
+	pinnedProjectRuleSourcePathLabel: '文件路径',
+	pinnedProjectRuleKeyOrPathName: '规则条件',
+	pinnedProjectRulePathPlaceholder: '例如：0_inbox/ 或 **/archive/**',
+	pinnedProjectPathMatchModeContainsLabel: '路径包含',
+	pinnedProjectPathMatchModeStartsWithLabel: '路径开头是',
+	pinnedProjectPathMatchModeGlobLabel: '路径匹配 glob',
 	relatedLinksHeading: '关联属性链接',
 	enableRelatedLinksName: '启用关联属性链接',
 	enableRelatedLinksDesc: '当某个属性引用了其他笔记时，自动把当前笔记回填到那些被引用笔记里。',
