@@ -1,9 +1,9 @@
 import {App, CachedMetadata, Notice, TFile} from 'obsidian';
+import type {FileMoveRequest, FileMoveResult} from '../../file-move-coordinator';
 import {
-	buildUniqueTargetPath,
+	buildProjectTargetMovePlan,
 	ensureFolderExists,
 	isPathInsideFolderPath,
-	joinPath,
 } from '../project-routing/file-move-utils';
 import {getProjectRoutingLocalization} from '../project-routing/localization';
 import {
@@ -24,6 +24,7 @@ interface EnsureFileInProjectFolderOptions {
 	relationProperty: string;
 	showNoticeAfterMove: boolean;
 	targetSubfolderPath: string;
+	moveFile?: (file: TFile, request: FileMoveRequest<TFile>) => Promise<FileMoveResult>;
 }
 
 type ProjectPlacementActionResult =
@@ -118,7 +119,8 @@ async function ensureFileInProject(
 	options: EnsureFileInProjectFolderOptions,
 	targetProject: ProjectCandidate,
 ): Promise<ProjectPlacementActionResult> {
-	if (isPathInsideFolderPath(options.file.path, targetProject.folderPath)) {
+	const initialPlan = buildMovePlan(options, targetProject, options.file);
+	if (initialPlan.kind === 'already-in-target') {
 		return {
 			kind: 'already-in-project',
 			targetProject,
@@ -127,14 +129,27 @@ async function ensureFileInProject(
 
 	const localization = getProjectRoutingLocalization();
 	const sourceName = options.file.name;
-	const targetFolderPath = options.targetSubfolderPath.length > 0
-		? joinPath(targetProject.folderPath, options.targetSubfolderPath)
-		: targetProject.folderPath;
 
 	try {
-		await ensureFolderExists(options.app, targetFolderPath);
-		const targetPath = buildUniqueTargetPath(options.app, options.file, targetFolderPath);
-		await options.app.fileManager.renameFile(options.file, targetPath);
+		const moveResult = options.moveFile
+			? await options.moveFile(options.file, {
+				resolveTargetPath: async (liveFile) => {
+					const plan = buildMovePlan(options, targetProject, liveFile);
+					await ensureFolderExists(options.app, plan.targetFolderPath);
+					return plan.targetPath;
+				},
+			})
+			: await moveFileWithoutCoordinator(options, targetProject, initialPlan.targetPath, initialPlan.targetFolderPath);
+		if (moveResult.kind === 'skipped') {
+			if (moveResult.reason === 'already-at-target') {
+				return {
+					kind: 'already-in-project',
+					targetProject,
+				};
+			}
+
+			return {kind: 'failed'};
+		}
 
 		if (options.showNoticeAfterMove) {
 			new Notice(localization.moveNotice(sourceName, targetProject.name));
@@ -142,7 +157,7 @@ async function ensureFileInProject(
 
 		return {
 			kind: 'moved',
-			targetPath,
+			targetPath: moveResult.targetPath,
 			targetProject,
 		};
 	} catch (error) {
@@ -150,6 +165,43 @@ async function ensureFileInProject(
 		new Notice(localization.moveFailureNotice);
 		return {kind: 'failed'};
 	}
+}
+
+async function moveFileWithoutCoordinator(
+	options: EnsureFileInProjectFolderOptions,
+	targetProject: ProjectCandidate,
+	targetPath: string,
+	targetFolderPath: string,
+): Promise<FileMoveResult> {
+	const sourcePath = options.file.path;
+	await ensureFolderExists(options.app, targetFolderPath);
+	await options.app.fileManager.renameFile(options.file, targetPath);
+	return {
+		kind: 'moved',
+		sourcePath,
+		targetPath,
+	};
+}
+
+function buildMovePlan(
+	options: EnsureFileInProjectFolderOptions,
+	targetProject: ProjectCandidate,
+	file: TFile,
+) {
+	return buildProjectTargetMovePlan({
+		file: {
+			basename: file.basename,
+			extension: file.extension,
+			name: file.name,
+			path: file.path,
+		},
+		pathExists: (path) => {
+			const existingFile = options.app.vault.getAbstractFileByPath(path);
+			return Boolean(existingFile && existingFile.path !== file.path);
+		},
+		projectFolderPath: targetProject.folderPath,
+		targetSubfolderPath: options.targetSubfolderPath,
+	});
 }
 
 function resolveRelatedProjectCandidate(

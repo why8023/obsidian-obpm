@@ -141,7 +141,34 @@ export class FileNameSyncFeature extends Component {
 	}
 
 	private async syncFileName(file: TFile, cache: CachedMetadata | null = this.plugin.app.metadataCache.getFileCache(file)) {
-		const nextPath = getExpectedFileNameSyncPath({
+		const pendingRename: {sourcePath: string | null} = {sourcePath: null};
+		try {
+			const moveResult = await this.plugin.moveFile(file, {
+				resolveTargetPath: (liveFile) => {
+					const nextPath = this.getExpectedPath(liveFile, cache);
+					if (!nextPath) {
+						return null;
+					}
+
+					pendingRename.sourcePath = liveFile.path;
+					this.pendingOwnRenames.set(liveFile.path, nextPath);
+					return nextPath;
+				},
+			});
+			if (moveResult.kind === 'skipped' && pendingRename.sourcePath) {
+				this.pendingOwnRenames.delete(pendingRename.sourcePath);
+			}
+		} catch (error) {
+			if (pendingRename.sourcePath) {
+				this.pendingOwnRenames.delete(pendingRename.sourcePath);
+			}
+
+			throw error;
+		}
+	}
+
+	private getExpectedPath(file: TFile, cache: CachedMetadata | null): string | null {
+		return getExpectedFileNameSyncPath({
 			file: {
 				basename: file.basename,
 				extension: file.extension,
@@ -157,27 +184,6 @@ export class FileNameSyncFeature extends Component {
 			},
 			propertyName: this.plugin.settings.fileNameSync.propertyName,
 		});
-		if (!nextPath) {
-			return;
-		}
-
-		const existingFile = this.plugin.app.vault.getAbstractFileByPath(nextPath);
-		if (existingFile && existingFile.path !== file.path) {
-			console.warn('[OBPM] Skipped file name sync because the target path already exists.', {
-				currentPath: file.path,
-				nextPath,
-				propertyName: this.plugin.settings.fileNameSync.propertyName,
-			});
-			return;
-		}
-
-		this.pendingOwnRenames.set(file.path, nextPath);
-		try {
-			await this.plugin.app.fileManager.renameFile(file, nextPath);
-		} catch (error) {
-			this.pendingOwnRenames.delete(file.path);
-			throw error;
-		}
 	}
 
 	private shouldIgnoreOwnRename(file: TFile, oldPath: string): boolean {

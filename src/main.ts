@@ -1,4 +1,5 @@
-import {Plugin} from 'obsidian';
+import {Plugin, TFile} from 'obsidian';
+import {FileMoveCoordinator, FileMoveRequest, FileMoveResult} from './file-move-coordinator';
 import {BasesFileRevealFeature} from './features/bases-file-reveal/bases-file-reveal-feature';
 import {BasesGroupFoldFeature} from './features/bases-group-fold/bases-group-fold-feature';
 import {BasesTopTabsFeature} from './features/bases-top-tabs/bases-top-tabs-feature';
@@ -16,6 +17,7 @@ import {RelatedLinksFeature} from './features/related-links/related-links-featur
 import {SameFolderNoteFeature} from './features/same-folder-note/same-folder-note-feature';
 import {normalizeRelatedLinksState} from './features/related-links/related-links-state-store';
 import {RelatedLinksState} from './features/related-links/types';
+import {SaveDataQueue} from './save-data-queue';
 import {RefreshableFeatureId, SaveSettingsOptions} from './save-settings-options';
 import {normalizePluginSettings, OBPMPluginSettingTab, OBPMPluginSettings} from './settings';
 
@@ -29,6 +31,16 @@ export default class OBPMPlugin extends Plugin {
 	settings: OBPMPluginSettings;
 	private relatedDocumentWorkflowUndoBatch: RelatedDocumentWorkflowUndoBatch | null = null;
 	private relatedLinksState: RelatedLinksState = normalizeRelatedLinksState(null);
+	private readonly saveDataQueue = new SaveDataQueue<OBPMPluginData>((data) => this.saveData(data));
+	private readonly fileMoveCoordinator = new FileMoveCoordinator<TFile>({
+		getFileByPath: (path) => {
+			const file = this.app.vault.getAbstractFileByPath(path);
+			return file instanceof TFile ? file : null;
+		},
+		renameFile: async (file, targetPath) => {
+			await this.app.fileManager.renameFile(file, targetPath);
+		},
+	});
 	private basesFileRevealFeature: BasesFileRevealFeature | null = null;
 	private basesGroupFoldFeature: BasesGroupFoldFeature | null = null;
 	private basesTopTabsFeature: BasesTopTabsFeature | null = null;
@@ -112,6 +124,10 @@ export default class OBPMPlugin extends Plugin {
 		}
 
 		await this.relatedLinksFeature.runFullSync();
+	}
+
+	async moveFile(file: TFile, request: FileMoveRequest<TFile>): Promise<FileMoveResult> {
+		return await this.fileMoveCoordinator.moveFile(file, request);
 	}
 
 	getRelatedDocumentWorkflowUndoBatch(): RelatedDocumentWorkflowUndoBatch | null {
@@ -207,10 +223,10 @@ export default class OBPMPlugin extends Plugin {
 	}
 
 	private async persistPluginData(): Promise<void> {
-		await this.saveData({
+		await this.saveDataQueue.enqueue(() => ({
 			...this.settings,
 			relatedDocumentWorkflowUndoBatch: this.relatedDocumentWorkflowUndoBatch,
 			relatedLinksState: this.relatedLinksState,
-		});
+		}));
 	}
 }

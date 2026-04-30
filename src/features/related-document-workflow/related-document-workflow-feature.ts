@@ -134,6 +134,7 @@ export class RelatedDocumentWorkflowFeature extends Component {
 		const plans = this.buildMovePlans();
 		let failedCount = 0;
 		let movedCount = 0;
+		let skippedCount = this.countSkippedPlans(plans.stats);
 		const records: RelatedDocumentWorkflowMoveRecord[] = [];
 
 		for (const plan of plans.plans) {
@@ -144,12 +145,22 @@ export class RelatedDocumentWorkflowFeature extends Component {
 			}
 
 			try {
-				await ensureFolderExists(this.plugin.app, plan.targetFolderPath);
-				await this.plugin.app.fileManager.renameFile(sourceFile, plan.targetPath);
+				const moveResult = await this.plugin.moveFile(sourceFile, {
+					resolveTargetPath: async () => {
+						await ensureFolderExists(this.plugin.app, plan.targetFolderPath);
+						return plan.targetPath;
+					},
+					skipIfPathChanged: true,
+				});
+				if (moveResult.kind === 'skipped') {
+					skippedCount += 1;
+					continue;
+				}
+
 				records.push({
 					projectPath: plan.projectPath,
 					sourcePath: plan.sourcePath,
-					targetPath: plan.targetPath,
+					targetPath: moveResult.targetPath,
 				});
 				movedCount += 1;
 			} catch (error) {
@@ -165,7 +176,7 @@ export class RelatedDocumentWorkflowFeature extends Component {
 			failedCount,
 			movedCount,
 			records,
-			skippedCount: this.countSkippedPlans(plans.stats),
+			skippedCount,
 		};
 	}
 
@@ -190,8 +201,19 @@ export class RelatedDocumentWorkflowFeature extends Component {
 			}
 
 			try {
-				await ensureFolderExists(this.plugin.app, getParentFolderPath(record.sourcePath));
-				await this.plugin.app.fileManager.renameFile(movedFile, record.sourcePath);
+				const moveResult = await this.plugin.moveFile(movedFile, {
+					resolveTargetPath: async () => {
+						await ensureFolderExists(this.plugin.app, getParentFolderPath(record.sourcePath));
+						return record.sourcePath;
+					},
+					skipIfPathChanged: true,
+				});
+				if (moveResult.kind === 'skipped') {
+					skippedCount += 1;
+					remainingRecords.push(record);
+					continue;
+				}
+
 				undoneCount += 1;
 			} catch (error) {
 				failedCount += 1;

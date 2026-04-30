@@ -1,4 +1,4 @@
-import {Component, Notice, TAbstractFile, TFile, TFolder, debounce, normalizePath} from 'obsidian';
+import {Component, Notice, TAbstractFile, TFile, debounce} from 'obsidian';
 import OBPMPlugin from '../../main';
 import {
 	DuplicateProjectFolder,
@@ -9,6 +9,7 @@ import {getProjectRoutingLocalization} from './localization';
 import {matchesAnyFrontmatterRule} from './matcher';
 import {ProjectRoutingSuggestModal} from './modal';
 import {PendingProjectRoutingQueue} from './pending-queue';
+import {buildProjectTargetMovePlan, ensureFolderExists} from './file-move-utils';
 import {getOpenProjectCandidates, ProjectFileRecognitionOptions} from './project-resolver';
 import {ProjectRoutingStatusBar} from './status-bar';
 import {ProjectCandidate} from './types';
@@ -21,6 +22,7 @@ interface MoveFileToProjectFolderOptions {
 	alreadyInTargetNotice?: ((projectName: string) => string) | null;
 	excludePath?: string;
 	noCandidateNotice?: string | null;
+	skipIfPathChanged?: boolean;
 }
 
 type MoveFileToProjectFolderResult =
@@ -42,6 +44,10 @@ type MoveFileToProjectFolderResult =
 	}
 	| {
 		kind: 'no-candidate';
+	}
+	| {
+		kind: 'skipped';
+		reason: string;
 	};
 
 export class ProjectRoutingFeature extends Component {
@@ -134,45 +140,6 @@ export class ProjectRoutingFeature extends Component {
 		}
 	}
 
-	private buildTargetPath(file: TFile, targetFolderPath: string): string {
-		const initialPath = joinPath(targetFolderPath, file.name);
-		if (initialPath === file.path || !this.plugin.app.vault.getAbstractFileByPath(initialPath)) {
-			return initialPath;
-		}
-
-		for (let suffix = 1; suffix < Number.MAX_SAFE_INTEGER; suffix += 1) {
-			const candidateName = `${file.basename} ${suffix}.${file.extension}`;
-			const candidatePath = joinPath(targetFolderPath, candidateName);
-			if (candidatePath === file.path || !this.plugin.app.vault.getAbstractFileByPath(candidatePath)) {
-				return candidatePath;
-			}
-		}
-
-		return initialPath;
-	}
-
-	private async ensureFolderExists(folderPath: string): Promise<void> {
-		if (!folderPath) {
-			return;
-		}
-
-		const existingEntry = this.plugin.app.vault.getAbstractFileByPath(folderPath);
-		if (existingEntry) {
-			if (existingEntry instanceof TFolder) {
-				return;
-			}
-
-			throw new Error(`Cannot create project-routing folder because a file already exists at ${folderPath}.`);
-		}
-
-		const parentFolderPath = getParentFolderPath(folderPath);
-		if (parentFolderPath && !this.plugin.app.vault.getAbstractFileByPath(parentFolderPath)) {
-			await this.ensureFolderExists(parentFolderPath);
-		}
-
-		await this.plugin.app.vault.createFolder(folderPath);
-	}
-
 	private clearFlushTimer(): void {
 		if (this.flushTimer === null) {
 			return;
@@ -198,11 +165,6 @@ export class ProjectRoutingFeature extends Component {
 	private enqueue(task: () => Promise<void>): Promise<void> {
 		this.workQueue = this.workQueue.then(task, task);
 		return this.workQueue;
-	}
-
-	private getProjectTargetFolderPath(projectFolderPath: string): string {
-		const subfolderPath = this.plugin.settings.projectRouting.projectSubfolderPath;
-		return subfolderPath.length > 0 ? joinPath(projectFolderPath, subfolderPath) : projectFolderPath;
 	}
 
 	private ensureRoutingEventListenersRegistered(): void {
@@ -358,6 +320,12 @@ export class ProjectRoutingFeature extends Component {
 				});
 				break;
 			case 'failed':
+				break;
+			case 'skipped':
+				this.debugLog('Skipped the move-current-file command because the pending move was no longer current.', {
+					filePath: sourcePath,
+					reason: result.reason,
+				});
 				break;
 		}
 	}
@@ -562,6 +530,7 @@ export class ProjectRoutingFeature extends Component {
 		const sourcePath = file.path;
 		const result = await this.moveFileToProjectFolder(file, {
 			excludePath: sourcePath,
+			skipIfPathChanged: true,
 		});
 
 		this.pendingQueue.remove(sourcePath);
@@ -593,6 +562,12 @@ export class ProjectRoutingFeature extends Component {
 				break;
 			case 'failed':
 				break;
+			case 'skipped':
+				this.debugLog('Skipped project routing because another move handled the file first.', {
+					filePath: sourcePath,
+					reason: result.reason,
+				});
+				break;
 		}
 	}
 
@@ -621,29 +596,53 @@ export class ProjectRoutingFeature extends Component {
 				return {kind: 'canceled'};
 			}
 
-			const targetFolderPath = this.getProjectTargetFolderPath(targetProject.folderPath);
-			await this.ensureFolderExists(targetFolderPath);
-			const targetPath = this.buildTargetPath(file, targetFolderPath);
-			if (targetPath === sourcePath) {
+			const moveResult = await this.plugin.moveFile(file, {
+				resolveTargetPath: async (liveFile) => {
+					const plan = this.buildMovePlan(liveFile, targetProject);
+					await ensureFolderExists(this.plugin.app, plan.targetFolderPath);
+					return plan.targetPath;
+				},
+				skipIfPathChanged: options.skipIfPathChanged,
+			});
+			if (moveResult.kind === 'skipped') {
+				if (moveResult.reason === 'already-at-target' && options.alreadyInTargetNotice) {
+					new Notice(options.alreadyInTargetNotice(targetProject.name));
+				}
+
+				this.requestStatusBarRefresh();
+				if (moveResult.reason === 'already-at-target') {
+					return {
+						kind: 'already-in-target',
+						targetPath: moveResult.targetPath ?? sourcePath,
+						targetProject,
+					};
+				}
+
+				return {
+					kind: 'skipped',
+					reason: moveResult.reason,
+				};
+			}
+
+			if (moveResult.targetPath === sourcePath) {
 				if (options.alreadyInTargetNotice) {
 					new Notice(options.alreadyInTargetNotice(targetProject.name));
 				}
 				this.requestStatusBarRefresh();
 				return {
 					kind: 'already-in-target',
-					targetPath,
+					targetPath: moveResult.targetPath,
 					targetProject,
 				};
 			}
 
-			await this.plugin.app.fileManager.renameFile(file, targetPath);
 			if (this.plugin.settings.projectRouting.showNoticeAfterMove) {
 				new Notice(this.localization.moveNotice(sourceName, targetProject.name));
 			}
 			this.requestStatusBarRefresh();
 			return {
 				kind: 'moved',
-				targetPath,
+				targetPath: moveResult.targetPath,
 				targetProject,
 			};
 		} catch (error) {
@@ -651,6 +650,23 @@ export class ProjectRoutingFeature extends Component {
 			new Notice(this.localization.moveFailureNotice);
 			return {kind: 'failed'};
 		}
+	}
+
+	private buildMovePlan(file: TFile, targetProject: ProjectCandidate) {
+		return buildProjectTargetMovePlan({
+			file: {
+				basename: file.basename,
+				extension: file.extension,
+				name: file.name,
+				path: file.path,
+			},
+			pathExists: (path) => {
+				const existingFile = this.plugin.app.vault.getAbstractFileByPath(path);
+				return Boolean(existingFile && existingFile.path !== file.path);
+			},
+			projectFolderPath: targetProject.folderPath,
+			targetSubfolderPath: this.plugin.settings.projectRouting.projectSubfolderPath,
+		});
 	}
 
 	private scheduleFlush(delayMs = 0): void {
@@ -681,14 +697,4 @@ export class ProjectRoutingFeature extends Component {
 
 		this.scheduleFlush(nextDelayMs);
 	}
-}
-
-function joinPath(folderPath: string, fileName: string): string {
-	return folderPath.length > 0 ? normalizePath(`${folderPath}/${fileName}`) : fileName;
-}
-
-function getParentFolderPath(path: string): string {
-	const normalizedPath = normalizePath(path);
-	const lastSlashIndex = normalizedPath.lastIndexOf('/');
-	return lastSlashIndex >= 0 ? normalizedPath.slice(0, lastSlashIndex) : '';
 }

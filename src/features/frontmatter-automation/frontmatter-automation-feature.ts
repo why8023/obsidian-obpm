@@ -406,6 +406,7 @@ export class FrontmatterAutomationFeature extends Component {
 			cache: {frontmatter: snapshot as CachedMetadata['frontmatter']},
 			displayProperty: this.plugin.settings.relatedLinks.displayProperty,
 			file,
+			moveFile: (targetFile, request) => this.plugin.moveFile(targetFile, request),
 			projectFileRecognition: this.getProjectFileRecognitionOptions(),
 			relationProperty: this.plugin.settings.relatedLinks.relationProperty,
 			showNoticeAfterMove: this.plugin.settings.projectRouting.showNoticeAfterMove,
