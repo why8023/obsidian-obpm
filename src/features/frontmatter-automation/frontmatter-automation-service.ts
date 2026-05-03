@@ -1,4 +1,12 @@
-import {FrontmatterAutomationSettings, FrontmatterSnapshot, FrontmatterAutomationAction, FrontmatterAutomationEvaluationResult, FrontmatterAutomationProjectMoveAction, FrontmatterAutomationRule} from './frontmatter-automation-types';
+import {
+	FrontmatterAutomationSettings,
+	FrontmatterSnapshot,
+	FrontmatterAutomationAction,
+	FrontmatterAutomationEvaluationResult,
+	FrontmatterAutomationProjectContentAction,
+	FrontmatterAutomationProjectMoveAction,
+	FrontmatterAutomationRule,
+} from './frontmatter-automation-types';
 import {createSnapshotWithAppliedActions, formatFrontmatterAutomationTime, isFrontmatterValueEmpty} from './frontmatter-automation-utils';
 
 interface EvaluateFrontmatterAutomationOptions {
@@ -20,6 +28,7 @@ export class FrontmatterAutomationService {
 		const now = options.now ?? new Date();
 		const actions: FrontmatterAutomationAction[] = [];
 		const nextSnapshot = createSnapshotWithAppliedActions(currentSnapshot, []);
+		const projectContentActions: FrontmatterAutomationProjectContentAction[] = [];
 		const projectMoveActions: FrontmatterAutomationProjectMoveAction[] = [];
 
 		for (const rule of settings.rules) {
@@ -31,6 +40,21 @@ export class FrontmatterAutomationService {
 				projectMoveActions.push({
 					ruleId: rule.id,
 					targetSubfolderPath: rule.targetSubfolderPath ?? '',
+				});
+				continue;
+			}
+
+			if (rule.actionType === 'send_content_to_project_file') {
+				const targetHeading = rule.projectContentTargetHeading.trim();
+				if (rule.projectContentPlacementMode === 'target_heading' && targetHeading.length === 0) {
+					continue;
+				}
+
+				projectContentActions.push({
+					headingLevel: rule.projectContentHeadingLevel,
+					placementMode: rule.projectContentPlacementMode,
+					ruleId: rule.id,
+					targetHeading,
 				});
 				continue;
 			}
@@ -55,6 +79,7 @@ export class FrontmatterAutomationService {
 		return {
 			actions,
 			nextSnapshot,
+			projectContentActions,
 			projectMoveActions,
 		};
 	}

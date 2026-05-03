@@ -175,6 +175,17 @@ export interface SettingsLocalization {
 	frontmatterAutomationActionTypeCurrentTimeLabel: string;
 	frontmatterAutomationActionTypeStaticValueLabel: string;
 	frontmatterAutomationActionTypeProjectFolderLabel: string;
+	frontmatterAutomationActionTypeProjectContentLabel: string;
+	frontmatterAutomationProjectContentPlacementModeName: string;
+	frontmatterAutomationProjectContentPlacementModeDesc: string;
+	frontmatterAutomationProjectContentPlacementModeTargetHeadingLabel: string;
+	frontmatterAutomationProjectContentPlacementModeSourceNameHeadingLabel: string;
+	frontmatterAutomationProjectContentTargetHeadingName: string;
+	frontmatterAutomationProjectContentTargetHeadingDesc: string;
+	frontmatterAutomationProjectContentTargetHeadingPlaceholder: string;
+	frontmatterAutomationProjectContentHeadingLevelName: string;
+	frontmatterAutomationProjectContentHeadingLevelDesc: (min: number, max: number, defaultValue: number) => string;
+	frontmatterAutomationProjectContentHeadingLevelOption: (level: number) => string;
 	frontmatterAutomationTargetFieldName: string;
 	frontmatterAutomationTargetFieldDesc: string;
 	frontmatterAutomationTargetFieldPlaceholder: string;
@@ -431,10 +442,22 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	frontmatterAutomationTriggerValueDesc: 'The rule runs only when the trigger field changes into this exact value.',
 	frontmatterAutomationTriggerValuePlaceholder: 'Enter trigger value',
 	frontmatterAutomationActionTypeName: 'Action type',
-	frontmatterAutomationActionTypeDesc: 'Choose whether the rule writes frontmatter or moves the file into its project folder.',
+	frontmatterAutomationActionTypeDesc: 'Choose whether the rule writes frontmatter, moves the file, or sends its content into the project file.',
 	frontmatterAutomationActionTypeCurrentTimeLabel: 'Set current time',
 	frontmatterAutomationActionTypeStaticValueLabel: 'Set static value',
 	frontmatterAutomationActionTypeProjectFolderLabel: 'Move into project folder',
+	frontmatterAutomationActionTypeProjectContentLabel: 'Send content to project file',
+	frontmatterAutomationProjectContentPlacementModeName: 'Project file location',
+	frontmatterAutomationProjectContentPlacementModeDesc: 'Choose where the source content is inserted in the associated project file.',
+	frontmatterAutomationProjectContentPlacementModeTargetHeadingLabel: 'Under configured heading',
+	frontmatterAutomationProjectContentPlacementModeSourceNameHeadingLabel: 'Use source file name as heading',
+	frontmatterAutomationProjectContentTargetHeadingName: 'Target heading',
+	frontmatterAutomationProjectContentTargetHeadingDesc: 'Heading text in the project file. Missing headings are created automatically.',
+	frontmatterAutomationProjectContentTargetHeadingPlaceholder: 'Done items',
+	frontmatterAutomationProjectContentHeadingLevelName: 'Heading level',
+	frontmatterAutomationProjectContentHeadingLevelDesc: (min, max, defaultValue) =>
+		`Markdown heading level used for the target heading. Range: ${min}-${max}. Default: ${defaultValue}.`,
+	frontmatterAutomationProjectContentHeadingLevelOption: (level) => `Heading ${level}`,
 	frontmatterAutomationTargetFieldName: 'Target field',
 	frontmatterAutomationTargetFieldDesc: 'Frontmatter field that will be written when the rule triggers.',
 	frontmatterAutomationTargetFieldPlaceholder: 'Enter target field',
@@ -691,10 +714,22 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	frontmatterAutomationTriggerValueDesc: '只有当触发字段变化为这个精确值时才执行规则。',
 	frontmatterAutomationTriggerValuePlaceholder: '输入触发值',
 	frontmatterAutomationActionTypeName: '动作类型',
-	frontmatterAutomationActionTypeDesc: '选择回写 frontmatter，或把文件移动到所属项目文件夹。',
+	frontmatterAutomationActionTypeDesc: '选择回写 frontmatter、移动文件，或把文件内容发送到所属项目文件。',
 	frontmatterAutomationActionTypeCurrentTimeLabel: '写入当前时间',
 	frontmatterAutomationActionTypeStaticValueLabel: '写入固定值',
 	frontmatterAutomationActionTypeProjectFolderLabel: '移动到项目文件夹',
+	frontmatterAutomationActionTypeProjectContentLabel: '发送内容到项目文件',
+	frontmatterAutomationProjectContentPlacementModeName: '项目文件位置',
+	frontmatterAutomationProjectContentPlacementModeDesc: '选择内容插入到关联项目文件中的哪个位置。',
+	frontmatterAutomationProjectContentPlacementModeTargetHeadingLabel: '发送到指定标题下',
+	frontmatterAutomationProjectContentPlacementModeSourceNameHeadingLabel: '使用源文件名作为标题',
+	frontmatterAutomationProjectContentTargetHeadingName: '目标标题',
+	frontmatterAutomationProjectContentTargetHeadingDesc: '项目文件中的标题文本。标题不存在时会自动创建。',
+	frontmatterAutomationProjectContentTargetHeadingPlaceholder: '已完成事项',
+	frontmatterAutomationProjectContentHeadingLevelName: '标题层级',
+	frontmatterAutomationProjectContentHeadingLevelDesc: (min, max, defaultValue) =>
+		`设置目标标题使用几级 Markdown 标题。范围：${min}-${max}。默认值：${defaultValue}。`,
+	frontmatterAutomationProjectContentHeadingLevelOption: (level) => `${level} 级标题`,
 	frontmatterAutomationTargetFieldName: '目标字段',
 	frontmatterAutomationTargetFieldDesc: '规则命中后要写入的 frontmatter 字段名。',
 	frontmatterAutomationTargetFieldPlaceholder: '输入目标字段',

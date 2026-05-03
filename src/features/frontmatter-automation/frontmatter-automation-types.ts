@@ -1,5 +1,10 @@
 export type FrontmatterAutomationTriggerOperator = 'equals' | 'contains';
-export type FrontmatterAutomationActionType = 'set_current_time' | 'set_static_value' | 'ensure_project_folder';
+export type FrontmatterAutomationActionType =
+	| 'set_current_time'
+	| 'set_static_value'
+	| 'ensure_project_folder'
+	| 'send_content_to_project_file';
+export type FrontmatterAutomationProjectContentPlacementMode = 'target_heading' | 'source_name_heading';
 export type FrontmatterAutomationWriteMode = 'always' | 'when-empty';
 
 export interface FrontmatterAutomationRule {
@@ -9,6 +14,9 @@ export interface FrontmatterAutomationRule {
 	triggerOperator: FrontmatterAutomationTriggerOperator;
 	triggerValue: string;
 	actionType: FrontmatterAutomationActionType;
+	projectContentHeadingLevel: number;
+	projectContentPlacementMode: FrontmatterAutomationProjectContentPlacementMode;
+	projectContentTargetHeading: string;
 	targetField: string;
 	staticValue?: string;
 	targetSubfolderPath?: string;
@@ -34,8 +42,16 @@ export interface FrontmatterAutomationProjectMoveAction {
 	targetSubfolderPath: string;
 }
 
+export interface FrontmatterAutomationProjectContentAction {
+	headingLevel: number;
+	placementMode: FrontmatterAutomationProjectContentPlacementMode;
+	ruleId: string;
+	targetHeading: string;
+}
+
 export interface FrontmatterAutomationEvaluationResult {
 	actions: FrontmatterAutomationAction[];
 	nextSnapshot: FrontmatterSnapshot;
+	projectContentActions: FrontmatterAutomationProjectContentAction[];
 	projectMoveActions: FrontmatterAutomationProjectMoveAction[];
 }

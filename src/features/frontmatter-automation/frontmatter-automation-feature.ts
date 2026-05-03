@@ -2,7 +2,11 @@ import {CachedMetadata, Component, Notice, TAbstractFile, TFile} from 'obsidian'
 import OBPMPlugin from '../../main';
 import {ProjectFileRecognitionOptions} from '../project-routing/project-resolver';
 import {FrontmatterAutomationService} from './frontmatter-automation-service';
-import {FrontmatterAutomationProjectMoveAction, FrontmatterSnapshot} from './frontmatter-automation-types';
+import {
+	FrontmatterAutomationProjectContentAction,
+	FrontmatterAutomationProjectMoveAction,
+	FrontmatterSnapshot,
+} from './frontmatter-automation-types';
 import {
 	UNAVAILABLE_FRONTMATTER_SNAPSHOT,
 	areFrontmatterSnapshotsEqual,
@@ -10,6 +14,7 @@ import {
 	createFrontmatterSnapshotFromMetadataCache,
 } from './frontmatter-automation-utils';
 import {ensureFileInProjectFolder} from './project-placement-action';
+import {sendContentToProjectFile as sendContentToProjectFileAction} from './project-content-action';
 
 const DEFAULT_FLUSH_DELAY_MS = 200;
 const EMPTY_FRONTMATTER_SNAPSHOT: FrontmatterSnapshot = Object.freeze({});
@@ -269,7 +274,11 @@ export class FrontmatterAutomationFeature extends Component {
 			previousSnapshot,
 			settings: this.plugin.settings.frontmatterAutomation,
 		});
-		if (observedEvaluation.actions.length === 0 && observedEvaluation.projectMoveActions.length === 0) {
+		if (
+			observedEvaluation.actions.length === 0
+			&& observedEvaluation.projectMoveActions.length === 0
+			&& observedEvaluation.projectContentActions.length === 0
+		) {
 			this.setStableSnapshot(change.file.path, change.snapshot);
 			return;
 		}
@@ -281,6 +290,7 @@ export class FrontmatterAutomationFeature extends Component {
 		const now = new Date();
 		let didMutateFrontmatter = false;
 		let resolvedSnapshot: FrontmatterSnapshot | null = null;
+		let projectContentActions = observedEvaluation.projectContentActions;
 		let projectMoveActions = observedEvaluation.projectMoveActions;
 
 		try {
@@ -291,6 +301,7 @@ export class FrontmatterAutomationFeature extends Component {
 					const liveSnapshot = createFrontmatterSnapshot(frontmatter as Record<string, unknown> | null | undefined);
 					if (liveSnapshot === null) {
 						resolvedSnapshot = null;
+						projectContentActions = [];
 						projectMoveActions = [];
 						return;
 					}
@@ -311,6 +322,7 @@ export class FrontmatterAutomationFeature extends Component {
 						settings: this.plugin.settings.frontmatterAutomation,
 						now,
 					});
+					projectContentActions = liveEvaluation.projectContentActions;
 					projectMoveActions = liveEvaluation.projectMoveActions;
 					if (liveEvaluation.actions.length === 0) {
 						resolvedSnapshot = liveSnapshot;
@@ -349,6 +361,11 @@ export class FrontmatterAutomationFeature extends Component {
 
 		for (const projectMoveAction of projectMoveActions) {
 			await this.ensureFileInProjectFolder(liveFile, resolvedSnapshot, projectMoveAction);
+		}
+
+		const projectContentAction = projectContentActions[0];
+		if (projectContentAction) {
+			await this.sendContentToProjectFile(liveFile, resolvedSnapshot, projectContentAction);
 		}
 	}
 
@@ -411,6 +428,24 @@ export class FrontmatterAutomationFeature extends Component {
 			relationProperty: this.plugin.settings.relatedLinks.relationProperty,
 			showNoticeAfterMove: this.plugin.settings.projectRouting.showNoticeAfterMove,
 			targetSubfolderPath: action.targetSubfolderPath,
+		});
+	}
+
+	private async sendContentToProjectFile(
+		file: TFile,
+		snapshot: FrontmatterSnapshot,
+		action: FrontmatterAutomationProjectContentAction,
+	): Promise<void> {
+		await sendContentToProjectFileAction({
+			action,
+			app: this.plugin.app,
+			autoMoveWhenSingleCandidate: this.plugin.settings.projectRouting.autoMoveWhenSingleCandidate,
+			cache: {frontmatter: snapshot as CachedMetadata['frontmatter']},
+			displayProperty: this.plugin.settings.relatedLinks.displayProperty,
+			file,
+			projectFileRecognition: this.getProjectFileRecognitionOptions(),
+			relationProperty: this.plugin.settings.relatedLinks.relationProperty,
+			stripSingleH1: this.plugin.settings.fileContentMove.stripSingleH1,
 		});
 	}
 }

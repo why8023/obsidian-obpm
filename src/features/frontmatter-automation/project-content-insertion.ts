@@ -1,0 +1,195 @@
+import {buildMovedContentBody, buildMovedContentList} from '../file-content-move/markdown-list-converter';
+import {FrontmatterAutomationProjectContentPlacementMode} from './frontmatter-automation-types';
+
+export interface ProjectContentPlacement {
+	headingLevel: number;
+	mode: FrontmatterAutomationProjectContentPlacementMode;
+	targetHeading: string;
+}
+
+interface BuildProjectFileContentWithSentContentOptions {
+	placement: ProjectContentPlacement;
+	projectContent: string;
+	sourceBasename: string;
+	sourceContent: string;
+	stripSingleH1: boolean;
+}
+
+interface HeadingRange {
+	endOffset: number;
+	startOffset: number;
+}
+
+interface HeadingMatch {
+	level: number;
+	startOffset: number;
+	text: string;
+}
+
+const HEADING_LINE_PATTERN = /^(?: {0,3})(#{1,6})[ \t]+(.+?)\s*#*\s*$/;
+const FENCE_LINE_PATTERN = /^(?: {0,3})(`{3,}|~{3,})/;
+
+export function buildProjectFileContentWithSentContent(
+	options: BuildProjectFileContentWithSentContentOptions,
+): string {
+	const headingLevel = normalizeHeadingLevel(options.placement.headingLevel);
+	if (options.placement.mode === 'source_name_heading') {
+		return appendBlock(options.projectContent, buildSourceNameHeadingBlock({
+			headingLevel,
+			sourceBasename: options.sourceBasename,
+			sourceContent: options.sourceContent,
+			stripSingleH1: options.stripSingleH1,
+		}));
+	}
+
+	const targetHeading = options.placement.targetHeading.trim();
+	const sentContent = buildMovedContentList({
+		sourceBasename: options.sourceBasename,
+		sourceContent: options.sourceContent,
+		stripSingleH1: options.stripSingleH1,
+	});
+	const headingRange = findHeadingRange(options.projectContent, headingLevel, targetHeading);
+	if (!headingRange) {
+		return appendBlock(options.projectContent, `${formatHeadingLine(headingLevel, targetHeading)}\n\n${sentContent}`);
+	}
+
+	return insertBlockAtOffset(options.projectContent, headingRange.endOffset, sentContent);
+}
+
+function appendBlock(content: string, block: string): string {
+	if (content.length === 0) {
+		return block;
+	}
+
+	return `${content}${getBlockPrefix(content)}${block}`;
+}
+
+function buildSourceNameHeadingBlock(options: {
+	headingLevel: number;
+	sourceBasename: string;
+	sourceContent: string;
+	stripSingleH1: boolean;
+}): string {
+	const headingLine = formatHeadingLine(options.headingLevel, options.sourceBasename);
+	const body = buildMovedContentBody({
+		parentHeadingLevel: options.headingLevel,
+		sourceContent: options.sourceContent,
+		stripSingleH1: options.stripSingleH1,
+	});
+	return body.length > 0 ? `${headingLine}\n\n${body}` : headingLine;
+}
+
+function findHeadingRange(content: string, level: number, text: string): HeadingRange | null {
+	let matchedHeading: HeadingMatch | null = null;
+	let inFence = false;
+
+	for (const line of iterateLines(content)) {
+		const fenceBeforeLine = inFence;
+		const fenceMatch = FENCE_LINE_PATTERN.exec(line.text);
+		if (!fenceBeforeLine) {
+			const heading = parseHeadingLine(line.text, line.startOffset);
+			if (heading) {
+				if (matchedHeading && heading.level <= matchedHeading.level) {
+					return {
+						endOffset: line.startOffset,
+						startOffset: matchedHeading.startOffset,
+					};
+				}
+
+				if (!matchedHeading && heading.level === level && heading.text === text) {
+					matchedHeading = heading;
+				}
+			}
+		}
+
+		if (fenceMatch) {
+			inFence = !inFence;
+		}
+	}
+
+	if (!matchedHeading) {
+		return null;
+	}
+
+	return {
+		endOffset: content.length,
+		startOffset: matchedHeading.startOffset,
+	};
+}
+
+function formatHeadingLine(level: number, text: string): string {
+	return `${'#'.repeat(level)} ${text.trim().replace(/\s+/g, ' ') || 'Untitled'}`;
+}
+
+function getBlockPrefix(contentBefore: string): string {
+	if (contentBefore.length === 0) {
+		return '';
+	}
+
+	if (/\n[ \t]*\n[ \t]*$/.test(contentBefore)) {
+		return '';
+	}
+
+	return contentBefore.endsWith('\n') ? '\n' : '\n\n';
+}
+
+function getBlockSuffix(contentAfter: string): string {
+	if (contentAfter.length === 0) {
+		return '';
+	}
+
+	if (contentAfter.startsWith('\n\n')) {
+		return '';
+	}
+
+	return contentAfter.startsWith('\n') ? '\n' : '\n\n';
+}
+
+function insertBlockAtOffset(content: string, offset: number, block: string): string {
+	const before = content.slice(0, offset);
+	const after = content.slice(offset);
+	return `${before}${getBlockPrefix(before)}${block}${getBlockSuffix(after)}${after}`;
+}
+
+function* iterateLines(content: string): Generator<{startOffset: number; text: string}> {
+	let startOffset = 0;
+	while (startOffset <= content.length) {
+		const nextLineIndex = content.indexOf('\n', startOffset);
+		if (nextLineIndex === -1) {
+			yield {
+				startOffset,
+				text: content.slice(startOffset),
+			};
+			return;
+		}
+
+		yield {
+			startOffset,
+			text: content.slice(startOffset, nextLineIndex),
+		};
+		startOffset = nextLineIndex + 1;
+	}
+}
+
+function normalizeHeadingLevel(value: number): number {
+	return Math.min(6, Math.max(1, Math.trunc(value)));
+}
+
+function parseHeadingLine(line: string, startOffset: number): HeadingMatch | null {
+	const match = HEADING_LINE_PATTERN.exec(line);
+	if (!match) {
+		return null;
+	}
+
+	const hashes = match[1];
+	const rawText = match[2];
+	if (!hashes || rawText === undefined) {
+		return null;
+	}
+
+	return {
+		level: hashes.length,
+		startOffset,
+		text: rawText.replace(/[ \t]+#+[ \t]*$/, '').trim().replace(/\s+/g, ' '),
+	};
+}

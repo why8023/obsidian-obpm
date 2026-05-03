@@ -4,6 +4,12 @@ export interface BuildMovedContentListOptions {
 	stripSingleH1: boolean;
 }
 
+export interface BuildMovedContentBodyOptions {
+	parentHeadingLevel: number;
+	sourceContent: string;
+	stripSingleH1: boolean;
+}
+
 interface HeadingLine {
 	level: number;
 	text: string;
@@ -102,6 +108,48 @@ export function buildMovedContentList(options: BuildMovedContentListOptions): st
 	return trimTrailingBlankLines(outputLines).join('\n');
 }
 
+export function buildMovedContentBody(options: BuildMovedContentBodyOptions): string {
+	const lines = normalizeSourceContent(options.sourceContent).split('\n');
+	const shouldStripSingleH1 = options.stripSingleH1 && countLevelOneHeadings(lines) === 1;
+	const headingLevelOffset = shouldStripSingleH1 ? 1 : 0;
+	const outputLines: string[] = [];
+	let inFence = false;
+
+	for (const rawLine of lines) {
+		const line = rawLine.replace(/\s+$/, '');
+		const fenceBeforeLine = inFence;
+		const fenceMatch = FENCE_LINE_PATTERN.exec(line);
+
+		if (!fenceBeforeLine) {
+			const heading = parseHeadingLine(line);
+			if (heading) {
+				if (shouldStripSingleH1 && heading.level === 1) {
+					if (fenceMatch) {
+						inFence = !inFence;
+					}
+					continue;
+				}
+
+				outputLines.push(formatHeadingLine(
+					options.parentHeadingLevel + heading.level - headingLevelOffset,
+					heading.text,
+				));
+				if (fenceMatch) {
+					inFence = !inFence;
+				}
+				continue;
+			}
+		}
+
+		outputLines.push(line);
+		if (fenceMatch) {
+			inFence = !inFence;
+		}
+	}
+
+	return trimOuterBlankLines(outputLines).join('\n');
+}
+
 function countLevelOneHeadings(lines: readonly string[]): number {
 	let count = 0;
 	let inFence = false;
@@ -129,6 +177,10 @@ function formatListItem(level: number, text: string): string {
 
 function formatIndentedContent(level: number, text: string): string {
 	return `${LIST_INDENT.repeat(Math.max(1, level))}${text}`;
+}
+
+function formatHeadingLine(level: number, text: string): string {
+	return `${'#'.repeat(Math.max(1, Math.min(6, level)))} ${normalizeListItemText(text)}`;
 }
 
 function getContentLevel(currentHeadingLevel: number): number {
@@ -223,6 +275,18 @@ function stripLeadingFrontmatter(value: string): string {
 
 function trimTrailingBlankLines(lines: string[]): string[] {
 	while (lines.length > 1 && lines[lines.length - 1] === '') {
+		lines.pop();
+	}
+
+	return lines;
+}
+
+function trimOuterBlankLines(lines: string[]): string[] {
+	while (lines.length > 0 && lines[0]?.trim().length === 0) {
+		lines.shift();
+	}
+
+	while (lines.length > 0 && lines[lines.length - 1]?.trim().length === 0) {
 		lines.pop();
 	}
 

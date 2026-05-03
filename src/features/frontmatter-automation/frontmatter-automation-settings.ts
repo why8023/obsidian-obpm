@@ -1,5 +1,6 @@
 import {
 	FrontmatterAutomationActionType,
+	FrontmatterAutomationProjectContentPlacementMode,
 	FrontmatterAutomationRule,
 	FrontmatterAutomationSettings,
 	FrontmatterAutomationTriggerOperator,
@@ -8,6 +9,9 @@ import {
 import {normalizeProjectSubfolderPath} from '../project-routing/settings';
 
 export const DEFAULT_FRONTMATTER_AUTOMATION_TIME_FORMAT = 'YYYY-MM-DDTHH:mm:ss';
+export const DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL = 2;
+export const MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL = 6;
+export const MIN_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL = 1;
 
 const DEFAULT_FRONTMATTER_AUTOMATION_RULE_ID = 'obpm-status-done-set-end-time';
 
@@ -21,6 +25,9 @@ export function createDefaultFrontmatterAutomationRule(
 		triggerOperator: 'contains',
 		triggerValue: 'done',
 		actionType: 'set_current_time',
+		projectContentHeadingLevel: DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+		projectContentPlacementMode: 'target_heading',
+		projectContentTargetHeading: '',
 		targetField: 'obpm_end_time',
 		staticValue: '',
 		targetSubfolderPath: '',
@@ -40,8 +47,9 @@ interface LegacyDoneProjectMoveSettings {
 	targetSubfolderPath?: unknown;
 }
 
-interface LegacyFrontmatterAutomationSettings extends Partial<FrontmatterAutomationSettings> {
+interface LegacyFrontmatterAutomationSettings extends Omit<Partial<FrontmatterAutomationSettings>, 'rules'> {
 	doneProjectMove?: LegacyDoneProjectMoveSettings | null;
+	rules?: unknown;
 }
 
 export function normalizeFrontmatterAutomationSettings(
@@ -64,7 +72,10 @@ function normalizeActionType(
 	value: unknown,
 	fallback: FrontmatterAutomationActionType,
 ): FrontmatterAutomationActionType {
-	return value === 'set_current_time' || value === 'set_static_value' || value === 'ensure_project_folder'
+	return value === 'set_current_time'
+		|| value === 'set_static_value'
+		|| value === 'ensure_project_folder'
+		|| value === 'send_content_to_project_file'
 		? value
 		: fallback;
 }
@@ -76,6 +87,32 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
 function normalizeRequiredText(value: unknown, fallback: string): string {
 	const normalized = normalizeText(value, fallback);
 	return normalized.length > 0 ? normalized : fallback;
+}
+
+export function normalizeFrontmatterAutomationProjectContentHeadingLevel(
+	value: unknown,
+	fallback = DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+): number {
+	return normalizeHeadingLevel(value, fallback);
+}
+
+function normalizeHeadingLevel(value: unknown, fallback: number): number {
+	const numericValue = typeof value === 'number' ? value : Number(value);
+	if (!Number.isFinite(numericValue)) {
+		return fallback;
+	}
+
+	return Math.min(
+		MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+		Math.max(MIN_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL, Math.trunc(numericValue)),
+	);
+}
+
+export function normalizeFrontmatterAutomationProjectContentPlacementMode(
+	value: unknown,
+	fallback: FrontmatterAutomationProjectContentPlacementMode = 'target_heading',
+): FrontmatterAutomationProjectContentPlacementMode {
+	return value === 'target_heading' || value === 'source_name_heading' ? value : fallback;
 }
 
 function normalizeRule(
@@ -97,6 +134,15 @@ function normalizeRule(
 		),
 		triggerValue: normalizeText(rule.triggerValue, fallbackRule.triggerValue),
 		actionType: normalizeActionType(rule.actionType, fallbackRule.actionType),
+		projectContentHeadingLevel: normalizeHeadingLevel(
+			rule.projectContentHeadingLevel,
+			fallbackRule.projectContentHeadingLevel,
+		),
+		projectContentPlacementMode: normalizeFrontmatterAutomationProjectContentPlacementMode(
+			rule.projectContentPlacementMode,
+			fallbackRule.projectContentPlacementMode,
+		),
+		projectContentTargetHeading: normalizeText(rule.projectContentTargetHeading, fallbackRule.projectContentTargetHeading),
 		targetField: normalizeText(rule.targetField, fallbackRule.targetField),
 		staticValue: normalizeText(rule.staticValue, fallbackRule.staticValue ?? ''),
 		targetSubfolderPath: normalizeProjectSubfolderPath(

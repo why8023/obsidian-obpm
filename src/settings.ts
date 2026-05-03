@@ -8,7 +8,12 @@ import {
 	normalizeInvalidCharacterReplacement,
 } from './features/file-name-sync/file-name-sync-utils';
 import {
+	DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+	MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+	MIN_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
 	createDefaultFrontmatterAutomationRule,
+	normalizeFrontmatterAutomationProjectContentHeadingLevel,
+	normalizeFrontmatterAutomationProjectContentPlacementMode,
 	normalizeFrontmatterAutomationSettings,
 } from './features/frontmatter-automation/frontmatter-automation-settings';
 import {
@@ -2357,6 +2362,10 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					attr: {value: 'ensure_project_folder'},
 					text: strings.frontmatterAutomationActionTypeProjectFolderLabel,
 				});
+				actionTypeSelectEl.createEl('option', {
+					attr: {value: 'send_content_to_project_file'},
+					text: strings.frontmatterAutomationActionTypeProjectContentLabel,
+				});
 				actionTypeSelectEl.value = rule.actionType;
 				actionTypeSelectEl.addEventListener('change', () => {
 					void (async () => {
@@ -2400,6 +2409,103 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 							}));
 						},
 					);
+				} else if (rule.actionType === 'send_content_to_project_file') {
+					const placementModeSelectEl = createFieldControl(
+						strings.frontmatterAutomationProjectContentPlacementModeName,
+						strings.frontmatterAutomationProjectContentPlacementModeDesc,
+					).createEl('select', {
+						attr: {
+							'aria-label': `${ruleLabel} ${strings.frontmatterAutomationProjectContentPlacementModeName}`,
+						},
+						cls: 'obpm-rule-table-select',
+					});
+					placementModeSelectEl.createEl('option', {
+						attr: {value: 'target_heading'},
+						text: strings.frontmatterAutomationProjectContentPlacementModeTargetHeadingLabel,
+					});
+					placementModeSelectEl.createEl('option', {
+						attr: {value: 'source_name_heading'},
+						text: strings.frontmatterAutomationProjectContentPlacementModeSourceNameHeadingLabel,
+					});
+					placementModeSelectEl.value = rule.projectContentPlacementMode;
+					placementModeSelectEl.addEventListener('change', () => {
+						void (async () => {
+							const projectContentPlacementMode = normalizeFrontmatterAutomationProjectContentPlacementMode(
+								placementModeSelectEl.value,
+								getLatestRule().projectContentPlacementMode,
+							);
+							placementModeSelectEl.value = projectContentPlacementMode;
+							await updateRule((currentRule) => ({
+								...currentRule,
+								projectContentPlacementMode,
+							}));
+							this.display();
+						})();
+					});
+
+					const headingLevelSelectEl = createFieldControl(
+						strings.frontmatterAutomationProjectContentHeadingLevelName,
+						strings.frontmatterAutomationProjectContentHeadingLevelDesc(
+							MIN_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+							MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+							DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+						),
+					).createEl('select', {
+						attr: {
+							'aria-label': `${ruleLabel} ${strings.frontmatterAutomationProjectContentHeadingLevelName}`,
+						},
+						cls: 'obpm-rule-table-select',
+					});
+					for (
+						let level = MIN_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL;
+						level <= MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL;
+						level += 1
+					) {
+						headingLevelSelectEl.createEl('option', {
+							attr: {value: level.toString()},
+							text: strings.frontmatterAutomationProjectContentHeadingLevelOption(level),
+						});
+					}
+					headingLevelSelectEl.value = rule.projectContentHeadingLevel.toString();
+					headingLevelSelectEl.addEventListener('change', () => {
+						void (async () => {
+							const projectContentHeadingLevel = normalizeFrontmatterAutomationProjectContentHeadingLevel(
+								headingLevelSelectEl.value,
+								getLatestRule().projectContentHeadingLevel,
+							);
+							headingLevelSelectEl.value = projectContentHeadingLevel.toString();
+							await updateRule((currentRule) => ({
+								...currentRule,
+								projectContentHeadingLevel,
+							}));
+						})();
+					});
+
+					if (rule.projectContentPlacementMode === 'target_heading') {
+						const targetHeadingInputEl = createFieldControl(
+							strings.frontmatterAutomationProjectContentTargetHeadingName,
+							strings.frontmatterAutomationProjectContentTargetHeadingDesc,
+							'obpm-automation-rule-field-wide',
+						).createEl('input', {
+							attr: {
+								'aria-label': `${ruleLabel} ${strings.frontmatterAutomationProjectContentTargetHeadingName}`,
+								placeholder: strings.frontmatterAutomationProjectContentTargetHeadingPlaceholder,
+								type: 'text',
+							},
+							cls: 'obpm-rule-table-input',
+							value: rule.projectContentTargetHeading,
+						});
+						bindCommittedInput(
+							targetHeadingInputEl,
+							() => getLatestRule().projectContentTargetHeading,
+							async (value) => {
+								await updateRule((currentRule) => ({
+									...currentRule,
+									projectContentTargetHeading: value.trim(),
+								}));
+							},
+						);
+					}
 				} else {
 					const targetFieldInputEl = createFieldControl(
 						strings.frontmatterAutomationTargetFieldName,
@@ -2524,7 +2630,12 @@ function normalizeFrontmatterAutomationActionType(
 	value: string,
 	fallback: FrontmatterAutomationActionType,
 ): FrontmatterAutomationActionType {
-	if (value === 'ensure_project_folder' || value === 'set_current_time' || value === 'set_static_value') {
+	if (
+		value === 'ensure_project_folder'
+		|| value === 'send_content_to_project_file'
+		|| value === 'set_current_time'
+		|| value === 'set_static_value'
+	) {
 		return value;
 	}
 
@@ -2538,6 +2649,8 @@ function getFrontmatterAutomationActionTypeLabel(
 	switch (actionType) {
 		case 'ensure_project_folder':
 			return strings.frontmatterAutomationActionTypeProjectFolderLabel;
+		case 'send_content_to_project_file':
+			return strings.frontmatterAutomationActionTypeProjectContentLabel;
 		case 'set_static_value':
 			return strings.frontmatterAutomationActionTypeStaticValueLabel;
 		case 'set_current_time':
