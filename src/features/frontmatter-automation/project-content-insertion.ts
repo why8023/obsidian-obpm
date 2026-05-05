@@ -1,4 +1,4 @@
-import {buildMovedContentBody, buildMovedContentList} from '../file-content-move/markdown-list-converter';
+import {buildMovedContentBody, buildMovedContentList} from '../sent-content/source-content';
 import {buildOffsetInsertionPlan, OffsetInsertionPlan} from '../sent-content/target-insertion';
 import {FrontmatterAutomationProjectContentPlacementMode} from './frontmatter-automation-types';
 

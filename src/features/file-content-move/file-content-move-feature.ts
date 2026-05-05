@@ -12,9 +12,10 @@ import {
 	normalizePath,
 } from 'obsidian';
 import OBPMPlugin from '../../main';
+import {sendContentToTarget, SentContentTransactionRecord} from '../sent-content/send-transaction';
+import {buildMovedContentList} from '../sent-content/source-content';
 import {buildOffsetInsertionPlan, removeInsertedText, RemovalPlan} from '../sent-content/target-insertion';
 import {getFileContentMoveLocalization} from './localization';
-import {buildMovedContentList} from './markdown-list-converter';
 
 const MAX_UNDO_ENTRIES = 20;
 const TARGET_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -32,21 +33,11 @@ interface EditorInsertionTarget {
 	insertOffset: number;
 }
 
-interface MoveUndoEntry {
-	insertOffset: number;
-	insertedText: string;
-	sourceContent: string;
-	sourcePath: string;
-	targetContentAfter: string;
-	targetContentBefore: string;
-	targetPath: string;
-}
-
 export class FileContentMoveFeature extends Component {
 	private cachedEditorTarget: CachedEditorTarget | null = null;
 	private readonly captureTimeouts = new Set<number>();
 	private readonly localization = getFileContentMoveLocalization();
-	private readonly undoStack: MoveUndoEntry[] = [];
+	private readonly undoStack: SentContentTransactionRecord[] = [];
 	private workQueue = Promise.resolve();
 
 	constructor(private readonly plugin: OBPMPlugin) {
@@ -152,7 +143,7 @@ export class FileContentMoveFeature extends Component {
 		this.cacheEditorTarget(info.editor, info.file, info.editor.posToOffset(info.editor.getCursor()));
 	}
 
-	private async createSourceFileFromUndo(entry: MoveUndoEntry): Promise<void> {
+	private async createSourceFileFromUndo(entry: SentContentTransactionRecord): Promise<void> {
 		const existingEntry = this.plugin.app.vault.getAbstractFileByPath(entry.sourcePath);
 		if (existingEntry) {
 			if (!(existingEntry instanceof TFile)) {
@@ -270,36 +261,41 @@ export class FileContentMoveFeature extends Component {
 		const originalSourcePath = sourceFile.path;
 		const originalTargetName = targetFile.name;
 		const originalTargetPath = targetFile.path;
-		const sourceContent = await this.plugin.app.vault.read(sourceFile);
 		const targetContentBefore = editor.getValue();
-		const listBlock = buildMovedContentList({
-			sourceBasename: sourceFile.basename,
-			sourceContent,
-			stripSingleH1: this.getSettings().stripSingleH1,
-		});
-		const insertionPlan = buildOffsetInsertionPlan({
-			block: listBlock,
-			content: targetContentBefore,
-			insertOffset: target.insertOffset,
-		});
-		const insertOffset = insertionPlan.offset;
-		const insertedText = insertionPlan.insertedText;
+		let transactionRecord: SentContentTransactionRecord | null = null;
 
 		try {
-			this.applyTextInsertion(editor, insertOffset, insertedText);
-			await this.saveEditorTarget(info, targetFile, editor);
-			await this.plugin.app.fileManager.trashFile(sourceFile);
-
-			this.pushUndoEntry({
-				insertOffset,
-				insertedText,
-				sourceContent,
+			transactionRecord = await sendContentToTarget({
+				buildInsertionPlan: ({sourceContent, targetContentBefore}) => {
+					const listBlock = buildMovedContentList({
+						sourceBasename: sourceFile.basename,
+						sourceContent,
+						stripSingleH1: this.getSettings().stripSingleH1,
+					});
+					return buildOffsetInsertionPlan({
+						block: listBlock,
+						content: targetContentBefore,
+						insertOffset: target.insertOffset,
+					});
+				},
+				readSourceContent: async () => this.plugin.app.vault.read(sourceFile),
+				readTargetContent: async () => targetContentBefore,
+				rollbackTargetContent: async (record) => {
+					await this.rollbackEditorInsertion(editor, info, targetFile, record.insertOffset, record.insertedText);
+				},
 				sourcePath: originalSourcePath,
-				targetContentAfter: editor.getValue(),
-				targetContentBefore,
 				targetPath: originalTargetPath,
+				trashSource: async () => {
+					await this.plugin.app.fileManager.trashFile(sourceFile);
+				},
+				writeTargetContent: async (_nextContent, insertionPlan) => {
+					this.applyTextInsertion(editor, insertionPlan.offset, insertionPlan.insertedText);
+					await this.saveEditorTarget(info, targetFile, editor);
+					return editor.getValue();
+				},
 			});
-			this.cacheEditorTarget(editor, targetFile, insertOffset + insertedText.length);
+			this.pushUndoEntry(transactionRecord);
+			this.cacheEditorTarget(editor, targetFile, transactionRecord.insertOffset + transactionRecord.insertedText.length);
 			new Notice(this.localization.moveNotice(originalSourceName, originalTargetName));
 			return true;
 		} catch (error) {
@@ -308,13 +304,15 @@ export class FileContentMoveFeature extends Component {
 				sourcePath: originalSourcePath,
 				targetPath: originalTargetPath,
 			});
-			await this.rollbackEditorInsertion(editor, info, targetFile, insertOffset, insertedText);
+			if (!transactionRecord) {
+				await this.rollbackEditorInsertionFromContent(editor, info, targetFile, targetContentBefore);
+			}
 			new Notice(this.localization.moveFailureNotice);
 			return false;
 		}
 	}
 
-	private pushUndoEntry(entry: MoveUndoEntry): void {
+	private pushUndoEntry(entry: SentContentTransactionRecord): void {
 		this.undoStack.push(entry);
 		if (this.undoStack.length > MAX_UNDO_ENTRIES) {
 			this.undoStack.shift();
@@ -372,6 +370,16 @@ export class FileContentMoveFeature extends Component {
 			nextContent: currentContent.slice(0, insertOffset) + currentContent.slice(insertOffset + insertedText.length),
 			start: insertOffset,
 		});
+		await this.saveEditorTarget(info, targetFile, editor);
+	}
+
+	private async rollbackEditorInsertionFromContent(
+		editor: Editor,
+		info: MarkdownFileInfo,
+		targetFile: TFile,
+		targetContentBefore: string,
+	): Promise<void> {
+		editor.setValue(targetContentBefore);
 		await this.saveEditorTarget(info, targetFile, editor);
 	}
 
@@ -475,7 +483,7 @@ export class FileContentMoveFeature extends Component {
 		});
 	}
 
-	private async undoMove(entry: MoveUndoEntry): Promise<void> {
+	private async undoMove(entry: SentContentTransactionRecord): Promise<void> {
 		const targetFile = this.plugin.app.vault.getAbstractFileByPath(entry.targetPath);
 		if (!this.isMarkdownFile(targetFile)) {
 			throw new Error('Target markdown file no longer exists.');

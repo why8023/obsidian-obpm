@@ -14,10 +14,16 @@ import {
 	createFrontmatterSnapshotFromMetadataCache,
 } from './frontmatter-automation-utils';
 import {ensureFileInProjectFolder} from './project-placement-action';
-import {sendContentToProjectFile as sendContentToProjectFileAction} from './project-content-action';
+import {
+	sendContentToProjectFile as sendContentToProjectFileAction,
+	undoProjectContentSend,
+} from './project-content-action';
+import {getProjectContentActionLocalization} from './project-content-action-localization';
+import {SentContentTransactionRecord} from '../sent-content/send-transaction';
 
 const DEFAULT_FLUSH_DELAY_MS = 200;
 const EMPTY_FRONTMATTER_SNAPSHOT: FrontmatterSnapshot = Object.freeze({});
+const MAX_PROJECT_CONTENT_UNDO_ENTRIES = 20;
 const OWN_WRITE_TTL_MS = 5000;
 
 interface PendingMetadataChange {
@@ -37,10 +43,13 @@ export class FrontmatterAutomationFeature extends Component {
 	private readonly fileWorkQueues = new Map<string, Promise<void>>();
 	private readonly pendingMetadataChanges = new Map<string, PendingMetadataChange>();
 	private readonly pendingOwnWrites = new Map<string, PendingOwnWrite>();
+	private readonly projectContentLocalization = getProjectContentActionLocalization();
+	private readonly projectContentUndoStack: SentContentTransactionRecord[] = [];
 	private readonly service = new FrontmatterAutomationService();
 	private readonly stableSnapshots = new Map<string, FrontmatterSnapshot>();
 	private flushTimer: number | null = null;
 	private eventListenersRegistered = false;
+	private projectContentUndoQueue = Promise.resolve();
 	private stateGeneration = 0;
 
 	constructor(private readonly plugin: OBPMPlugin) {
@@ -48,6 +57,22 @@ export class FrontmatterAutomationFeature extends Component {
 	}
 
 	onload() {
+		this.plugin.addCommand({
+			id: 'undo-last-automated-project-content-send',
+			name: this.projectContentLocalization.undoCommandName,
+			checkCallback: (checking) => {
+				if (this.projectContentUndoStack.length === 0) {
+					return false;
+				}
+
+				if (!checking) {
+					void this.undoLastProjectContentSend();
+				}
+
+				return true;
+			},
+		});
+
 		this.plugin.app.workspace.onLayoutReady(() => {
 			this.ensureEventListenersRegistered();
 			void this.refresh();
@@ -107,6 +132,11 @@ export class FrontmatterAutomationFeature extends Component {
 		});
 
 		return nextTask;
+	}
+
+	private enqueueProjectContentUndo(task: () => Promise<void>): Promise<void> {
+		this.projectContentUndoQueue = this.projectContentUndoQueue.then(task, task);
+		return this.projectContentUndoQueue;
 	}
 
 	private ensureEventListenersRegistered(): void {
@@ -436,7 +466,7 @@ export class FrontmatterAutomationFeature extends Component {
 		snapshot: FrontmatterSnapshot,
 		action: FrontmatterAutomationProjectContentAction,
 	): Promise<void> {
-		await sendContentToProjectFileAction({
+		const result = await sendContentToProjectFileAction({
 			action,
 			app: this.plugin.app,
 			autoMoveWhenSingleCandidate: this.plugin.settings.projectRouting.autoMoveWhenSingleCandidate,
@@ -446,6 +476,41 @@ export class FrontmatterAutomationFeature extends Component {
 			projectFileRecognition: this.getProjectFileRecognitionOptions(),
 			relationProperty: this.plugin.settings.relatedLinks.relationProperty,
 			stripSingleH1: this.plugin.settings.fileContentMove.stripSingleH1,
+		});
+		if (result.kind === 'sent') {
+			this.pushProjectContentUndoEntry(result.undoEntry);
+		}
+	}
+
+	private pushProjectContentUndoEntry(entry: SentContentTransactionRecord): void {
+		this.projectContentUndoStack.push(entry);
+		if (this.projectContentUndoStack.length > MAX_PROJECT_CONTENT_UNDO_ENTRIES) {
+			this.projectContentUndoStack.shift();
+		}
+	}
+
+	private async undoLastProjectContentSend(): Promise<void> {
+		const entry = this.projectContentUndoStack.pop();
+		if (!entry) {
+			new Notice(this.projectContentLocalization.undoNoOperationNotice);
+			return;
+		}
+
+		await this.enqueueProjectContentUndo(async () => {
+			try {
+				await undoProjectContentSend(this.plugin.app, entry);
+				new Notice(this.projectContentLocalization.undoSuccessNotice);
+			} catch (error) {
+				this.projectContentUndoStack.push(entry);
+				console.error('[OBPM] Failed to undo the last automated project content send.', {
+					error,
+					sourcePath: entry.sourcePath,
+					targetPath: entry.targetPath,
+				});
+				new Notice(error instanceof Error && error.message.includes('occupied')
+					? this.projectContentLocalization.undoSourceConflictNotice
+					: this.projectContentLocalization.undoFailureNotice);
+			}
 		});
 	}
 }

@@ -56,7 +56,7 @@ export class FrontmatterAutomationService {
 					ruleId: rule.id,
 					targetHeading,
 				});
-				continue;
+				break;
 			}
 
 			if (rule.targetField.length === 0) {
