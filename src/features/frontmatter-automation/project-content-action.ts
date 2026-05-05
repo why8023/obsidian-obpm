@@ -1,6 +1,6 @@
 import {App, CachedMetadata, Notice, TFile} from 'obsidian';
 import {buildSourceContribution} from '../related-links/source-index';
-import {isPathInsideFolderPath} from '../project-routing/file-move-utils';
+import {resolveAssociatedProjectCandidate, ProjectAssociationCandidate} from '../project-routing/project-association-resolver';
 import {
 	getOpenProjectCandidates,
 	getVaultProjectCandidates,
@@ -42,15 +42,17 @@ type ProjectContentActionResult =
 type ProjectResolution =
 	| {
 		kind: 'ambiguous';
-		candidates: ProjectCandidate[];
+		candidates: ProjectAssociationCandidateWithProject[];
 	}
 	| {
 		kind: 'project';
-		candidate: ProjectCandidate;
+		candidate: ProjectAssociationCandidateWithProject;
 	}
 	| {
 		kind: 'none';
 	};
+
+type ProjectAssociationCandidateWithProject = ProjectAssociationCandidate & ProjectCandidate;
 
 export async function sendContentToProjectFile(
 	options: SendContentToProjectFileOptions,
@@ -148,54 +150,6 @@ function resolveTargetProjectCandidate(
 	options: SendContentToProjectFileOptions,
 	projectCandidates: readonly ProjectCandidate[],
 ): ProjectResolution {
-	const relatedProject = resolveRelatedProjectCandidate(options, projectCandidates);
-	if (relatedProject.kind === 'project') {
-		return relatedProject;
-	}
-
-	if (relatedProject.kind === 'ambiguous') {
-		const containingRelatedProject = relatedProject.candidates.find((candidate) =>
-			isPathInsideFolderPath(options.file.path, candidate.folderPath));
-		return containingRelatedProject
-			? {
-				kind: 'project',
-				candidate: containingRelatedProject,
-			}
-			: relatedProject;
-	}
-
-	const containingProject = findDeepestContainingProjectCandidate(options.file.path, projectCandidates);
-	if (containingProject) {
-		return {
-			kind: 'project',
-			candidate: containingProject,
-		};
-	}
-
-	if (!options.autoMoveWhenSingleCandidate) {
-		return {kind: 'none'};
-	}
-
-	const openCandidates = getOpenProjectCandidates(
-		options.app,
-		options.projectFileRecognition,
-		{excludePath: options.file.path},
-	);
-	const onlyOpenCandidate = openCandidates[0];
-	if (openCandidates.length === 1 && onlyOpenCandidate) {
-		return {
-			kind: 'project',
-			candidate: onlyOpenCandidate,
-		};
-	}
-
-	return {kind: 'none'};
-}
-
-function resolveRelatedProjectCandidate(
-	options: SendContentToProjectFileOptions,
-	projectCandidates: readonly ProjectCandidate[],
-): ProjectResolution {
 	const contribution = buildSourceContribution(
 		options.app,
 		options.file,
@@ -203,49 +157,22 @@ function resolveRelatedProjectCandidate(
 		options.displayProperty.trim(),
 		options.cache,
 	);
-	if (!contribution) {
-		return {kind: 'none'};
-	}
-
-	const projectCandidatesByFilePath = new Map(projectCandidates.map((candidate) => [candidate.file.path, candidate]));
-	const relatedProjectCandidates = new Map<string, ProjectCandidate>();
-	for (const targetPath of contribution.targetPaths) {
-		const directProjectCandidate = projectCandidatesByFilePath.get(targetPath);
-		const projectCandidate = directProjectCandidate
-			?? findDeepestContainingProjectCandidate(targetPath, projectCandidates);
-		if (!projectCandidate) {
-			continue;
-		}
-
-		relatedProjectCandidates.set(projectCandidate.file.path, projectCandidate);
-	}
-
-	const candidates = [...relatedProjectCandidates.values()];
-	const onlyCandidate = candidates[0];
-	if (candidates.length === 1 && onlyCandidate) {
-		return {
-			kind: 'project',
-			candidate: onlyCandidate,
-		};
-	}
-
-	if (candidates.length > 1) {
-		return {
-			kind: 'ambiguous',
-			candidates,
-		};
-	}
-
-	return {kind: 'none'};
+	return resolveAssociatedProjectCandidate({
+		autoUseSingleOpenProject: options.autoMoveWhenSingleCandidate,
+		openProjectCandidates: getOpenProjectCandidates(
+			options.app,
+			options.projectFileRecognition,
+			{excludePath: options.file.path},
+		).map(toProjectAssociationCandidate),
+		projectCandidates: projectCandidates.map(toProjectAssociationCandidate),
+		relatedTargetPaths: contribution?.targetPaths ?? [],
+		sourcePath: options.file.path,
+	});
 }
 
-function findDeepestContainingProjectCandidate(
-	path: string,
-	projectCandidates: readonly ProjectCandidate[],
-): ProjectCandidate | null {
-	const matches = projectCandidates
-		.filter((candidate) => isPathInsideFolderPath(path, candidate.folderPath))
-		.sort((left, right) => right.folderPath.length - left.folderPath.length);
-
-	return matches[0] ?? null;
+function toProjectAssociationCandidate(candidate: ProjectCandidate): ProjectAssociationCandidateWithProject {
+	return {
+		...candidate,
+		filePath: candidate.file.path,
+	};
 }

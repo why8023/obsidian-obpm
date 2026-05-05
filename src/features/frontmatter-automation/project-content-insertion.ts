@@ -1,4 +1,5 @@
 import {buildMovedContentBody, buildMovedContentList} from '../file-content-move/markdown-list-converter';
+import {buildOffsetInsertionPlan, OffsetInsertionPlan} from '../sent-content/target-insertion';
 import {FrontmatterAutomationProjectContentPlacementMode} from './frontmatter-automation-types';
 
 export interface ProjectContentPlacement {
@@ -32,6 +33,12 @@ const FENCE_LINE_PATTERN = /^(?: {0,3})(`{3,}|~{3,})/;
 export function buildProjectFileContentWithSentContent(
 	options: BuildProjectFileContentWithSentContentOptions,
 ): string {
+	return buildProjectFileContentSentContentInsertionPlan(options).nextContent;
+}
+
+export function buildProjectFileContentSentContentInsertionPlan(
+	options: BuildProjectFileContentWithSentContentOptions,
+): OffsetInsertionPlan {
 	const headingLevel = normalizeHeadingLevel(options.placement.headingLevel);
 	if (options.placement.mode === 'source_name_heading') {
 		return appendBlock(options.projectContent, buildSourceNameHeadingBlock({
@@ -53,15 +60,19 @@ export function buildProjectFileContentWithSentContent(
 		return appendBlock(options.projectContent, `${formatHeadingLine(headingLevel, targetHeading)}\n\n${sentContent}`);
 	}
 
-	return insertBlockAtOffset(options.projectContent, headingRange.endOffset, sentContent);
+	return buildOffsetInsertionPlan({
+		block: sentContent,
+		content: options.projectContent,
+		insertOffset: headingRange.endOffset,
+	});
 }
 
-function appendBlock(content: string, block: string): string {
-	if (content.length === 0) {
-		return block;
-	}
-
-	return `${content}${getBlockPrefix(content)}${block}`;
+function appendBlock(content: string, block: string): OffsetInsertionPlan {
+	return buildOffsetInsertionPlan({
+		block,
+		content,
+		insertOffset: content.length,
+	});
 }
 
 function buildSourceNameHeadingBlock(options: {
@@ -119,36 +130,6 @@ function findHeadingRange(content: string, level: number, text: string): Heading
 
 function formatHeadingLine(level: number, text: string): string {
 	return `${'#'.repeat(level)} ${text.trim().replace(/\s+/g, ' ') || 'Untitled'}`;
-}
-
-function getBlockPrefix(contentBefore: string): string {
-	if (contentBefore.length === 0) {
-		return '';
-	}
-
-	if (/\n[ \t]*\n[ \t]*$/.test(contentBefore)) {
-		return '';
-	}
-
-	return contentBefore.endsWith('\n') ? '\n' : '\n\n';
-}
-
-function getBlockSuffix(contentAfter: string): string {
-	if (contentAfter.length === 0) {
-		return '';
-	}
-
-	if (contentAfter.startsWith('\n\n')) {
-		return '';
-	}
-
-	return contentAfter.startsWith('\n') ? '\n' : '\n\n';
-}
-
-function insertBlockAtOffset(content: string, offset: number, block: string): string {
-	const before = content.slice(0, offset);
-	const after = content.slice(offset);
-	return `${before}${getBlockPrefix(before)}${block}${getBlockSuffix(after)}${after}`;
 }
 
 function* iterateLines(content: string): Generator<{startOffset: number; text: string}> {

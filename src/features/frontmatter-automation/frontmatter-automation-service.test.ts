@@ -264,6 +264,45 @@ describe('FrontmatterAutomationService', () => {
 		]);
 	});
 
+	it('treats project content sending as a terminal action for the source file', () => {
+		const result = service.evaluate({
+			currentSnapshot: {
+				status: 'done',
+			},
+			previousSnapshot: {
+				status: 'doing',
+			},
+			settings: createSettings({
+				rules: [
+					createDefaultFrontmatterAutomationRule({
+						actionType: 'send_content_to_project_file',
+						id: 'done-send-content-a',
+						projectContentHeadingLevel: 2,
+						projectContentPlacementMode: 'target_heading',
+						projectContentTargetHeading: '已完成事项',
+						targetField: '',
+						triggerField: 'status',
+						triggerOperator: 'equals',
+						triggerValue: 'done',
+					}),
+					createDefaultFrontmatterAutomationRule({
+						actionType: 'send_content_to_project_file',
+						id: 'done-send-content-b',
+						projectContentHeadingLevel: 2,
+						projectContentPlacementMode: 'target_heading',
+						projectContentTargetHeading: '归档',
+						targetField: '',
+						triggerField: 'status',
+						triggerOperator: 'equals',
+						triggerValue: 'done',
+					}),
+				],
+			}),
+		});
+
+		assert.deepEqual(result.projectContentActions.map((action) => action.ruleId), ['done-send-content-a']);
+	});
+
 	it('can write frontmatter and request a project move from the same trigger change', () => {
 		const result = service.evaluate({
 			currentSnapshot: {

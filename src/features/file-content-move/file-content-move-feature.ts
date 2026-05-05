@@ -12,6 +12,7 @@ import {
 	normalizePath,
 } from 'obsidian';
 import OBPMPlugin from '../../main';
+import {buildOffsetInsertionPlan, removeInsertedText, RemovalPlan} from '../sent-content/target-insertion';
 import {getFileContentMoveLocalization} from './localization';
 import {buildMovedContentList} from './markdown-list-converter';
 
@@ -39,12 +40,6 @@ interface MoveUndoEntry {
 	targetContentAfter: string;
 	targetContentBefore: string;
 	targetPath: string;
-}
-
-interface RemovalPlan {
-	end: number;
-	nextContent: string;
-	start: number;
 }
 
 export class FileContentMoveFeature extends Component {
@@ -277,13 +272,18 @@ export class FileContentMoveFeature extends Component {
 		const originalTargetPath = targetFile.path;
 		const sourceContent = await this.plugin.app.vault.read(sourceFile);
 		const targetContentBefore = editor.getValue();
-		const insertOffset = clamp(target.insertOffset, 0, targetContentBefore.length);
 		const listBlock = buildMovedContentList({
 			sourceBasename: sourceFile.basename,
 			sourceContent,
 			stripSingleH1: this.getSettings().stripSingleH1,
 		});
-		const insertedText = buildInsertionText(targetContentBefore, insertOffset, listBlock);
+		const insertionPlan = buildOffsetInsertionPlan({
+			block: listBlock,
+			content: targetContentBefore,
+			insertOffset: target.insertOffset,
+		});
+		const insertOffset = insertionPlan.offset;
+		const insertedText = insertionPlan.insertedText;
 
 		try {
 			this.applyTextInsertion(editor, insertOffset, insertedText);
@@ -353,38 +353,6 @@ export class FileContentMoveFeature extends Component {
 		this.registerDomEvent(document, 'focusin', () => {
 			this.scheduleActiveEditorCapture();
 		});
-	}
-
-	private removeInsertedText(currentContent: string, entry: MoveUndoEntry): RemovalPlan | null {
-		const exactStart = entry.insertOffset;
-		const exactEnd = exactStart + entry.insertedText.length;
-		if (currentContent.slice(exactStart, exactEnd) === entry.insertedText) {
-			return {
-				end: exactEnd,
-				nextContent: currentContent.slice(0, exactStart) + currentContent.slice(exactEnd),
-				start: exactStart,
-			};
-		}
-
-		if (currentContent === entry.targetContentAfter) {
-			return {
-				end: exactEnd,
-				nextContent: entry.targetContentBefore,
-				start: exactStart,
-			};
-		}
-
-		const singleOccurrenceStart = findSingleOccurrence(currentContent, entry.insertedText);
-		if (singleOccurrenceStart !== null) {
-			const singleOccurrenceEnd = singleOccurrenceStart + entry.insertedText.length;
-			return {
-				end: singleOccurrenceEnd,
-				nextContent: currentContent.slice(0, singleOccurrenceStart) + currentContent.slice(singleOccurrenceEnd),
-				start: singleOccurrenceStart,
-			};
-		}
-
-		return null;
 	}
 
 	private async rollbackEditorInsertion(
@@ -515,7 +483,7 @@ export class FileContentMoveFeature extends Component {
 
 		const openTargetView = this.findOpenMarkdownView(entry.targetPath);
 		const currentContent = openTargetView?.editor.getValue() ?? await this.plugin.app.vault.read(targetFile);
-		const removalPlan = this.removeInsertedText(currentContent, entry);
+		const removalPlan = removeInsertedText(currentContent, entry);
 		if (!removalPlan) {
 			throw new Error('Inserted content could not be found in target file.');
 		}
@@ -532,47 +500,8 @@ export class FileContentMoveFeature extends Component {
 	}
 }
 
-function buildInsertionText(content: string, insertOffset: number, block: string): string {
-	return `${getBlockPrefix(content, insertOffset)}${block}${getBlockSuffix(content, insertOffset)}`;
-}
-
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), max);
-}
-
-function findSingleOccurrence(content: string, value: string): number | null {
-	const firstIndex = content.indexOf(value);
-	if (firstIndex < 0) {
-		return null;
-	}
-
-	return content.indexOf(value, firstIndex + value.length) < 0 ? firstIndex : null;
-}
-
-function getBlockPrefix(content: string, insertOffset: number): string {
-	if (insertOffset <= 0) {
-		return '';
-	}
-
-	const before = content.slice(0, insertOffset);
-	if (/\n[ \t]*\n[ \t]*$/.test(before)) {
-		return '';
-	}
-
-	return before.endsWith('\n') ? '\n' : '\n\n';
-}
-
-function getBlockSuffix(content: string, insertOffset: number): string {
-	if (insertOffset >= content.length) {
-		return '';
-	}
-
-	const after = content.slice(insertOffset);
-	if (after.startsWith('\n\n')) {
-		return '';
-	}
-
-	return after.startsWith('\n') ? '\n' : '\n\n';
 }
 
 function getParentFolderPath(path: string): string {

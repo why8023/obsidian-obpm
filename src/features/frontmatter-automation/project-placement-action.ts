@@ -3,9 +3,9 @@ import type {FileMoveRequest, FileMoveResult} from '../../file-move-coordinator'
 import {
 	buildProjectTargetMovePlan,
 	ensureFolderExists,
-	isPathInsideFolderPath,
 } from '../project-routing/file-move-utils';
 import {getProjectRoutingLocalization} from '../project-routing/localization';
+import {resolveAssociatedProjectCandidate, ProjectAssociationCandidate} from '../project-routing/project-association-resolver';
 import {
 	getOpenProjectCandidates,
 	getVaultProjectCandidates,
@@ -51,15 +51,17 @@ type ProjectPlacementActionResult =
 type ProjectResolution =
 	| {
 		kind: 'ambiguous';
-		candidates: ProjectCandidate[];
+		candidates: ProjectAssociationCandidateWithProject[];
 	}
 	| {
 		kind: 'project';
-		candidate: ProjectCandidate;
+		candidate: ProjectAssociationCandidateWithProject;
 	}
 	| {
 		kind: 'none';
 	};
+
+type ProjectAssociationCandidateWithProject = ProjectAssociationCandidate & ProjectCandidate;
 
 export async function ensureFileInProjectFolder(
 	options: EnsureFileInProjectFolderOptions,
@@ -69,50 +71,19 @@ export async function ensureFileInProjectFolder(
 		return {kind: 'no-project'};
 	}
 
-	const relatedProject = resolveRelatedProjectCandidate(options, projectCandidates);
-	if (relatedProject.kind === 'project') {
-		return await ensureFileInProject(options, relatedProject.candidate);
+	const targetProject = resolveTargetProjectCandidate(options, projectCandidates);
+	if (targetProject.kind === 'project') {
+		return await ensureFileInProject(options, targetProject.candidate);
 	}
 
-	if (relatedProject.kind === 'ambiguous') {
-		const containingRelatedProject = relatedProject.candidates.find((candidate) =>
-			isPathInsideFolderPath(options.file.path, candidate.folderPath));
-		if (containingRelatedProject) {
-			return {
-				kind: 'already-in-project',
-				targetProject: containingRelatedProject,
-			};
-		}
-
+	if (targetProject.kind === 'ambiguous') {
 		return {
 			kind: 'ambiguous-project',
-			candidates: relatedProject.candidates,
+			candidates: targetProject.candidates,
 		};
 	}
 
-	const containingProject = findDeepestContainingProjectCandidate(options.file.path, projectCandidates);
-	if (containingProject) {
-		return {
-			kind: 'already-in-project',
-			targetProject: containingProject,
-		};
-	}
-
-	if (!options.autoMoveWhenSingleCandidate) {
-		return {kind: 'no-project'};
-	}
-
-	const openCandidates = getOpenProjectCandidates(
-		options.app,
-		options.projectFileRecognition,
-		{excludePath: options.file.path},
-	);
-	const onlyOpenCandidate = openCandidates[0];
-	if (openCandidates.length !== 1 || !onlyOpenCandidate) {
-		return {kind: 'no-project'};
-	}
-
-	return await ensureFileInProject(options, onlyOpenCandidate);
+	return {kind: 'no-project'};
 }
 
 async function ensureFileInProject(
@@ -204,7 +175,7 @@ function buildMovePlan(
 	});
 }
 
-function resolveRelatedProjectCandidate(
+function resolveTargetProjectCandidate(
 	options: EnsureFileInProjectFolderOptions,
 	projectCandidates: readonly ProjectCandidate[],
 ): ProjectResolution {
@@ -215,49 +186,22 @@ function resolveRelatedProjectCandidate(
 		options.displayProperty.trim(),
 		options.cache,
 	);
-	if (!contribution) {
-		return {kind: 'none'};
-	}
-
-	const projectCandidatesByFilePath = new Map(projectCandidates.map((candidate) => [candidate.file.path, candidate]));
-	const relatedProjectCandidates = new Map<string, ProjectCandidate>();
-	for (const targetPath of contribution.targetPaths) {
-		const directProjectCandidate = projectCandidatesByFilePath.get(targetPath);
-		const projectCandidate = directProjectCandidate
-			?? findDeepestContainingProjectCandidate(targetPath, projectCandidates);
-		if (!projectCandidate) {
-			continue;
-		}
-
-		relatedProjectCandidates.set(projectCandidate.file.path, projectCandidate);
-	}
-
-	const candidates = [...relatedProjectCandidates.values()];
-	const onlyCandidate = candidates[0];
-	if (candidates.length === 1 && onlyCandidate) {
-		return {
-			kind: 'project',
-			candidate: onlyCandidate,
-		};
-	}
-
-	if (candidates.length > 1) {
-		return {
-			kind: 'ambiguous',
-			candidates,
-		};
-	}
-
-	return {kind: 'none'};
+	return resolveAssociatedProjectCandidate({
+		autoUseSingleOpenProject: options.autoMoveWhenSingleCandidate,
+		openProjectCandidates: getOpenProjectCandidates(
+			options.app,
+			options.projectFileRecognition,
+			{excludePath: options.file.path},
+		).map(toProjectAssociationCandidate),
+		projectCandidates: projectCandidates.map(toProjectAssociationCandidate),
+		relatedTargetPaths: contribution?.targetPaths ?? [],
+		sourcePath: options.file.path,
+	});
 }
 
-function findDeepestContainingProjectCandidate(
-	path: string,
-	projectCandidates: readonly ProjectCandidate[],
-): ProjectCandidate | null {
-	const matches = projectCandidates
-		.filter((candidate) => isPathInsideFolderPath(path, candidate.folderPath))
-		.sort((left, right) => right.folderPath.length - left.folderPath.length);
-
-	return matches[0] ?? null;
+function toProjectAssociationCandidate(candidate: ProjectCandidate): ProjectAssociationCandidateWithProject {
+	return {
+		...candidate,
+		filePath: candidate.file.path,
+	};
 }
