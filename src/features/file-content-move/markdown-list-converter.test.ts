@@ -19,6 +19,30 @@ describe('buildMovedContentList', () => {
 		].join('\n'));
 	});
 
+	it('keeps source properties on the same line as the list root item', () => {
+		const result = buildMovedContentList({
+			preserveSourceProperties: true,
+			sourceBasename: 'Source note',
+			sourceContent: [
+				'---',
+				'status: done',
+				'priority: 2',
+				'---',
+				'Body',
+			].join('\n'),
+			sourceProperties: {
+				status: 'done',
+				priority: 2,
+			},
+			stripSingleH1: true,
+		});
+
+		assert.equal(result, [
+			'- Source note <!-- obpm-property:{status:"done",priority:2} -->',
+			'    Body',
+		].join('\n'));
+	});
+
 	it('removes spacer blank lines around headings and list items', () => {
 		const result = buildMovedContentList({
 			sourceBasename: 'Source note',

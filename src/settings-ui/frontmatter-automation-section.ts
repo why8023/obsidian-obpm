@@ -486,6 +486,23 @@ function renderFrontmatterAutomationRuleListSection(
 					})();
 				});
 
+				const preservePropertiesControlEl = createFieldControl(
+					strings.frontmatterAutomationProjectContentPreserveSourcePropertiesName,
+					strings.frontmatterAutomationProjectContentPreserveSourcePropertiesDesc,
+				);
+				const preservePropertiesToggle = new ToggleComponent(preservePropertiesControlEl)
+					.setValue(rule.projectContentPreserveSourceProperties)
+					.onChange(async (projectContentPreserveSourceProperties) => {
+						await updateRule((currentRule) => ({
+							...currentRule,
+							projectContentPreserveSourceProperties,
+						}));
+					});
+				preservePropertiesToggle.toggleEl.setAttribute(
+					'aria-label',
+					`${ruleLabel} ${strings.frontmatterAutomationProjectContentPreserveSourcePropertiesName}`,
+				);
+
 				if (rule.projectContentPlacementMode === 'target_heading') {
 					const targetHeadingInputEl = createFieldControl(
 						strings.frontmatterAutomationProjectContentTargetHeadingName,

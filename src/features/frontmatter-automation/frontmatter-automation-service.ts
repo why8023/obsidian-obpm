@@ -53,6 +53,7 @@ export class FrontmatterAutomationService {
 				projectContentActions.push({
 					headingLevel: rule.projectContentHeadingLevel,
 					placementMode: rule.projectContentPlacementMode,
+					preserveSourceProperties: rule.projectContentPreserveSourceProperties,
 					ruleId: rule.id,
 					targetHeading,
 				});

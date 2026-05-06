@@ -1,4 +1,5 @@
 import {buildMovedContentBody, buildMovedContentList} from '../sent-content/source-content';
+import {appendSourcePropertyComment, SourcePropertyMap} from '../sent-content/source-property-comment';
 import {buildOffsetInsertionPlan, OffsetInsertionPlan} from '../sent-content/target-insertion';
 import {FrontmatterAutomationProjectContentPlacementMode} from './frontmatter-automation-types';
 
@@ -10,9 +11,11 @@ export interface ProjectContentPlacement {
 
 interface BuildProjectFileContentWithSentContentOptions {
 	placement: ProjectContentPlacement;
+	preserveSourceProperties?: boolean;
 	projectContent: string;
 	sourceBasename: string;
 	sourceContent: string;
+	sourceProperties?: SourcePropertyMap | null;
 	stripSingleH1: boolean;
 }
 
@@ -43,16 +46,20 @@ export function buildProjectFileContentSentContentInsertionPlan(
 	if (options.placement.mode === 'source_name_heading') {
 		return appendBlock(options.projectContent, buildSourceNameHeadingBlock({
 			headingLevel,
+			preserveSourceProperties: options.preserveSourceProperties,
 			sourceBasename: options.sourceBasename,
 			sourceContent: options.sourceContent,
+			sourceProperties: options.sourceProperties,
 			stripSingleH1: options.stripSingleH1,
 		}));
 	}
 
 	const targetHeading = options.placement.targetHeading.trim();
 	const sentContent = buildMovedContentList({
+		preserveSourceProperties: options.preserveSourceProperties,
 		sourceBasename: options.sourceBasename,
 		sourceContent: options.sourceContent,
+		sourceProperties: options.sourceProperties,
 		stripSingleH1: options.stripSingleH1,
 	});
 	const headingRange = findHeadingRange(options.projectContent, headingLevel, targetHeading);
@@ -77,11 +84,15 @@ function appendBlock(content: string, block: string): OffsetInsertionPlan {
 
 function buildSourceNameHeadingBlock(options: {
 	headingLevel: number;
+	preserveSourceProperties?: boolean;
 	sourceBasename: string;
 	sourceContent: string;
+	sourceProperties?: SourcePropertyMap | null;
 	stripSingleH1: boolean;
 }): string {
-	const headingLine = formatHeadingLine(options.headingLevel, options.sourceBasename);
+	const headingLine = options.preserveSourceProperties
+		? appendSourcePropertyComment(formatHeadingLine(options.headingLevel, options.sourceBasename), options.sourceProperties)
+		: formatHeadingLine(options.headingLevel, options.sourceBasename);
 	const body = buildMovedContentBody({
 		parentHeadingLevel: options.headingLevel,
 		sourceContent: options.sourceContent,

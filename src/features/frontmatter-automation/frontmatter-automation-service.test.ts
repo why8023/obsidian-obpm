@@ -241,6 +241,7 @@ describe('FrontmatterAutomationService', () => {
 					createDefaultFrontmatterAutomationRule({
 						actionType: 'send_content_to_project_file',
 						id: 'done-send-content',
+						projectContentPreserveSourceProperties: true,
 						projectContentHeadingLevel: 3,
 						projectContentPlacementMode: 'target_heading',
 						projectContentTargetHeading: '已完成事项',
@@ -258,6 +259,7 @@ describe('FrontmatterAutomationService', () => {
 			{
 				headingLevel: 3,
 				placementMode: 'target_heading',
+				preserveSourceProperties: true,
 				ruleId: 'done-send-content',
 				targetHeading: '已完成事项',
 			},

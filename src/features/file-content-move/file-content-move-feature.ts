@@ -268,8 +268,10 @@ export class FileContentMoveFeature extends Component {
 			transactionRecord = await sendContentToTarget({
 				buildInsertionPlan: ({sourceContent, targetContentBefore}) => {
 					const listBlock = buildMovedContentList({
+						preserveSourceProperties: this.getSettings().preserveSourceProperties,
 						sourceBasename: sourceFile.basename,
 						sourceContent,
+						sourceProperties: this.plugin.app.metadataCache.getFileCache(sourceFile)?.frontmatter ?? null,
 						stripSingleH1: this.getSettings().stripSingleH1,
 					});
 					return buildOffsetInsertionPlan({

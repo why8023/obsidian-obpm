@@ -159,6 +159,7 @@ export interface FileNameSyncSettings {
 export interface FileContentMoveSettings {
 	enableFileExplorer: boolean;
 	enabled: boolean;
+	preserveSourceProperties: boolean;
 	stripSingleH1: boolean;
 }
 
@@ -220,6 +221,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 	fileContentMove: {
 		enableFileExplorer: true,
 		enabled: false,
+		preserveSourceProperties: false,
 		stripSingleH1: true,
 	},
 	relatedLinks: {
@@ -304,6 +306,10 @@ export function normalizePluginSettings(
 				DEFAULT_SETTINGS.fileContentMove.enableFileExplorer,
 			),
 			enabled: normalizeBoolean(settings?.fileContentMove?.enabled, DEFAULT_SETTINGS.fileContentMove.enabled),
+			preserveSourceProperties: normalizeBoolean(
+				settings?.fileContentMove?.preserveSourceProperties,
+				DEFAULT_SETTINGS.fileContentMove.preserveSourceProperties,
+			),
 			stripSingleH1: normalizeBoolean(
 				settings?.fileContentMove?.stripSingleH1,
 				DEFAULT_SETTINGS.fileContentMove.stripSingleH1,
@@ -1272,6 +1278,16 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.fileContentMove.stripSingleH1)
 				.onChange(async (value) => {
 					this.plugin.settings.fileContentMove.stripSingleH1 = value;
+					await saveWithoutRefresh();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.fileContentMovePreserveSourcePropertiesName)
+			.setDesc(strings.fileContentMovePreserveSourcePropertiesDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.fileContentMove.preserveSourceProperties)
+				.onChange(async (value) => {
+					this.plugin.settings.fileContentMove.preserveSourceProperties = value;
 					await saveWithoutRefresh();
 				}));
 

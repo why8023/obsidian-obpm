@@ -1,6 +1,10 @@
+import {appendSourcePropertyComment, SourcePropertyMap} from './source-property-comment';
+
 export interface BuildMovedContentListOptions {
+	preserveSourceProperties?: boolean;
 	sourceBasename: string;
 	sourceContent: string;
+	sourceProperties?: SourcePropertyMap | null;
 	stripSingleH1: boolean;
 }
 
@@ -30,7 +34,7 @@ export function buildMovedContentList(options: BuildMovedContentListOptions): st
 	const lines = normalizeSourceContent(options.sourceContent).split('\n');
 	const shouldStripSingleH1 = options.stripSingleH1 && countLevelOneHeadings(lines) === 1;
 	const headingLevelOffset = shouldStripSingleH1 ? 1 : 0;
-	const outputLines: string[] = [formatListItem(0, sourceBasename)];
+	const outputLines: string[] = [formatRootListItem(sourceBasename, options)];
 	let currentHeadingLevel = 0;
 	let hasContentAfterRoot = false;
 	let listIndentStack: number[] = [];
@@ -173,6 +177,13 @@ function countLevelOneHeadings(lines: readonly string[]): number {
 
 function formatListItem(level: number, text: string): string {
 	return `${LIST_INDENT.repeat(Math.max(0, level))}- ${normalizeListItemText(text)}`;
+}
+
+function formatRootListItem(sourceBasename: string, options: BuildMovedContentListOptions): string {
+	const text = options.preserveSourceProperties
+		? appendSourcePropertyComment(sourceBasename, options.sourceProperties)
+		: sourceBasename;
+	return `- ${text}`;
 }
 
 function formatIndentedContent(level: number, text: string): string {

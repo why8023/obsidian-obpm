@@ -27,6 +27,7 @@ export function createDefaultFrontmatterAutomationRule(
 		actionType: 'set_current_time',
 		projectContentHeadingLevel: DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
 		projectContentPlacementMode: 'target_heading',
+		projectContentPreserveSourceProperties: false,
 		projectContentTargetHeading: '',
 		targetField: 'obpm_end_time',
 		staticValue: '',
@@ -141,6 +142,10 @@ function normalizeRule(
 		projectContentPlacementMode: normalizeFrontmatterAutomationProjectContentPlacementMode(
 			rule.projectContentPlacementMode,
 			fallbackRule.projectContentPlacementMode,
+		),
+		projectContentPreserveSourceProperties: normalizeBoolean(
+			rule.projectContentPreserveSourceProperties,
+			fallbackRule.projectContentPreserveSourceProperties,
 		),
 		projectContentTargetHeading: normalizeText(rule.projectContentTargetHeading, fallbackRule.projectContentTargetHeading),
 		targetField: normalizeText(rule.targetField, fallbackRule.targetField),

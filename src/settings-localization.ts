@@ -58,6 +58,8 @@ export interface SettingsLocalization {
 	fileContentMoveFileExplorerDesc: string;
 	fileContentMoveFileExplorerName: string;
 	fileContentMoveHeading: string;
+	fileContentMovePreserveSourcePropertiesDesc: string;
+	fileContentMovePreserveSourcePropertiesName: string;
 	fileContentMoveStripSingleH1Desc: string;
 	fileContentMoveStripSingleH1Name: string;
 	relatedDocumentWorkflowHeading: string;
@@ -186,6 +188,8 @@ export interface SettingsLocalization {
 	frontmatterAutomationProjectContentHeadingLevelName: string;
 	frontmatterAutomationProjectContentHeadingLevelDesc: (min: number, max: number, defaultValue: number) => string;
 	frontmatterAutomationProjectContentHeadingLevelOption: (level: number) => string;
+	frontmatterAutomationProjectContentPreserveSourcePropertiesDesc: string;
+	frontmatterAutomationProjectContentPreserveSourcePropertiesName: string;
 	frontmatterAutomationTargetFieldName: string;
 	frontmatterAutomationTargetFieldDesc: string;
 	frontmatterAutomationTargetFieldPlaceholder: string;
@@ -327,6 +331,8 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	fileContentMoveFileExplorerDesc: 'Show the send action on file explorer context-menu items.',
 	fileContentMoveFileExplorerName: 'Enable in file explorer',
 	fileContentMoveHeading: 'Send content to cursor',
+	fileContentMovePreserveSourcePropertiesDesc: 'Append the source note properties as an OBPM HTML comment on the same line as the source file name.',
+	fileContentMovePreserveSourcePropertiesName: 'Preserve source properties',
 	fileContentMoveStripSingleH1Desc: 'When the source note has exactly one level-1 heading, omit that heading and promote the remaining outline under the source file name.',
 	fileContentMoveStripSingleH1Name: 'Remove single level-1 heading',
 	relatedDocumentWorkflowHeading: 'Related document workflow',
@@ -458,6 +464,8 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	frontmatterAutomationProjectContentHeadingLevelDesc: (min, max, defaultValue) =>
 		`Markdown heading level used for the target heading. Range: ${min}-${max}. Default: ${defaultValue}.`,
 	frontmatterAutomationProjectContentHeadingLevelOption: (level) => `Heading ${level}`,
+	frontmatterAutomationProjectContentPreserveSourcePropertiesDesc: 'Append the source note properties as an OBPM HTML comment on the same line as the inserted source file name.',
+	frontmatterAutomationProjectContentPreserveSourcePropertiesName: 'Preserve source properties',
 	frontmatterAutomationTargetFieldName: 'Target field',
 	frontmatterAutomationTargetFieldDesc: 'Frontmatter field that will be written when the rule triggers.',
 	frontmatterAutomationTargetFieldPlaceholder: 'Enter target field',
@@ -599,6 +607,8 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	fileContentMoveFileExplorerDesc: '在文件列表项的右键菜单中显示发送动作。',
 	fileContentMoveFileExplorerName: '在文件列表中启用',
 	fileContentMoveHeading: '发送内容到光标处',
+	fileContentMovePreserveSourcePropertiesDesc: '把源文件 Property 作为 OBPM HTML 注释追加到源文件名同一行。',
+	fileContentMovePreserveSourcePropertiesName: '保留源文件 Property',
 	fileContentMoveStripSingleH1Desc: '当源文件恰好只有一个一级标题时，移动时去掉该标题，并将后续大纲提升到源文件名下面。',
 	fileContentMoveStripSingleH1Name: '去掉单一一级标题',
 	relatedDocumentWorkflowHeading: '关联文档工作流',
@@ -730,6 +740,8 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	frontmatterAutomationProjectContentHeadingLevelDesc: (min, max, defaultValue) =>
 		`设置目标标题使用几级 Markdown 标题。范围：${min}-${max}。默认值：${defaultValue}。`,
 	frontmatterAutomationProjectContentHeadingLevelOption: (level) => `${level} 级标题`,
+	frontmatterAutomationProjectContentPreserveSourcePropertiesDesc: '把源文件 Property 作为 OBPM HTML 注释追加到插入的源文件名同一行。',
+	frontmatterAutomationProjectContentPreserveSourcePropertiesName: '保留源文件 Property',
 	frontmatterAutomationTargetFieldName: '目标字段',
 	frontmatterAutomationTargetFieldDesc: '规则命中后要写入的 frontmatter 字段名。',
 	frontmatterAutomationTargetFieldPlaceholder: '输入目标字段',

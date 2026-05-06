@@ -16,6 +16,7 @@ export interface FrontmatterAutomationRule {
 	actionType: FrontmatterAutomationActionType;
 	projectContentHeadingLevel: number;
 	projectContentPlacementMode: FrontmatterAutomationProjectContentPlacementMode;
+	projectContentPreserveSourceProperties: boolean;
 	projectContentTargetHeading: string;
 	targetField: string;
 	staticValue?: string;
@@ -45,6 +46,7 @@ export interface FrontmatterAutomationProjectMoveAction {
 export interface FrontmatterAutomationProjectContentAction {
 	headingLevel: number;
 	placementMode: FrontmatterAutomationProjectContentPlacementMode;
+	preserveSourceProperties: boolean;
 	ruleId: string;
 	targetHeading: string;
 }
