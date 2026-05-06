@@ -44,14 +44,40 @@ export function buildProjectFileContentSentContentInsertionPlan(
 ): OffsetInsertionPlan {
 	const headingLevel = normalizeHeadingLevel(options.placement.headingLevel);
 	if (options.placement.mode === 'source_name_heading') {
-		return appendBlock(options.projectContent, buildSourceNameHeadingBlock({
-			headingLevel,
+		const targetHeading = options.placement.targetHeading.trim();
+		if (targetHeading.length === 0) {
+			return appendBlock(options.projectContent, buildSourceNameHeadingBlock({
+				headingLevel,
+				preserveSourceProperties: options.preserveSourceProperties,
+				sourceBasename: options.sourceBasename,
+				sourceContent: options.sourceContent,
+				sourceProperties: options.sourceProperties,
+				stripSingleH1: options.stripSingleH1,
+			}));
+		}
+
+		const parentHeadingLevel = normalizeParentHeadingLevel(options.placement.headingLevel);
+		const sourceNameHeadingBlock = buildSourceNameHeadingBlock({
+			headingLevel: parentHeadingLevel + 1,
 			preserveSourceProperties: options.preserveSourceProperties,
 			sourceBasename: options.sourceBasename,
 			sourceContent: options.sourceContent,
 			sourceProperties: options.sourceProperties,
 			stripSingleH1: options.stripSingleH1,
-		}));
+		});
+		const headingRange = findHeadingRange(options.projectContent, parentHeadingLevel, targetHeading);
+		if (!headingRange) {
+			return appendBlock(
+				options.projectContent,
+				`${formatHeadingLine(parentHeadingLevel, targetHeading)}\n\n${sourceNameHeadingBlock}`,
+			);
+		}
+
+		return buildOffsetInsertionPlan({
+			block: sourceNameHeadingBlock,
+			content: options.projectContent,
+			insertOffset: headingRange.endOffset,
+		});
 	}
 
 	const targetHeading = options.placement.targetHeading.trim();
@@ -165,6 +191,10 @@ function* iterateLines(content: string): Generator<{startOffset: number; text: s
 
 function normalizeHeadingLevel(value: number): number {
 	return Math.min(6, Math.max(1, Math.trunc(value)));
+}
+
+function normalizeParentHeadingLevel(value: number): number {
+	return Math.min(5, Math.max(1, Math.trunc(value)));
 }
 
 function parseHeadingLine(line: string, startOffset: number): HeadingMatch | null {

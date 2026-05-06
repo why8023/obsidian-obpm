@@ -458,7 +458,7 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	frontmatterAutomationProjectContentPlacementModeTargetHeadingLabel: 'Under configured heading',
 	frontmatterAutomationProjectContentPlacementModeSourceNameHeadingLabel: 'Use source file name as heading',
 	frontmatterAutomationProjectContentTargetHeadingName: 'Target heading',
-	frontmatterAutomationProjectContentTargetHeadingDesc: 'Heading text in the project file. Missing headings are created automatically.',
+	frontmatterAutomationProjectContentTargetHeadingDesc: 'Heading text in the project file. Missing headings are created automatically. In source-file-name mode, this heading is the parent and the source heading is inserted one level below it.',
 	frontmatterAutomationProjectContentTargetHeadingPlaceholder: 'Done items',
 	frontmatterAutomationProjectContentHeadingLevelName: 'Heading level',
 	frontmatterAutomationProjectContentHeadingLevelDesc: (min, max, defaultValue) =>
@@ -734,7 +734,7 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	frontmatterAutomationProjectContentPlacementModeTargetHeadingLabel: '发送到指定标题下',
 	frontmatterAutomationProjectContentPlacementModeSourceNameHeadingLabel: '使用源文件名作为标题',
 	frontmatterAutomationProjectContentTargetHeadingName: '目标标题',
-	frontmatterAutomationProjectContentTargetHeadingDesc: '项目文件中的标题文本。标题不存在时会自动创建。',
+	frontmatterAutomationProjectContentTargetHeadingDesc: '项目文件中的标题文本。标题不存在时会自动创建。使用源文件名作为标题时，此标题作为父级标题，源文件名标题会插入到下一层级。',
 	frontmatterAutomationProjectContentTargetHeadingPlaceholder: '已完成事项',
 	frontmatterAutomationProjectContentHeadingLevelName: '标题层级',
 	frontmatterAutomationProjectContentHeadingLevelDesc: (min, max, defaultValue) =>

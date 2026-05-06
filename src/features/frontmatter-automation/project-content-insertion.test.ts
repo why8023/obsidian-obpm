@@ -180,4 +180,130 @@ describe('buildProjectFileContentWithSentContent', () => {
 			'结论',
 		].join('\n'));
 	});
+
+	it('inserts a source-name heading one level below an existing configured parent heading', () => {
+		const result = buildProjectFileContentWithSentContent({
+			placement: {
+				headingLevel: 2,
+				mode: 'source_name_heading',
+				targetHeading: 'Record',
+			},
+			projectContent: [
+				'# CRM系统改造',
+				'',
+				'## Record',
+				'',
+				'旧记录',
+				'',
+				'## 风险',
+				'',
+				'待确认',
+			].join('\n'),
+			sourceBasename: '修复登录问题',
+			sourceContent: [
+				'# 修复登录问题',
+				'',
+				'## 原因',
+				'',
+				'原因是 token 过期后没有刷新。',
+			].join('\n'),
+			stripSingleH1: true,
+		});
+
+		assert.equal(result, [
+			'# CRM系统改造',
+			'',
+			'## Record',
+			'',
+			'旧记录',
+			'',
+			'### 修复登录问题',
+			'',
+			'#### 原因',
+			'',
+			'原因是 token 过期后没有刷新。',
+			'',
+			'## 风险',
+			'',
+			'待确认',
+		].join('\n'));
+	});
+
+	it('creates a missing configured parent heading before inserting the source-name heading below it', () => {
+		const result = buildProjectFileContentWithSentContent({
+			placement: {
+				headingLevel: 2,
+				mode: 'source_name_heading',
+				targetHeading: 'Record',
+			},
+			projectContent: '# CRM系统改造\n\n项目说明',
+			sourceBasename: '修复登录问题',
+			sourceContent: '结论',
+			stripSingleH1: true,
+		});
+
+		assert.equal(result, [
+			'# CRM系统改造',
+			'',
+			'项目说明',
+			'',
+			'## Record',
+			'',
+			'### 修复登录问题',
+			'',
+			'结论',
+		].join('\n'));
+	});
+
+	it('keeps source properties on the generated source-name heading below a configured parent heading', () => {
+		const result = buildProjectFileContentWithSentContent({
+			placement: {
+				headingLevel: 2,
+				mode: 'source_name_heading',
+				targetHeading: 'Record',
+			},
+			preserveSourceProperties: true,
+			projectContent: '# CRM系统改造\n\n## Record',
+			sourceBasename: '修复登录问题',
+			sourceContent: '结论',
+			sourceProperties: {
+				status: 'done',
+			},
+			stripSingleH1: true,
+		});
+
+		assert.equal(result, [
+			'# CRM系统改造',
+			'',
+			'## Record',
+			'',
+			'### 修复登录问题 <!-- obpm-property:{status:"done"} -->',
+			'',
+			'结论',
+		].join('\n'));
+	});
+
+	it('caps a configured source-name parent heading at level 5 so the source heading can be one level lower', () => {
+		const result = buildProjectFileContentWithSentContent({
+			placement: {
+				headingLevel: 6,
+				mode: 'source_name_heading',
+				targetHeading: 'Record',
+			},
+			projectContent: '# CRM系统改造',
+			sourceBasename: '修复登录问题',
+			sourceContent: '结论',
+			stripSingleH1: true,
+		});
+
+		assert.equal(result, [
+			'# CRM系统改造',
+			'',
+			'##### Record',
+			'',
+			'###### 修复登录问题',
+			'',
+			'结论',
+		].join('\n'));
+	});
 });

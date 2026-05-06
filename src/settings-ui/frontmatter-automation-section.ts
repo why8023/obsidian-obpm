@@ -50,6 +50,9 @@ interface CommittedTextSettingOptions {
 	refreshFeatures?: readonly RefreshableFeatureId[];
 }
 
+const MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_PARENT_HEADING_LEVEL =
+	MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL - 1;
+
 export function renderFrontmatterAutomationSettingsSection(options: FrontmatterAutomationSectionOptions): void {
 	const {containerEl, plugin} = options;
 	const strings = getSettingsLocalization();
@@ -442,17 +445,30 @@ function renderFrontmatterAutomationRuleListSection(
 						placementModeSelectEl.value = projectContentPlacementMode;
 						await updateRule((currentRule) => ({
 							...currentRule,
+							projectContentHeadingLevel: normalizeProjectContentHeadingLevelForPlacement(
+								currentRule.projectContentHeadingLevel,
+								currentRule.projectContentHeadingLevel,
+								projectContentPlacementMode,
+							),
 							projectContentPlacementMode,
 						}));
 						display();
 					})();
 				});
 
+				const maxProjectContentHeadingLevel = getMaxProjectContentHeadingLevelForPlacement(
+					rule.projectContentPlacementMode,
+				);
+				const projectContentHeadingLevel = normalizeProjectContentHeadingLevelForPlacement(
+					rule.projectContentHeadingLevel,
+					DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+					rule.projectContentPlacementMode,
+				);
 				const headingLevelSelectEl = createFieldControl(
 					strings.frontmatterAutomationProjectContentHeadingLevelName,
 					strings.frontmatterAutomationProjectContentHeadingLevelDesc(
 						MIN_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
-						MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+						maxProjectContentHeadingLevel,
 						DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
 					),
 				).createEl('select', {
@@ -463,7 +479,7 @@ function renderFrontmatterAutomationRuleListSection(
 				});
 				for (
 					let level = MIN_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL;
-					level <= MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL;
+					level <= maxProjectContentHeadingLevel;
 					level += 1
 				) {
 					headingLevelSelectEl.createEl('option', {
@@ -471,17 +487,23 @@ function renderFrontmatterAutomationRuleListSection(
 						text: strings.frontmatterAutomationProjectContentHeadingLevelOption(level),
 					});
 				}
-				headingLevelSelectEl.value = rule.projectContentHeadingLevel.toString();
+				headingLevelSelectEl.value = projectContentHeadingLevel.toString();
 				headingLevelSelectEl.addEventListener('change', () => {
 					void (async () => {
+						const latestRule = getLatestRule();
 						const projectContentHeadingLevel = normalizeFrontmatterAutomationProjectContentHeadingLevel(
 							headingLevelSelectEl.value,
-							getLatestRule().projectContentHeadingLevel,
+							latestRule.projectContentHeadingLevel,
 						);
-						headingLevelSelectEl.value = projectContentHeadingLevel.toString();
+						const normalizedProjectContentHeadingLevel = normalizeProjectContentHeadingLevelForPlacement(
+							projectContentHeadingLevel,
+							latestRule.projectContentHeadingLevel,
+							latestRule.projectContentPlacementMode,
+						);
+						headingLevelSelectEl.value = normalizedProjectContentHeadingLevel.toString();
 						await updateRule((currentRule) => ({
 							...currentRule,
-							projectContentHeadingLevel,
+							projectContentHeadingLevel: normalizedProjectContentHeadingLevel,
 						}));
 					})();
 				});
@@ -503,31 +525,29 @@ function renderFrontmatterAutomationRuleListSection(
 					`${ruleLabel} ${strings.frontmatterAutomationProjectContentPreserveSourcePropertiesName}`,
 				);
 
-				if (rule.projectContentPlacementMode === 'target_heading') {
-					const targetHeadingInputEl = createFieldControl(
-						strings.frontmatterAutomationProjectContentTargetHeadingName,
-						strings.frontmatterAutomationProjectContentTargetHeadingDesc,
-						'obpm-automation-rule-field-wide',
-					).createEl('input', {
-						attr: {
-							'aria-label': `${ruleLabel} ${strings.frontmatterAutomationProjectContentTargetHeadingName}`,
-							placeholder: strings.frontmatterAutomationProjectContentTargetHeadingPlaceholder,
-							type: 'text',
-						},
-						cls: 'obpm-rule-table-input',
-						value: rule.projectContentTargetHeading,
-					});
-					bindCommittedInput(
-						targetHeadingInputEl,
-						() => getLatestRule().projectContentTargetHeading,
-						async (value) => {
-							await updateRule((currentRule) => ({
-								...currentRule,
-								projectContentTargetHeading: value.trim(),
-							}));
-						},
-					);
-				}
+				const targetHeadingInputEl = createFieldControl(
+					strings.frontmatterAutomationProjectContentTargetHeadingName,
+					strings.frontmatterAutomationProjectContentTargetHeadingDesc,
+					'obpm-automation-rule-field-wide',
+				).createEl('input', {
+					attr: {
+						'aria-label': `${ruleLabel} ${strings.frontmatterAutomationProjectContentTargetHeadingName}`,
+						placeholder: strings.frontmatterAutomationProjectContentTargetHeadingPlaceholder,
+						type: 'text',
+					},
+					cls: 'obpm-rule-table-input',
+					value: rule.projectContentTargetHeading,
+				});
+				bindCommittedInput(
+					targetHeadingInputEl,
+					() => getLatestRule().projectContentTargetHeading,
+					async (value) => {
+						await updateRule((currentRule) => ({
+							...currentRule,
+							projectContentTargetHeading: value.trim(),
+						}));
+					},
+				);
 			} else {
 				const targetFieldInputEl = createFieldControl(
 					strings.frontmatterAutomationTargetFieldName,
@@ -653,6 +673,25 @@ function normalizeFrontmatterAutomationActionType(
 	}
 
 	return fallback;
+}
+
+function getMaxProjectContentHeadingLevelForPlacement(
+	placementMode: FrontmatterAutomationRule['projectContentPlacementMode'],
+): number {
+	return placementMode === 'source_name_heading'
+		? MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_PARENT_HEADING_LEVEL
+		: MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL;
+}
+
+function normalizeProjectContentHeadingLevelForPlacement(
+	value: unknown,
+	fallback: number,
+	placementMode: FrontmatterAutomationRule['projectContentPlacementMode'],
+): number {
+	return Math.min(
+		getMaxProjectContentHeadingLevelForPlacement(placementMode),
+		normalizeFrontmatterAutomationProjectContentHeadingLevel(value, fallback),
+	);
 }
 
 function getFrontmatterAutomationActionTypeLabel(
