@@ -19,6 +19,11 @@ import {
 	normalizeProjectSubfolderPath,
 	normalizeProjectRoutingSettings,
 } from './features/project-routing/settings';
+import {
+	DEFAULT_PROJECT_FOLDER_SETTINGS,
+	normalizeProjectFolderSettings,
+	ProjectFolderSettings,
+} from './features/project-folder/project-folder-settings';
 import {FrontmatterMatchRule, ProjectRoutingSettings} from './features/project-routing/types';
 import {
 	createDefaultPinnedRelationTargetRule,
@@ -188,6 +193,7 @@ export interface OBPMPluginSettings {
 	relatedLinks: RelatedLinksSettings;
 	fileNameSync: FileNameSyncSettings;
 	frontmatterAutomation: FrontmatterAutomationSettings;
+	projectFolder: ProjectFolderSettings;
 	projectRouting: ProjectRoutingSettings;
 	relatedDocumentWorkflow: RelatedDocumentWorkflowSettings;
 	pinnedRelationTarget: PinnedRelationTargetSettings;
@@ -242,6 +248,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		maxFileNameLength: DEFAULT_FILE_NAME_MAX_LENGTH,
 	},
 	frontmatterAutomation: normalizeFrontmatterAutomationSettings(undefined),
+	projectFolder: DEFAULT_PROJECT_FOLDER_SETTINGS,
 	projectRouting: normalizeProjectRoutingSettings(undefined),
 	relatedDocumentWorkflow: {
 		enabled: false,
@@ -354,6 +361,7 @@ export function normalizePluginSettings(
 			),
 		},
 		frontmatterAutomation: normalizeFrontmatterAutomationSettings(settings?.frontmatterAutomation),
+		projectFolder: normalizeProjectFolderSettings(settings?.projectFolder),
 		projectRouting: normalizeProjectRoutingSettings(settings?.projectRouting),
 		relatedDocumentWorkflow: {
 			enabled: normalizeBoolean(
@@ -727,6 +735,9 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				});
 				break;
 			case 'project':
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderProjectFolderSettingsSection(panelBodyEl);
+				});
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderProjectRecognitionSettingsSection(panelBodyEl);
 				});
@@ -1916,7 +1927,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 	private renderProjectRecognitionSettingsSection(containerEl: HTMLElement): void {
 		const strings = getSettingsLocalization();
-		const saveProjectRoutingSettings = async () => this.saveSettingsFor('projectRouting', 'relatedLinks');
+		const saveProjectRoutingSettings = async () => this.saveSettingsFor('projectRouting', 'projectFolder', 'relatedLinks');
 
 		new Setting(containerEl)
 			.setName(strings.projectRoutingProjectRuleHeading)
@@ -1961,6 +1972,25 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				this.plugin.settings.projectRouting.projectFileRules = rules;
 			},
 		});
+	}
+
+	private renderProjectFolderSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+
+		new Setting(containerEl)
+			.setName(strings.projectFolderHeading)
+			.setDesc(strings.projectFolderDesc)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.projectFolderEnableName)
+			.setDesc(strings.projectFolderEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.projectFolder.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.projectFolder.enabled = value;
+					await this.saveSettingsFor('projectFolder');
+				}));
 	}
 
 	private renderProjectRoutingSettingsSection(containerEl: HTMLElement): void {

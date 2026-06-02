@@ -267,6 +267,10 @@ export interface SettingsLocalization {
 	projectRoutingCurrentFileCommandRemoveRuleName: string;
 	projectRoutingCurrentFileCommandRemoveRuleDesc: string;
 	projectRoutingCurrentFileCommandRemoveRuleButton: string;
+	projectFolderHeading: string;
+	projectFolderDesc: string;
+	projectFolderEnableName: string;
+	projectFolderEnableDesc: string;
 	sameFolderNoteHeading: string;
 	enableSameFolderNoteName: string;
 	enableSameFolderNoteDesc: string;
@@ -543,6 +547,10 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectRoutingCurrentFileCommandRemoveRuleName: 'Remove this current-file rule',
 	projectRoutingCurrentFileCommandRemoveRuleDesc: 'Delete this move-current-file command rule from the list.',
 	projectRoutingCurrentFileCommandRemoveRuleButton: 'Remove rule',
+	projectFolderHeading: 'Project folders',
+	projectFolderDesc: 'Add quick-open markers and name-sync prompts for folders that contain a direct same-name markdown file.',
+	projectFolderEnableName: 'Enable project folder helpers',
+	projectFolderEnableDesc: 'Show a small marker next to direct same-name project folders and ask whether to sync names when the folder or project file is renamed.',
 	sameFolderNoteHeading: 'Create note in same folder',
 	enableSameFolderNoteName: 'Enable same-folder note command',
 	enableSameFolderNoteDesc: 'Add a file context-menu command that creates a new markdown note next to the selected file.',
@@ -819,6 +827,10 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectRoutingCurrentFileCommandRemoveRuleName: '删除这条当前文件规则',
 	projectRoutingCurrentFileCommandRemoveRuleDesc: '从列表中移除这条“移动当前文件”命令规则。',
 	projectRoutingCurrentFileCommandRemoveRuleButton: '删除规则',
+	projectFolderHeading: '项目文件夹',
+	projectFolderDesc: '为直属同名项目文件夹增加快速打开标记，并在项目文件夹或项目文件改名时提示同步名称。',
+	projectFolderEnableName: '启用项目文件夹辅助',
+	projectFolderEnableDesc: '开启后，会在直属同名项目文件夹旁显示小圆点，并在文件夹名或项目文件名变化时询问是否同步另一侧名称。',
 	sameFolderNoteHeading: '同目录新建笔记',
 	enableSameFolderNoteName: '启用同目录新建命令',
 	enableSameFolderNoteDesc: '在文件右键菜单中增加一个命令，用来在所选文件同目录下新建 Markdown 笔记。',

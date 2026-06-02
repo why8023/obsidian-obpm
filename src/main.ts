@@ -7,6 +7,7 @@ import {FileContentMoveFeature} from './features/file-content-move/file-content-
 import {FileNameSyncFeature} from './features/file-name-sync/file-name-sync-feature';
 import {FrontmatterAutomationFeature} from './features/frontmatter-automation/frontmatter-automation-feature';
 import {PinnedProjectFeature} from './features/pinned-project/pinned-project-feature';
+import {ProjectFolderFeature} from './features/project-folder/project-folder-feature';
 import {ProjectRoutingFeature} from './features/project-routing/project-routing-feature';
 import {RelatedDocumentWorkflowFeature} from './features/related-document-workflow/related-document-workflow-feature';
 import {
@@ -48,6 +49,7 @@ export default class OBPMPlugin extends Plugin {
 	private fileNameSyncFeature: FileNameSyncFeature | null = null;
 	private frontmatterAutomationFeature: FrontmatterAutomationFeature | null = null;
 	private pinnedRelationTargetFeature: PinnedProjectFeature | null = null;
+	private projectFolderFeature: ProjectFolderFeature | null = null;
 	private projectRoutingFeature: ProjectRoutingFeature | null = null;
 	private relatedDocumentWorkflowFeature: RelatedDocumentWorkflowFeature | null = null;
 	private relatedLinksFeature: RelatedLinksFeature | null = null;
@@ -71,6 +73,8 @@ export default class OBPMPlugin extends Plugin {
 		this.addChild(this.frontmatterAutomationFeature);
 		this.projectRoutingFeature = new ProjectRoutingFeature(this);
 		this.addChild(this.projectRoutingFeature);
+		this.projectFolderFeature = new ProjectFolderFeature(this);
+		this.addChild(this.projectFolderFeature);
 		this.pinnedRelationTargetFeature = new PinnedProjectFeature(this);
 		this.addChild(this.pinnedRelationTargetFeature);
 		this.relatedDocumentWorkflowFeature = new RelatedDocumentWorkflowFeature(this);
@@ -190,6 +194,11 @@ export default class OBPMPlugin extends Plugin {
 				case 'fileNameSync':
 					if (this.fileNameSyncFeature) {
 						refreshTasks.push(this.fileNameSyncFeature.refresh());
+					}
+					break;
+				case 'projectFolder':
+					if (this.projectFolderFeature) {
+						refreshTasks.push(this.projectFolderFeature.refresh());
 					}
 					break;
 				case 'projectRouting':

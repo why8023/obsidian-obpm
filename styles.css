@@ -289,6 +289,39 @@
 	visibility: visible;
 }
 
+.nav-folder-title .obpm-project-folder-open-indicator {
+	align-items: center;
+	background: transparent;
+	border: 0;
+	border-radius: 999px;
+	box-shadow: none;
+	color: var(--interactive-accent);
+	display: inline-flex;
+	flex: 0 0 auto;
+	height: 16px;
+	justify-content: center;
+	margin-inline-start: 4px;
+	min-width: 16px;
+	opacity: 0.72;
+	padding: 0;
+	width: 16px;
+}
+
+.nav-folder-title .obpm-project-folder-open-indicator::before {
+	background: currentColor;
+	border-radius: 999px;
+	content: "";
+	display: block;
+	height: 7px;
+	width: 7px;
+}
+
+.nav-folder-title .obpm-project-folder-open-indicator:hover,
+.nav-folder-title .obpm-project-folder-open-indicator:focus-visible {
+	background: var(--background-modifier-hover);
+	opacity: 1;
+}
+
 .obpm-settings-root {
 	padding-bottom: var(--size-4-6);
 }
