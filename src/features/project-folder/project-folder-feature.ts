@@ -3,6 +3,7 @@ import type {TAbstractFile} from 'obsidian';
 import OBPMPlugin from '../../main';
 import {ProjectFolderFileTreeController} from './project-folder-file-tree-controller';
 import {getProjectFolderLocalization} from './project-folder-localization';
+import {executeProjectFolderRenamePlan} from './project-folder-rename-executor';
 import {ProjectFolderSyncConfirmModal} from './project-folder-sync-modal';
 import {
 	buildProjectFolderChildRenameSyncPlan,
@@ -86,19 +87,18 @@ export class ProjectFolderFeature extends Component {
 	}
 
 	private async applyRenamePlan(plan: ProjectFolderSyncPlan): Promise<void> {
-		const sourceFile = this.plugin.app.vault.getAbstractFileByPath(plan.sourcePath);
-		if (!sourceFile) {
-			return;
-		}
-
-		if (this.plugin.app.vault.getAbstractFileByPath(plan.targetPath)) {
-			new Notice(this.localization.conflictNotice(plan.targetPath));
-			return;
-		}
-
-		this.pendingOwnRenames.set(plan.sourcePath, plan.targetPath);
 		try {
-			await this.plugin.app.vault.rename(sourceFile, plan.targetPath);
+			await executeProjectFolderRenamePlan<TAbstractFile>(plan, {
+				getFileByPath: (path) => this.plugin.app.vault.getAbstractFileByPath(path),
+				onConflict: (targetPath) => {
+					new Notice(this.localization.conflictNotice(targetPath));
+				},
+				pathExists: (path) => Boolean(this.plugin.app.vault.getAbstractFileByPath(path)),
+				renameFile: async (sourceFile, targetPath) => {
+					this.pendingOwnRenames.set(plan.sourcePath, targetPath);
+					await this.plugin.app.fileManager.renameFile(sourceFile, targetPath);
+				},
+			});
 		} catch (error) {
 			this.pendingOwnRenames.delete(plan.sourcePath);
 			console.error('[OBPM:project-folder] Failed to sync a project folder name.', {
