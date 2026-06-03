@@ -38,6 +38,12 @@ export interface BuildProjectFileRenameSyncPlanOptions {
 	pathExists: (path: string) => boolean;
 }
 
+export interface BuildNewProjectFolderCreationPlanOptions {
+	parentFolderPath: unknown;
+	pathExists: (path: string) => boolean;
+	projectName: string;
+}
+
 export type ProjectFolderSyncPlan =
 	| {
 		kind: 'conflict';
@@ -49,6 +55,27 @@ export type ProjectFolderSyncPlan =
 		sourcePath: string;
 		targetPath: string;
 	};
+
+export type NewProjectFolderCreationPlan =
+	| {
+		kind: 'conflict';
+		conflictPath: string;
+		filePath: string;
+		folderPath: string;
+		projectName: string;
+	}
+	| {
+		kind: 'create';
+		filePath: string;
+		folderPath: string;
+		projectName: string;
+	};
+
+export interface FindProjectParentFolderFileConflictOptions {
+	parentFolderPath: unknown;
+	pathExists: (path: string) => boolean;
+	pathIsFolder: (path: string) => boolean;
+}
 
 export function isDirectSameNameProjectFile(file: DirectProjectFileLike): boolean {
 	const parentName = file.parentName.trim();
@@ -180,8 +207,73 @@ export function buildProjectFileRenameSyncPlan(
 	};
 }
 
+export function buildNewProjectFolderCreationPlan(
+	options: BuildNewProjectFolderCreationPlanOptions,
+): NewProjectFolderCreationPlan | null {
+	const projectName = normalizeProjectName(options.projectName);
+	if (!projectName) {
+		return null;
+	}
+
+	const parentFolderPath = normalizeProjectParentFolderPath(options.parentFolderPath);
+	const folderPath = joinPath(parentFolderPath, projectName);
+	const filePath = joinPath(folderPath, `${projectName}.md`);
+	const conflictPath = options.pathExists(folderPath)
+		? folderPath
+		: options.pathExists(filePath)
+			? filePath
+			: null;
+	if (conflictPath) {
+		return {
+			kind: 'conflict',
+			conflictPath,
+			filePath,
+			folderPath,
+			projectName,
+		};
+	}
+
+	return {
+		kind: 'create',
+		filePath,
+		folderPath,
+		projectName,
+	};
+}
+
 export function joinPath(folderPath: string, childPath: string): string {
 	return folderPath.length > 0 ? normalizeVaultPath(`${folderPath}/${childPath}`) : normalizeVaultPath(childPath);
+}
+
+export function findProjectParentFolderFileConflict(
+	options: FindProjectParentFolderFileConflictOptions,
+): string | null {
+	const parentFolderPath = normalizeProjectParentFolderPath(options.parentFolderPath);
+	if (!parentFolderPath) {
+		return null;
+	}
+
+	const segments = parentFolderPath.split('/');
+	let currentPath = '';
+	for (const segment of segments) {
+		currentPath = joinPath(currentPath, segment);
+		if (options.pathExists(currentPath) && !options.pathIsFolder(currentPath)) {
+			return currentPath;
+		}
+	}
+
+	return null;
+}
+
+export function normalizeProjectParentFolderPath(path: unknown): string {
+	if (typeof path !== 'string') {
+		return '';
+	}
+
+	return normalizeVaultPath(path)
+		.split('/')
+		.filter((segment) => segment !== '..')
+		.join('/');
 }
 
 export function getParentPath(path: string): string {
@@ -206,6 +298,15 @@ function getPathExtension(path: string): string {
 	const basename = getPathBasename(path);
 	const lastDotIndex = basename.lastIndexOf('.');
 	return lastDotIndex > 0 ? basename.slice(lastDotIndex + 1).toLowerCase() : '';
+}
+
+function normalizeProjectName(value: string): string {
+	const trimmedValue = value.trim();
+	if (trimmedValue.toLowerCase().endsWith('.md')) {
+		return trimmedValue.slice(0, -3).trim();
+	}
+
+	return trimmedValue;
 }
 
 function normalizeVaultPath(path: string): string {

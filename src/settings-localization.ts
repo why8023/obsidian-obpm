@@ -271,6 +271,11 @@ export interface SettingsLocalization {
 	projectFolderDesc: string;
 	projectFolderEnableName: string;
 	projectFolderEnableDesc: string;
+	projectFolderCreateProjectCommandEnableName: string;
+	projectFolderCreateProjectCommandEnableDesc: string;
+	projectFolderCreateProjectParentFolderPathName: string;
+	projectFolderCreateProjectParentFolderPathDesc: string;
+	projectFolderCreateProjectParentFolderPathPlaceholder: string;
 	sameFolderNoteHeading: string;
 	enableSameFolderNoteName: string;
 	enableSameFolderNoteDesc: string;
@@ -551,6 +556,11 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectFolderDesc: 'Add quick-open markers and name-sync prompts for folders that contain a direct same-name markdown file.',
 	projectFolderEnableName: 'Enable project folder helpers',
 	projectFolderEnableDesc: 'Show a small marker next to direct same-name project folders and ask whether to sync names when the folder or project file is renamed.',
+	projectFolderCreateProjectCommandEnableName: 'Enable create project command',
+	projectFolderCreateProjectCommandEnableDesc: 'Add a command that creates a project folder and a same-name markdown file inside the configured parent folder.',
+	projectFolderCreateProjectParentFolderPathName: 'New project parent folder',
+	projectFolderCreateProjectParentFolderPathDesc: 'Create new project folders under this vault path. Leave empty to use the vault root. Missing folders are created automatically.',
+	projectFolderCreateProjectParentFolderPathPlaceholder: '1_project',
 	sameFolderNoteHeading: 'Create note in same folder',
 	enableSameFolderNoteName: 'Enable same-folder note command',
 	enableSameFolderNoteDesc: 'Add a file context-menu command that creates a new markdown note next to the selected file.',
@@ -831,6 +841,11 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectFolderDesc: '为直属同名项目文件夹增加快速打开标记，并在项目文件夹或项目文件改名时提示同步名称。',
 	projectFolderEnableName: '启用项目文件夹辅助',
 	projectFolderEnableDesc: '开启后，会在直属同名项目文件夹旁显示小圆点，并在文件夹名或项目文件名变化时询问是否同步另一侧名称。',
+	projectFolderCreateProjectCommandEnableName: '启用新建项目命令',
+	projectFolderCreateProjectCommandEnableDesc: '增加一个命令，用来在配置的父文件夹下新建项目文件夹，并创建同名 Markdown 文件。',
+	projectFolderCreateProjectParentFolderPathName: '新项目父文件夹',
+	projectFolderCreateProjectParentFolderPathDesc: '新项目文件夹会创建在这个库内路径下。留空则使用库根目录；目录不存在时会自动创建。',
+	projectFolderCreateProjectParentFolderPathPlaceholder: '1_project',
 	sameFolderNoteHeading: '同目录新建笔记',
 	enableSameFolderNoteName: '启用同目录新建命令',
 	enableSameFolderNoteDesc: '在文件右键菜单中增加一个命令，用来在所选文件同目录下新建 Markdown 笔记。',

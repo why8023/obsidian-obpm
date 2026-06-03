@@ -2,11 +2,15 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 import {
+	buildNewProjectFolderCreationPlan,
 	buildProjectFolderChildRenameSyncPlan,
 	buildProjectFileOpenTarget,
 	buildProjectFileRenameSyncPlan,
 	buildProjectFolderRenameSyncPlan,
+	findProjectParentFolderFileConflict,
 	isDirectSameNameProjectFile,
+	joinPath,
+	normalizeProjectParentFolderPath,
 } from './project-folder-utils';
 import {
 	DEFAULT_PROJECT_FOLDER_SETTINGS,
@@ -154,14 +158,119 @@ describe('project-folder utilities', () => {
 
 	it('normalizes project-folder feature settings independently from project routing', () => {
 		assert.deepEqual(DEFAULT_PROJECT_FOLDER_SETTINGS, {
+			createProjectCommandEnabled: true,
+			createProjectParentFolderPath: '',
 			enabled: true,
 		});
 
 		assert.deepEqual(normalizeProjectFolderSettings({enabled: false}), {
+			createProjectCommandEnabled: true,
+			createProjectParentFolderPath: '',
 			enabled: false,
 		});
 
 		assert.deepEqual(normalizeProjectFolderSettings({enabled: 'no'}), {
+			createProjectCommandEnabled: true,
+			createProjectParentFolderPath: '',
+			enabled: true,
+		});
+	});
+
+	it('normalizes the parent folder path for the new project command', () => {
+		assert.equal(normalizeProjectParentFolderPath(' 1_project\\Work / ./ '), '1_project/Work');
+		assert.equal(normalizeProjectParentFolderPath('../outside'), 'outside');
+		assert.equal(normalizeProjectParentFolderPath(''), '');
+		assert.equal(normalizeProjectParentFolderPath(123), '');
+	});
+
+	it('keeps existing path joining behavior for non-parent project-folder helpers', () => {
+		assert.equal(joinPath('Projects/..', 'Alpha.md'), 'Projects/../Alpha.md');
+	});
+
+	it('finds the first file conflict in a configured parent folder path', () => {
+		const conflictPath = findProjectParentFolderFileConflict({
+			parentFolderPath: 'Projects/Blocked/Child',
+			pathExists: (path) => path === 'Projects' || path === 'Projects/Blocked',
+			pathIsFolder: (path) => path === 'Projects',
+		});
+
+		assert.equal(conflictPath, 'Projects/Blocked');
+	});
+
+	it('does not report missing parent path segments as conflicts', () => {
+		const conflictPath = findProjectParentFolderFileConflict({
+			parentFolderPath: 'Projects/New/Child',
+			pathExists: (path) => path === 'Projects',
+			pathIsFolder: (path) => path === 'Projects',
+		});
+
+		assert.equal(conflictPath, null);
+	});
+
+	it('builds a new project folder and same-name markdown creation plan', () => {
+		const plan = buildNewProjectFolderCreationPlan({
+			parentFolderPath: '1_project',
+			projectName: ' Alpha ',
+			pathExists: () => false,
+		});
+
+		assert.deepEqual(plan, {
+			kind: 'create',
+			folderPath: '1_project/Alpha',
+			filePath: '1_project/Alpha/Alpha.md',
+			projectName: 'Alpha',
+		});
+	});
+
+	it('treats a single trailing markdown extension as input sugar for a project name', () => {
+		const plan = buildNewProjectFolderCreationPlan({
+			parentFolderPath: '1_project',
+			projectName: 'Alpha.md.md',
+			pathExists: () => false,
+		});
+
+		assert.deepEqual(plan, {
+			kind: 'create',
+			folderPath: '1_project/Alpha.md',
+			filePath: '1_project/Alpha.md/Alpha.md.md',
+			projectName: 'Alpha.md',
+		});
+	});
+
+	it('reports an existing project folder as a new project creation conflict', () => {
+		const plan = buildNewProjectFolderCreationPlan({
+			parentFolderPath: '1_project',
+			projectName: 'Alpha',
+			pathExists: (path) => path === '1_project/Alpha',
+		});
+
+		assert.deepEqual(plan, {
+			kind: 'conflict',
+			conflictPath: '1_project/Alpha',
+			folderPath: '1_project/Alpha',
+			filePath: '1_project/Alpha/Alpha.md',
+			projectName: 'Alpha',
+		});
+	});
+
+	it('normalizes new project command settings from saved data', () => {
+		assert.deepEqual(normalizeProjectFolderSettings({
+			createProjectCommandEnabled: false,
+			createProjectParentFolderPath: ' 1_project\\Work ',
+			enabled: true,
+		}), {
+			createProjectCommandEnabled: false,
+			createProjectParentFolderPath: '1_project/Work',
+			enabled: true,
+		});
+
+		assert.deepEqual(normalizeProjectFolderSettings({
+			createProjectCommandEnabled: 'no',
+			createProjectParentFolderPath: 42,
+			enabled: true,
+		}), {
+			createProjectCommandEnabled: true,
+			createProjectParentFolderPath: '',
 			enabled: true,
 		});
 	});

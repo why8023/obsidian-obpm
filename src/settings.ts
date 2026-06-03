@@ -24,6 +24,7 @@ import {
 	normalizeProjectFolderSettings,
 	ProjectFolderSettings,
 } from './features/project-folder/project-folder-settings';
+import {normalizeProjectParentFolderPath} from './features/project-folder/project-folder-utils';
 import {FrontmatterMatchRule, ProjectRoutingSettings} from './features/project-routing/types';
 import {
 	createDefaultPinnedRelationTargetRule,
@@ -1991,6 +1992,30 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					this.plugin.settings.projectFolder.enabled = value;
 					await this.saveSettingsFor('projectFolder');
 				}));
+
+		new Setting(containerEl)
+			.setName(strings.projectFolderCreateProjectCommandEnableName)
+			.setDesc(strings.projectFolderCreateProjectCommandEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.projectFolder.createProjectCommandEnabled)
+				.onChange(async (value) => {
+					this.plugin.settings.projectFolder.createProjectCommandEnabled = value;
+					await this.saveSettingsFor();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.projectFolderCreateProjectParentFolderPathName)
+			.setDesc(strings.projectFolderCreateProjectParentFolderPathDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.projectFolderCreateProjectParentFolderPathPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.projectFolder.createProjectParentFolderPath,
+					normalize: normalizeProjectParentFolderPath,
+					onCommit: (value) => {
+						this.plugin.settings.projectFolder.createProjectParentFolderPath = value;
+					},
+				});
+			});
 	}
 
 	private renderProjectRoutingSettingsSection(containerEl: HTMLElement): void {

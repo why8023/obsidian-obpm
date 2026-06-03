@@ -274,18 +274,21 @@
 	display: none;
 }
 
-.obpm-same-folder-note-modal-input input {
+.obpm-same-folder-note-modal-input input,
+.obpm-project-folder-create-modal-input input {
 	width: 100%;
 }
 
-.obpm-same-folder-note-modal-error {
+.obpm-same-folder-note-modal-error,
+.obpm-project-folder-create-modal-error {
 	min-height: 1.25em;
 	margin-top: var(--size-2-1);
 	color: var(--text-error);
 	visibility: hidden;
 }
 
-.obpm-same-folder-note-modal-error.is-visible {
+.obpm-same-folder-note-modal-error.is-visible,
+.obpm-project-folder-create-modal-error.is-visible {
 	visibility: visible;
 }
 
