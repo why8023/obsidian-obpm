@@ -5,6 +5,7 @@ export type FrontmatterAutomationActionType =
 	| 'ensure_project_folder'
 	| 'send_content_to_project_file';
 export type FrontmatterAutomationProjectContentPlacementMode = 'target_heading' | 'source_name_heading';
+export type FrontmatterAutomationProjectMoveTimePosition = 'prefix' | 'suffix';
 export type FrontmatterAutomationWriteMode = 'always' | 'when-empty';
 
 export interface FrontmatterAutomationRule {
@@ -18,6 +19,9 @@ export interface FrontmatterAutomationRule {
 	projectContentPlacementMode: FrontmatterAutomationProjectContentPlacementMode;
 	projectContentPreserveSourceProperties: boolean;
 	projectContentTargetHeading: string;
+	projectMoveTimeEnabled: boolean;
+	projectMoveTimeFormat: string;
+	projectMoveTimePosition: FrontmatterAutomationProjectMoveTimePosition;
 	targetField: string;
 	staticValue?: string;
 	targetSubfolderPath?: string;
@@ -39,8 +43,15 @@ export interface FrontmatterAutomationAction {
 }
 
 export interface FrontmatterAutomationProjectMoveAction {
+	fileNameTime: FrontmatterAutomationProjectMoveFileNameTime;
 	ruleId: string;
 	targetSubfolderPath: string;
+}
+
+export interface FrontmatterAutomationProjectMoveFileNameTime {
+	enabled: boolean;
+	format: string;
+	position: FrontmatterAutomationProjectMoveTimePosition;
 }
 
 export interface FrontmatterAutomationProjectContentAction {

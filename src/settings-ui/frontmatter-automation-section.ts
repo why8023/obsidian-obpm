@@ -2,12 +2,14 @@ import {Notice, Setting, ToggleComponent} from 'obsidian';
 import OBPMPlugin from '../main';
 import {
 	DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
+	DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_MOVE_TIME_FORMAT,
 	DEFAULT_FRONTMATTER_AUTOMATION_SETTINGS,
 	MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
 	MIN_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL,
 	createDefaultFrontmatterAutomationRule,
 	normalizeFrontmatterAutomationProjectContentHeadingLevel,
 	normalizeFrontmatterAutomationProjectContentPlacementMode,
+	normalizeFrontmatterAutomationProjectMoveTimePosition,
 } from '../features/frontmatter-automation/frontmatter-automation-settings';
 import {
 	FrontmatterAutomationActionType,
@@ -417,6 +419,84 @@ function renderFrontmatterAutomationRuleListSection(
 						}));
 					},
 				);
+
+				const moveTimeControlEl = createFieldControl(
+					strings.frontmatterAutomationProjectMoveTimeEnabledName,
+					strings.frontmatterAutomationProjectMoveTimeEnabledDesc,
+				);
+				const moveTimeToggle = new ToggleComponent(moveTimeControlEl)
+					.setValue(rule.projectMoveTimeEnabled)
+					.onChange(async (projectMoveTimeEnabled) => {
+						await updateRule((currentRule) => ({
+							...currentRule,
+							projectMoveTimeEnabled,
+						}));
+						display();
+					});
+				moveTimeToggle.toggleEl.setAttribute(
+					'aria-label',
+					`${ruleLabel} ${strings.frontmatterAutomationProjectMoveTimeEnabledName}`,
+				);
+
+				if (rule.projectMoveTimeEnabled) {
+					const moveTimeFormatInputEl = createFieldControl(
+						strings.frontmatterAutomationProjectMoveTimeFormatName,
+						strings.frontmatterAutomationProjectMoveTimeFormatDesc,
+						'obpm-automation-rule-field-wide',
+					).createEl('input', {
+						attr: {
+							'aria-label': `${ruleLabel} ${strings.frontmatterAutomationProjectMoveTimeFormatName}`,
+							placeholder: strings.frontmatterAutomationProjectMoveTimeFormatPlaceholder,
+							type: 'text',
+						},
+						cls: 'obpm-rule-table-input',
+						value: rule.projectMoveTimeFormat,
+					});
+					bindCommittedInput(
+						moveTimeFormatInputEl,
+						() => getLatestRule().projectMoveTimeFormat,
+						async (value) => {
+							await updateRule((currentRule) => ({
+								...currentRule,
+								projectMoveTimeFormat: value.trim().length > 0
+									? value.trim()
+									: DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_MOVE_TIME_FORMAT,
+							}));
+						},
+					);
+
+					const moveTimePositionSelectEl = createFieldControl(
+						strings.frontmatterAutomationProjectMoveTimePositionName,
+						strings.frontmatterAutomationProjectMoveTimePositionDesc,
+					).createEl('select', {
+						attr: {
+							'aria-label': `${ruleLabel} ${strings.frontmatterAutomationProjectMoveTimePositionName}`,
+						},
+						cls: 'obpm-rule-table-select',
+					});
+					moveTimePositionSelectEl.createEl('option', {
+						attr: {value: 'prefix'},
+						text: strings.frontmatterAutomationProjectMoveTimePositionPrefixLabel,
+					});
+					moveTimePositionSelectEl.createEl('option', {
+						attr: {value: 'suffix'},
+						text: strings.frontmatterAutomationProjectMoveTimePositionSuffixLabel,
+					});
+					moveTimePositionSelectEl.value = rule.projectMoveTimePosition;
+					moveTimePositionSelectEl.addEventListener('change', () => {
+						void (async () => {
+							const projectMoveTimePosition = normalizeFrontmatterAutomationProjectMoveTimePosition(
+								moveTimePositionSelectEl.value,
+								getLatestRule().projectMoveTimePosition,
+							);
+							moveTimePositionSelectEl.value = projectMoveTimePosition;
+							await updateRule((currentRule) => ({
+								...currentRule,
+								projectMoveTimePosition,
+							}));
+						})();
+					});
+				}
 			} else if (rule.actionType === 'send_content_to_project_file') {
 				const placementModeSelectEl = createFieldControl(
 					strings.frontmatterAutomationProjectContentPlacementModeName,

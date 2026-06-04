@@ -13,13 +13,17 @@ import {
 } from '../project-routing/project-resolver';
 import {ProjectCandidate} from '../project-routing/types';
 import {buildSourceContribution} from '../related-links/source-index';
+import {FrontmatterAutomationProjectMoveFileNameTime} from './frontmatter-automation-types';
+import {buildProjectMoveFileName} from './project-move-filename';
 
 interface EnsureFileInProjectFolderOptions {
 	app: App;
 	autoMoveWhenSingleCandidate: boolean;
 	cache: CachedMetadata | null;
 	displayProperty: string;
+	fileNameTime: FrontmatterAutomationProjectMoveFileNameTime;
 	file: TFile;
+	now: Date;
 	projectFileRecognition: ProjectFileRecognitionOptions;
 	relationProperty: string;
 	showNoticeAfterMove: boolean;
@@ -159,11 +163,18 @@ function buildMovePlan(
 	targetProject: ProjectCandidate,
 	file: TFile,
 ) {
+	const fileName = buildProjectMoveFileName({
+		basename: file.basename,
+		extension: file.extension,
+		fileNameTime: options.fileNameTime,
+		now: options.now,
+	});
+
 	return buildProjectTargetMovePlan({
 		file: {
-			basename: file.basename,
+			basename: fileName.basename,
 			extension: file.extension,
-			name: file.name,
+			name: fileName.name,
 			path: file.path,
 		},
 		pathExists: (path) => {

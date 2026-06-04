@@ -209,6 +209,9 @@ describe('FrontmatterAutomationService', () => {
 					createDefaultFrontmatterAutomationRule({
 						actionType: 'ensure_project_folder',
 						id: 'archive-into-project',
+						projectMoveTimeEnabled: true,
+						projectMoveTimeFormat: 'YYYY-MM-DD HH-mm',
+						projectMoveTimePosition: 'suffix',
 						targetField: '',
 						targetSubfolderPath: 'done',
 						triggerField: 'status',
@@ -222,6 +225,11 @@ describe('FrontmatterAutomationService', () => {
 		assert.equal(result.actions.length, 0);
 		assert.deepEqual(result.projectMoveActions, [
 			{
+				fileNameTime: {
+					enabled: true,
+					format: 'YYYY-MM-DD HH-mm',
+					position: 'suffix',
+				},
 				ruleId: 'archive-into-project',
 				targetSubfolderPath: 'done',
 			},
@@ -339,6 +347,11 @@ describe('FrontmatterAutomationService', () => {
 		assert.equal(result.nextSnapshot.obpm_end_time, '2026-04-10T23:45:12');
 		assert.deepEqual(result.projectMoveActions, [
 			{
+				fileNameTime: {
+					enabled: false,
+					format: 'YYYY-MM-DD HH-mm-ss',
+					position: 'prefix',
+				},
 				ruleId: 'done-move-into-project',
 				targetSubfolderPath: 'archive',
 			},
@@ -355,9 +368,32 @@ describe('FrontmatterAutomationService', () => {
 		const projectMoveRule = settings.rules.find((rule) => rule.id === 'obpm-status-done-ensure-project-folder');
 
 		assert.equal(projectMoveRule?.actionType, 'ensure_project_folder');
+		assert.equal(projectMoveRule?.projectMoveTimeEnabled, false);
+		assert.equal(projectMoveRule?.projectMoveTimeFormat, 'YYYY-MM-DD HH-mm-ss');
+		assert.equal(projectMoveRule?.projectMoveTimePosition, 'prefix');
 		assert.equal(projectMoveRule?.triggerField, 'obpm_status');
 		assert.equal(projectMoveRule?.triggerValue, 'done');
 		assert.equal(projectMoveRule?.targetSubfolderPath, 'task/done');
+	});
+
+	it('normalizes move-time filename settings on project move rules', () => {
+		const settings = normalizeFrontmatterAutomationSettings({
+			rules: [
+				{
+					actionType: 'ensure_project_folder',
+					id: 'archive-into-project',
+					projectMoveTimeEnabled: true,
+					projectMoveTimeFormat: ' YYYY/MM/DD HH:mm ',
+					projectMoveTimePosition: 'suffix',
+					targetSubfolderPath: 'archive',
+				},
+			],
+		});
+
+		const rule = settings.rules[0]!;
+		assert.equal(rule.projectMoveTimeEnabled, true);
+		assert.equal(rule.projectMoveTimeFormat, 'YYYY/MM/DD HH:mm');
+		assert.equal(rule.projectMoveTimePosition, 'suffix');
 	});
 });
 

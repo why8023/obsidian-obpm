@@ -1,6 +1,7 @@
 import {
 	FrontmatterAutomationActionType,
 	FrontmatterAutomationProjectContentPlacementMode,
+	FrontmatterAutomationProjectMoveTimePosition,
 	FrontmatterAutomationRule,
 	FrontmatterAutomationSettings,
 	FrontmatterAutomationTriggerOperator,
@@ -10,6 +11,8 @@ import {normalizeProjectSubfolderPath} from '../project-routing/settings';
 
 export const DEFAULT_FRONTMATTER_AUTOMATION_TIME_FORMAT = 'YYYY-MM-DDTHH:mm:ss';
 export const DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL = 2;
+export const DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_MOVE_TIME_FORMAT = 'YYYY-MM-DD HH-mm-ss';
+export const DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_MOVE_TIME_POSITION: FrontmatterAutomationProjectMoveTimePosition = 'prefix';
 export const MAX_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL = 6;
 export const MIN_FRONTMATTER_AUTOMATION_PROJECT_CONTENT_HEADING_LEVEL = 1;
 
@@ -29,6 +32,9 @@ export function createDefaultFrontmatterAutomationRule(
 		projectContentPlacementMode: 'target_heading',
 		projectContentPreserveSourceProperties: false,
 		projectContentTargetHeading: '',
+		projectMoveTimeEnabled: false,
+		projectMoveTimeFormat: DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_MOVE_TIME_FORMAT,
+		projectMoveTimePosition: DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_MOVE_TIME_POSITION,
 		targetField: 'obpm_end_time',
 		staticValue: '',
 		targetSubfolderPath: '',
@@ -148,6 +154,15 @@ function normalizeRule(
 			fallbackRule.projectContentPreserveSourceProperties,
 		),
 		projectContentTargetHeading: normalizeText(rule.projectContentTargetHeading, fallbackRule.projectContentTargetHeading),
+		projectMoveTimeEnabled: normalizeBoolean(rule.projectMoveTimeEnabled, fallbackRule.projectMoveTimeEnabled),
+		projectMoveTimeFormat: normalizeRequiredText(
+			rule.projectMoveTimeFormat,
+			fallbackRule.projectMoveTimeFormat,
+		),
+		projectMoveTimePosition: normalizeProjectMoveTimePosition(
+			rule.projectMoveTimePosition,
+			fallbackRule.projectMoveTimePosition,
+		),
 		targetField: normalizeText(rule.targetField, fallbackRule.targetField),
 		staticValue: normalizeText(rule.staticValue, fallbackRule.staticValue ?? ''),
 		targetSubfolderPath: normalizeProjectSubfolderPath(
@@ -196,6 +211,20 @@ function normalizeTriggerOperator(
 	fallback: FrontmatterAutomationTriggerOperator,
 ): FrontmatterAutomationTriggerOperator {
 	return value === 'equals' || value === 'contains' ? value : fallback;
+}
+
+export function normalizeFrontmatterAutomationProjectMoveTimePosition(
+	value: unknown,
+	fallback: FrontmatterAutomationProjectMoveTimePosition = DEFAULT_FRONTMATTER_AUTOMATION_PROJECT_MOVE_TIME_POSITION,
+): FrontmatterAutomationProjectMoveTimePosition {
+	return normalizeProjectMoveTimePosition(value, fallback);
+}
+
+function normalizeProjectMoveTimePosition(
+	value: unknown,
+	fallback: FrontmatterAutomationProjectMoveTimePosition,
+): FrontmatterAutomationProjectMoveTimePosition {
+	return value === 'prefix' || value === 'suffix' ? value : fallback;
 }
 
 function normalizeWriteMode(

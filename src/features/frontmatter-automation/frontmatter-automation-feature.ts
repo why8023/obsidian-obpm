@@ -390,7 +390,7 @@ export class FrontmatterAutomationFeature extends Component {
 		}
 
 		for (const projectMoveAction of projectMoveActions) {
-			await this.ensureFileInProjectFolder(liveFile, resolvedSnapshot, projectMoveAction);
+			await this.ensureFileInProjectFolder(liveFile, resolvedSnapshot, projectMoveAction, now);
 		}
 
 		const projectContentAction = projectContentActions[0];
@@ -446,6 +446,7 @@ export class FrontmatterAutomationFeature extends Component {
 		file: TFile,
 		snapshot: FrontmatterSnapshot,
 		action: FrontmatterAutomationProjectMoveAction,
+		now: Date,
 	): Promise<void> {
 		await ensureFileInProjectFolder({
 			app: this.plugin.app,
@@ -453,7 +454,9 @@ export class FrontmatterAutomationFeature extends Component {
 			cache: {frontmatter: snapshot as CachedMetadata['frontmatter']},
 			displayProperty: this.plugin.settings.relatedLinks.displayProperty,
 			file,
+			fileNameTime: action.fileNameTime,
 			moveFile: (targetFile, request) => this.plugin.moveFile(targetFile, request),
+			now,
 			projectFileRecognition: this.getProjectFileRecognitionOptions(),
 			relationProperty: this.plugin.settings.relatedLinks.relationProperty,
 			showNoticeAfterMove: this.plugin.settings.projectRouting.showNoticeAfterMove,

@@ -38,6 +38,11 @@ export class FrontmatterAutomationService {
 
 			if (rule.actionType === 'ensure_project_folder') {
 				projectMoveActions.push({
+					fileNameTime: {
+						enabled: rule.projectMoveTimeEnabled,
+						format: rule.projectMoveTimeFormat,
+						position: rule.projectMoveTimePosition,
+					},
 					ruleId: rule.id,
 					targetSubfolderPath: rule.targetSubfolderPath ?? '',
 				});

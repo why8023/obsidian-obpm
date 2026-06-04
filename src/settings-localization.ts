@@ -190,6 +190,15 @@ export interface SettingsLocalization {
 	frontmatterAutomationProjectContentHeadingLevelOption: (level: number) => string;
 	frontmatterAutomationProjectContentPreserveSourcePropertiesDesc: string;
 	frontmatterAutomationProjectContentPreserveSourcePropertiesName: string;
+	frontmatterAutomationProjectMoveTimeEnabledName: string;
+	frontmatterAutomationProjectMoveTimeEnabledDesc: string;
+	frontmatterAutomationProjectMoveTimeFormatName: string;
+	frontmatterAutomationProjectMoveTimeFormatDesc: string;
+	frontmatterAutomationProjectMoveTimeFormatPlaceholder: string;
+	frontmatterAutomationProjectMoveTimePositionName: string;
+	frontmatterAutomationProjectMoveTimePositionDesc: string;
+	frontmatterAutomationProjectMoveTimePositionPrefixLabel: string;
+	frontmatterAutomationProjectMoveTimePositionSuffixLabel: string;
 	frontmatterAutomationTargetFieldName: string;
 	frontmatterAutomationTargetFieldDesc: string;
 	frontmatterAutomationTargetFieldPlaceholder: string;
@@ -475,6 +484,15 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	frontmatterAutomationProjectContentHeadingLevelOption: (level) => `Heading ${level}`,
 	frontmatterAutomationProjectContentPreserveSourcePropertiesDesc: 'Append the source note properties as an OBPM HTML comment on the same line as the inserted source file name.',
 	frontmatterAutomationProjectContentPreserveSourcePropertiesName: 'Preserve source properties',
+	frontmatterAutomationProjectMoveTimeEnabledName: 'Add move time to file name',
+	frontmatterAutomationProjectMoveTimeEnabledDesc: 'When moving into a project folder, add the move time to the file name. If the file name already contains this time format, that time is replaced instead.',
+	frontmatterAutomationProjectMoveTimeFormatName: 'Move time format',
+	frontmatterAutomationProjectMoveTimeFormatDesc: 'Format used in moved file names. Supported tokens: YYYY, MM, DD, HH, mm, ss. Characters invalid in file names are replaced with "-".',
+	frontmatterAutomationProjectMoveTimeFormatPlaceholder: 'YYYY-MM-DD HH-mm-ss',
+	frontmatterAutomationProjectMoveTimePositionName: 'Move time position',
+	frontmatterAutomationProjectMoveTimePositionDesc: 'Choose where the move time is added when the file name does not already contain this time format.',
+	frontmatterAutomationProjectMoveTimePositionPrefixLabel: 'Prefix',
+	frontmatterAutomationProjectMoveTimePositionSuffixLabel: 'Suffix',
 	frontmatterAutomationTargetFieldName: 'Target field',
 	frontmatterAutomationTargetFieldDesc: 'Frontmatter field that will be written when the rule triggers.',
 	frontmatterAutomationTargetFieldPlaceholder: 'Enter target field',
@@ -760,6 +778,15 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	frontmatterAutomationProjectContentHeadingLevelOption: (level) => `${level} 级标题`,
 	frontmatterAutomationProjectContentPreserveSourcePropertiesDesc: '把源文件 Property 作为 OBPM HTML 注释追加到插入的源文件名同一行。',
 	frontmatterAutomationProjectContentPreserveSourcePropertiesName: '保留源文件 Property',
+	frontmatterAutomationProjectMoveTimeEnabledName: '文件名添加移动时间',
+	frontmatterAutomationProjectMoveTimeEnabledDesc: '移动到项目文件夹时，把移动时间加入文件名。如果文件名里已经有同格式时间，则直接替换该时间。',
+	frontmatterAutomationProjectMoveTimeFormatName: '移动时间格式',
+	frontmatterAutomationProjectMoveTimeFormatDesc: '用于移动后文件名的时间格式。支持占位符：YYYY、MM、DD、HH、mm、ss。文件名非法字符会替换为“-”。',
+	frontmatterAutomationProjectMoveTimeFormatPlaceholder: 'YYYY-MM-DD HH-mm-ss',
+	frontmatterAutomationProjectMoveTimePositionName: '移动时间位置',
+	frontmatterAutomationProjectMoveTimePositionDesc: '当文件名里没有同格式时间时，选择把移动时间添加到前缀还是后缀。',
+	frontmatterAutomationProjectMoveTimePositionPrefixLabel: '前缀',
+	frontmatterAutomationProjectMoveTimePositionSuffixLabel: '后缀',
 	frontmatterAutomationTargetFieldName: '目标字段',
 	frontmatterAutomationTargetFieldDesc: '规则命中后要写入的 frontmatter 字段名。',
 	frontmatterAutomationTargetFieldPlaceholder: '输入目标字段',
