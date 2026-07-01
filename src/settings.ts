@@ -1,6 +1,16 @@
 import {App, Notice, PluginSettingTab, Setting} from 'obsidian';
 import OBPMPlugin from './main';
 import {
+	ConfiguredFolderNoteSettings,
+	DEFAULT_CONFIGURED_FOLDER_NOTE_SETTINGS,
+	normalizeConfiguredFolderNoteSettings,
+} from './features/configured-folder-note/configured-folder-note-settings';
+import {
+	normalizeBaseViewName,
+	normalizeConfiguredBaseFilePath,
+	normalizeConfiguredFolderPath,
+} from './features/configured-folder-note/configured-folder-note-utils';
+import {
 	DEFAULT_FILE_NAME_MAX_LENGTH,
 	MAX_FILE_NAME_MAX_LENGTH,
 	MIN_FILE_NAME_MAX_LENGTH,
@@ -190,6 +200,7 @@ export interface OBPMPluginSettings {
 	basesFileReveal: BasesFileRevealSettings;
 	basesGroupFold: BasesGroupFoldSettings;
 	basesTopTabs: BasesTopTabsSettings;
+	configuredFolderNote: ConfiguredFolderNoteSettings;
 	fileContentMove: FileContentMoveSettings;
 	relatedLinks: RelatedLinksSettings;
 	fileNameSync: FileNameSyncSettings;
@@ -225,6 +236,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		showIcons: true,
 		showViewCount: false,
 	},
+	configuredFolderNote: DEFAULT_CONFIGURED_FOLDER_NOTE_SETTINGS,
 	fileContentMove: {
 		enableFileExplorer: true,
 		enabled: false,
@@ -308,6 +320,7 @@ export function normalizePluginSettings(
 			showIcons: normalizeBoolean(settings?.basesTopTabs?.showIcons, DEFAULT_SETTINGS.basesTopTabs.showIcons),
 			showViewCount: normalizeBoolean(settings?.basesTopTabs?.showViewCount, DEFAULT_SETTINGS.basesTopTabs.showViewCount),
 		},
+		configuredFolderNote: normalizeConfiguredFolderNoteSettings(settings?.configuredFolderNote),
 		fileContentMove: {
 			enableFileExplorer: normalizeBoolean(
 				settings?.fileContentMove?.enableFileExplorer,
@@ -746,6 +759,9 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			case 'workflow':
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderFileContentMoveSettingsSection(panelBodyEl);
+				});
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderConfiguredFolderNoteSettingsSection(panelBodyEl);
 				});
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderRelatedDocumentWorkflowSettingsSection(panelBodyEl);
@@ -1311,6 +1327,78 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.fileContentMove.enableFileExplorer = value;
 					await saveFileContentMoveSettings();
+				}));
+	}
+
+	private renderConfiguredFolderNoteSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+		const saveWithoutRefresh = async () => this.saveSettingsFor();
+
+		new Setting(containerEl)
+			.setName(strings.configuredFolderNoteHeading)
+			.setDesc(strings.configuredFolderNoteDesc)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.configuredFolderNoteEnableName)
+			.setDesc(strings.configuredFolderNoteEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.configuredFolderNote.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.configuredFolderNote.enabled = value;
+					await saveWithoutRefresh();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.configuredFolderNoteTargetFolderPathName)
+			.setDesc(strings.configuredFolderNoteTargetFolderPathDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.configuredFolderNoteTargetFolderPathPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.configuredFolderNote.targetFolderPath,
+					normalize: normalizeConfiguredFolderPath,
+					onCommit: (value) => {
+						this.plugin.settings.configuredFolderNote.targetFolderPath = value;
+					},
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.configuredFolderNoteBaseFilePathName)
+			.setDesc(strings.configuredFolderNoteBaseFilePathDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.configuredFolderNoteBaseFilePathPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.configuredFolderNote.baseFilePath,
+					normalize: normalizeConfiguredBaseFilePath,
+					onCommit: (value) => {
+						this.plugin.settings.configuredFolderNote.baseFilePath = value;
+					},
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.configuredFolderNoteBaseViewNameName)
+			.setDesc(strings.configuredFolderNoteBaseViewNameDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.configuredFolderNoteBaseViewNamePlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.configuredFolderNote.baseViewName,
+					normalize: normalizeBaseViewName,
+					onCommit: (value) => {
+						this.plugin.settings.configuredFolderNote.baseViewName = value;
+					},
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.configuredFolderNoteIncludeFilterDefaultsName)
+			.setDesc(strings.configuredFolderNoteIncludeFilterDefaultsDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.configuredFolderNote.includeFilterDefaults)
+				.onChange(async (value) => {
+					this.plugin.settings.configuredFolderNote.includeFilterDefaults = value;
+					await saveWithoutRefresh();
 				}));
 	}
 

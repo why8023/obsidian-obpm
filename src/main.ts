@@ -3,6 +3,7 @@ import {FileMoveCoordinator, FileMoveRequest, FileMoveResult} from './file-move-
 import {BasesFileRevealFeature} from './features/bases-file-reveal/bases-file-reveal-feature';
 import {BasesGroupFoldFeature} from './features/bases-group-fold/bases-group-fold-feature';
 import {BasesTopTabsFeature} from './features/bases-top-tabs/bases-top-tabs-feature';
+import {ConfiguredFolderNoteFeature} from './features/configured-folder-note/configured-folder-note-feature';
 import {FileContentMoveFeature} from './features/file-content-move/file-content-move-feature';
 import {FileNameSyncFeature} from './features/file-name-sync/file-name-sync-feature';
 import {FrontmatterAutomationFeature} from './features/frontmatter-automation/frontmatter-automation-feature';
@@ -79,6 +80,7 @@ export default class OBPMPlugin extends Plugin {
 		this.addChild(this.pinnedRelationTargetFeature);
 		this.relatedDocumentWorkflowFeature = new RelatedDocumentWorkflowFeature(this);
 		this.addChild(this.relatedDocumentWorkflowFeature);
+		this.addChild(new ConfiguredFolderNoteFeature(this));
 		this.addChild(new SameFolderNoteFeature(this));
 
 		this.addCommand({

@@ -285,6 +285,21 @@ export interface SettingsLocalization {
 	projectFolderCreateProjectParentFolderPathName: string;
 	projectFolderCreateProjectParentFolderPathDesc: string;
 	projectFolderCreateProjectParentFolderPathPlaceholder: string;
+	configuredFolderNoteHeading: string;
+	configuredFolderNoteDesc: string;
+	configuredFolderNoteEnableName: string;
+	configuredFolderNoteEnableDesc: string;
+	configuredFolderNoteTargetFolderPathName: string;
+	configuredFolderNoteTargetFolderPathDesc: string;
+	configuredFolderNoteTargetFolderPathPlaceholder: string;
+	configuredFolderNoteBaseFilePathName: string;
+	configuredFolderNoteBaseFilePathDesc: string;
+	configuredFolderNoteBaseFilePathPlaceholder: string;
+	configuredFolderNoteBaseViewNameName: string;
+	configuredFolderNoteBaseViewNameDesc: string;
+	configuredFolderNoteBaseViewNamePlaceholder: string;
+	configuredFolderNoteIncludeFilterDefaultsName: string;
+	configuredFolderNoteIncludeFilterDefaultsDesc: string;
 	sameFolderNoteHeading: string;
 	enableSameFolderNoteName: string;
 	enableSameFolderNoteDesc: string;
@@ -579,6 +594,21 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectFolderCreateProjectParentFolderPathName: 'New project parent folder',
 	projectFolderCreateProjectParentFolderPathDesc: 'Create new project folders under this vault path. Leave empty to use the vault root. Missing folders are created automatically.',
 	projectFolderCreateProjectParentFolderPathPlaceholder: '1_project',
+	configuredFolderNoteHeading: 'Create note in configured folder',
+	configuredFolderNoteDesc: 'Create a default-named note in one configured folder, optionally seeded with properties from one Base view.',
+	configuredFolderNoteEnableName: 'Enable configured-folder note command',
+	configuredFolderNoteEnableDesc: 'Add a command that creates a markdown note in the configured target folder.',
+	configuredFolderNoteTargetFolderPathName: 'Target folder',
+	configuredFolderNoteTargetFolderPathDesc: 'Create new notes under this vault path. Leave empty to use the vault root. Missing folders are created automatically.',
+	configuredFolderNoteTargetFolderPathPlaceholder: 'Inbox',
+	configuredFolderNoteBaseFilePathName: 'Base file',
+	configuredFolderNoteBaseFilePathDesc: 'Optional .base file whose selected view provides initial note properties.',
+	configuredFolderNoteBaseFilePathPlaceholder: 'Bases/Tasks.base',
+	configuredFolderNoteBaseViewNameName: 'Base view name',
+	configuredFolderNoteBaseViewNameDesc: 'The exact view name to read from the configured Base file.',
+	configuredFolderNoteBaseViewNamePlaceholder: 'Tasks',
+	configuredFolderNoteIncludeFilterDefaultsName: 'Write simple rule defaults',
+	configuredFolderNoteIncludeFilterDefaultsDesc: 'Also write simple equality rules from the Base filters, such as status == "todo". Complex rules are ignored.',
 	sameFolderNoteHeading: 'Create note in same folder',
 	enableSameFolderNoteName: 'Enable same-folder note command',
 	enableSameFolderNoteDesc: 'Add a file context-menu command that creates a new markdown note next to the selected file.',
@@ -873,6 +903,21 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectFolderCreateProjectParentFolderPathName: '新项目父文件夹',
 	projectFolderCreateProjectParentFolderPathDesc: '新项目文件夹会创建在这个库内路径下。留空则使用库根目录；目录不存在时会自动创建。',
 	projectFolderCreateProjectParentFolderPathPlaceholder: '1_project',
+	configuredFolderNoteHeading: '在指定文件夹新建笔记',
+	configuredFolderNoteDesc: '在一个已配置的文件夹里新建默认命名的笔记，并可从一个 Base 视图带入初始属性。',
+	configuredFolderNoteEnableName: '启用指定文件夹新建命令',
+	configuredFolderNoteEnableDesc: '添加一个命令，用于在配置的目标文件夹中新建 Markdown 笔记。',
+	configuredFolderNoteTargetFolderPathName: '目标文件夹',
+	configuredFolderNoteTargetFolderPathDesc: '在这个库路径下新建笔记。留空则使用库根目录。缺失的目录会自动创建。',
+	configuredFolderNoteTargetFolderPathPlaceholder: 'Inbox',
+	configuredFolderNoteBaseFilePathName: 'Base 文件',
+	configuredFolderNoteBaseFilePathDesc: '可选的 .base 文件；选中的视图会提供新笔记的初始属性。',
+	configuredFolderNoteBaseFilePathPlaceholder: 'Bases/Tasks.base',
+	configuredFolderNoteBaseViewNameName: 'Base 视图名',
+	configuredFolderNoteBaseViewNameDesc: '从已配置 Base 文件中读取的精确视图名称。',
+	configuredFolderNoteBaseViewNamePlaceholder: 'Tasks',
+	configuredFolderNoteIncludeFilterDefaultsName: '写入简单规则默认值',
+	configuredFolderNoteIncludeFilterDefaultsDesc: '同时写入 Base filter 中的简单等值规则，例如 status == "todo"。复杂规则会被忽略。',
 	sameFolderNoteHeading: '同目录新建笔记',
 	enableSameFolderNoteName: '启用同目录新建命令',
 	enableSameFolderNoteDesc: '在文件右键菜单中增加一个命令，用来在所选文件同目录下新建 Markdown 笔记。',
