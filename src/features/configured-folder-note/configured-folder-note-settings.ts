@@ -1,4 +1,6 @@
 import {
+	ProjectListSortBy,
+	ProjectListSortDirection,
 	normalizeBaseViewName,
 	normalizeConfiguredBaseFilePath,
 	normalizeConfiguredFolderPath,
@@ -9,7 +11,9 @@ export interface ConfiguredFolderNoteSettings {
 	baseViewName: string;
 	enabled: boolean;
 	includeFilterDefaults: boolean;
-	targetFolderPath: string;
+	projectInboxFolderPath: string;
+	projectListSortBy: ProjectListSortBy;
+	projectListSortDirection: ProjectListSortDirection;
 }
 
 export interface ConfiguredFolderNoteSettingsInput {
@@ -17,6 +21,10 @@ export interface ConfiguredFolderNoteSettingsInput {
 	baseViewName?: unknown;
 	enabled?: unknown;
 	includeFilterDefaults?: unknown;
+	projectInboxFolderPath?: unknown;
+	projectListSortBy?: unknown;
+	projectListSortDirection?: unknown;
+	/** Legacy fixed-folder setting retained so older saved data remains valid. */
 	targetFolderPath?: unknown;
 }
 
@@ -25,7 +33,9 @@ export const DEFAULT_CONFIGURED_FOLDER_NOTE_SETTINGS: ConfiguredFolderNoteSettin
 	baseViewName: '',
 	enabled: false,
 	includeFilterDefaults: false,
-	targetFolderPath: '',
+	projectInboxFolderPath: 'inbox',
+	projectListSortBy: 'name',
+	projectListSortDirection: 'asc',
 };
 
 export function normalizeConfiguredFolderNoteSettings(
@@ -40,6 +50,20 @@ export function normalizeConfiguredFolderNoteSettings(
 		includeFilterDefaults: typeof settings?.includeFilterDefaults === 'boolean'
 			? settings.includeFilterDefaults
 			: DEFAULT_CONFIGURED_FOLDER_NOTE_SETTINGS.includeFilterDefaults,
-		targetFolderPath: normalizeConfiguredFolderPath(settings?.targetFolderPath),
+		projectInboxFolderPath: normalizeProjectInboxFolderPath(settings?.projectInboxFolderPath),
+		projectListSortBy: normalizeProjectListSortBy(settings?.projectListSortBy),
+		projectListSortDirection: normalizeProjectListSortDirection(settings?.projectListSortDirection),
 	};
+}
+
+export function normalizeProjectInboxFolderPath(value: unknown): string {
+	return normalizeConfiguredFolderPath(value) || DEFAULT_CONFIGURED_FOLDER_NOTE_SETTINGS.projectInboxFolderPath;
+}
+
+export function normalizeProjectListSortBy(value: unknown): ProjectListSortBy {
+	return value === 'created' || value === 'modified' ? value : 'name';
+}
+
+export function normalizeProjectListSortDirection(value: unknown): ProjectListSortDirection {
+	return value === 'desc' ? value : 'asc';
 }

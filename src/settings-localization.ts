@@ -289,9 +289,18 @@ export interface SettingsLocalization {
 	configuredFolderNoteDesc: string;
 	configuredFolderNoteEnableName: string;
 	configuredFolderNoteEnableDesc: string;
-	configuredFolderNoteTargetFolderPathName: string;
-	configuredFolderNoteTargetFolderPathDesc: string;
-	configuredFolderNoteTargetFolderPathPlaceholder: string;
+	configuredFolderNoteProjectInboxFolderPathName: string;
+	configuredFolderNoteProjectInboxFolderPathDesc: string;
+	configuredFolderNoteProjectInboxFolderPathPlaceholder: string;
+	configuredFolderNoteProjectListSortByName: string;
+	configuredFolderNoteProjectListSortByDesc: string;
+	configuredFolderNoteProjectListSortByNameLabel: string;
+	configuredFolderNoteProjectListSortByCreatedLabel: string;
+	configuredFolderNoteProjectListSortByModifiedLabel: string;
+	configuredFolderNoteProjectListSortDirectionName: string;
+	configuredFolderNoteProjectListSortDirectionDesc: string;
+	configuredFolderNoteProjectListSortDirectionAscendingLabel: string;
+	configuredFolderNoteProjectListSortDirectionDescendingLabel: string;
 	configuredFolderNoteBaseFilePathName: string;
 	configuredFolderNoteBaseFilePathDesc: string;
 	configuredFolderNoteBaseFilePathPlaceholder: string;
@@ -594,13 +603,22 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectFolderCreateProjectParentFolderPathName: 'New project parent folder',
 	projectFolderCreateProjectParentFolderPathDesc: 'Create new project folders under this vault path. Leave empty to use the vault root. Missing folders are created automatically.',
 	projectFolderCreateProjectParentFolderPathPlaceholder: '1_project',
-	configuredFolderNoteHeading: 'Create note in configured folder',
-	configuredFolderNoteDesc: 'Create a default-named note in one configured folder, optionally seeded with properties from one Base view.',
-	configuredFolderNoteEnableName: 'Enable configured-folder note command',
-	configuredFolderNoteEnableDesc: 'Add a command that creates a markdown note in the configured target folder.',
-	configuredFolderNoteTargetFolderPathName: 'Target folder',
-	configuredFolderNoteTargetFolderPathDesc: 'Create new notes under this vault path. Leave empty to use the vault root. Missing folders are created automatically.',
-	configuredFolderNoteTargetFolderPathPlaceholder: 'Inbox',
+	configuredFolderNoteHeading: 'Create note in project folder',
+	configuredFolderNoteDesc: 'Choose a project, then create a default-named note in its configured child folder using one Base view as the property template.',
+	configuredFolderNoteEnableName: 'Enable project note command',
+	configuredFolderNoteEnableDesc: 'Add a command that asks for a project before creating a markdown note.',
+	configuredFolderNoteProjectInboxFolderPathName: 'Project child folder',
+	configuredFolderNoteProjectInboxFolderPathDesc: 'Create notes under this child path of the selected project. Missing folders are created automatically.',
+	configuredFolderNoteProjectInboxFolderPathPlaceholder: 'inbox',
+	configuredFolderNoteProjectListSortByName: 'Project list sort',
+	configuredFolderNoteProjectListSortByDesc: 'Choose how projects are ordered in the picker.',
+	configuredFolderNoteProjectListSortByNameLabel: 'Name',
+	configuredFolderNoteProjectListSortByCreatedLabel: 'Creation time',
+	configuredFolderNoteProjectListSortByModifiedLabel: 'Modification time',
+	configuredFolderNoteProjectListSortDirectionName: 'Project list sort direction',
+	configuredFolderNoteProjectListSortDirectionDesc: 'Choose whether the selected project order is ascending or descending.',
+	configuredFolderNoteProjectListSortDirectionAscendingLabel: 'Ascending',
+	configuredFolderNoteProjectListSortDirectionDescendingLabel: 'Descending',
 	configuredFolderNoteBaseFilePathName: 'Base file',
 	configuredFolderNoteBaseFilePathDesc: 'Optional .base file whose selected view provides initial note properties.',
 	configuredFolderNoteBaseFilePathPlaceholder: 'Bases/Tasks.base',
@@ -903,13 +921,22 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectFolderCreateProjectParentFolderPathName: '新项目父文件夹',
 	projectFolderCreateProjectParentFolderPathDesc: '新项目文件夹会创建在这个库内路径下。留空则使用库根目录；目录不存在时会自动创建。',
 	projectFolderCreateProjectParentFolderPathPlaceholder: '1_project',
-	configuredFolderNoteHeading: '在指定文件夹新建笔记',
-	configuredFolderNoteDesc: '在一个已配置的文件夹里新建默认命名的笔记，并可从一个 Base 视图带入初始属性。',
-	configuredFolderNoteEnableName: '启用指定文件夹新建命令',
-	configuredFolderNoteEnableDesc: '添加一个命令，用于在配置的目标文件夹中新建 Markdown 笔记。',
-	configuredFolderNoteTargetFolderPathName: '目标文件夹',
-	configuredFolderNoteTargetFolderPathDesc: '在这个库路径下新建笔记。留空则使用库根目录。缺失的目录会自动创建。',
-	configuredFolderNoteTargetFolderPathPlaceholder: 'Inbox',
+	configuredFolderNoteHeading: '在项目中新建笔记',
+	configuredFolderNoteDesc: '先选择项目，再在其配置的子文件夹中新建默认命名的笔记；属性由一个 Base 视图提供。',
+	configuredFolderNoteEnableName: '启用项目新建命令',
+	configuredFolderNoteEnableDesc: '添加一个命令，在新建 Markdown 笔记前先选择项目。',
+	configuredFolderNoteProjectInboxFolderPathName: '项目子文件夹',
+	configuredFolderNoteProjectInboxFolderPathDesc: '在所选项目目录下的这个子路径中新建笔记。缺失的目录会自动创建。',
+	configuredFolderNoteProjectInboxFolderPathPlaceholder: 'inbox',
+	configuredFolderNoteProjectListSortByName: '项目列表排序',
+	configuredFolderNoteProjectListSortByDesc: '选择项目选择器中的项目排序依据。',
+	configuredFolderNoteProjectListSortByNameLabel: '名称',
+	configuredFolderNoteProjectListSortByCreatedLabel: '创建时间',
+	configuredFolderNoteProjectListSortByModifiedLabel: '修改时间',
+	configuredFolderNoteProjectListSortDirectionName: '项目列表排序方向',
+	configuredFolderNoteProjectListSortDirectionDesc: '选择当前排序依据采用升序还是降序。',
+	configuredFolderNoteProjectListSortDirectionAscendingLabel: '升序',
+	configuredFolderNoteProjectListSortDirectionDescendingLabel: '降序',
 	configuredFolderNoteBaseFilePathName: 'Base 文件',
 	configuredFolderNoteBaseFilePathDesc: '可选的 .base 文件；选中的视图会提供新笔记的初始属性。',
 	configuredFolderNoteBaseFilePathPlaceholder: 'Bases/Tasks.base',

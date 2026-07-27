@@ -4,11 +4,13 @@ import {
 	ConfiguredFolderNoteSettings,
 	DEFAULT_CONFIGURED_FOLDER_NOTE_SETTINGS,
 	normalizeConfiguredFolderNoteSettings,
+	normalizeProjectInboxFolderPath,
+	normalizeProjectListSortBy,
+	normalizeProjectListSortDirection,
 } from './features/configured-folder-note/configured-folder-note-settings';
 import {
 	normalizeBaseViewName,
 	normalizeConfiguredBaseFilePath,
-	normalizeConfiguredFolderPath,
 } from './features/configured-folder-note/configured-folder-note-utils';
 import {
 	DEFAULT_FILE_NAME_MAX_LENGTH,
@@ -1350,18 +1352,43 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName(strings.configuredFolderNoteTargetFolderPathName)
-			.setDesc(strings.configuredFolderNoteTargetFolderPathDesc)
+			.setName(strings.configuredFolderNoteProjectInboxFolderPathName)
+			.setDesc(strings.configuredFolderNoteProjectInboxFolderPathDesc)
 			.addText((text) => {
-				text.setPlaceholder(strings.configuredFolderNoteTargetFolderPathPlaceholder);
+				text.setPlaceholder(strings.configuredFolderNoteProjectInboxFolderPathPlaceholder);
 				return this.bindCommittedTextSetting(text, {
-					initialValue: this.plugin.settings.configuredFolderNote.targetFolderPath,
-					normalize: normalizeConfiguredFolderPath,
+					initialValue: this.plugin.settings.configuredFolderNote.projectInboxFolderPath,
+					normalize: normalizeProjectInboxFolderPath,
 					onCommit: (value) => {
-						this.plugin.settings.configuredFolderNote.targetFolderPath = value;
+						this.plugin.settings.configuredFolderNote.projectInboxFolderPath = value;
 					},
 				});
 			});
+
+		new Setting(containerEl)
+			.setName(strings.configuredFolderNoteProjectListSortByName)
+			.setDesc(strings.configuredFolderNoteProjectListSortByDesc)
+			.addDropdown((dropdown) => dropdown
+				.addOption('name', strings.configuredFolderNoteProjectListSortByNameLabel)
+				.addOption('created', strings.configuredFolderNoteProjectListSortByCreatedLabel)
+				.addOption('modified', strings.configuredFolderNoteProjectListSortByModifiedLabel)
+				.setValue(this.plugin.settings.configuredFolderNote.projectListSortBy)
+				.onChange(async (value) => {
+					this.plugin.settings.configuredFolderNote.projectListSortBy = normalizeProjectListSortBy(value);
+					await saveWithoutRefresh();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.configuredFolderNoteProjectListSortDirectionName)
+			.setDesc(strings.configuredFolderNoteProjectListSortDirectionDesc)
+			.addDropdown((dropdown) => dropdown
+				.addOption('asc', strings.configuredFolderNoteProjectListSortDirectionAscendingLabel)
+				.addOption('desc', strings.configuredFolderNoteProjectListSortDirectionDescendingLabel)
+				.setValue(this.plugin.settings.configuredFolderNote.projectListSortDirection)
+				.onChange(async (value) => {
+					this.plugin.settings.configuredFolderNote.projectListSortDirection = normalizeProjectListSortDirection(value);
+					await saveWithoutRefresh();
+				}));
 
 		new Setting(containerEl)
 			.setName(strings.configuredFolderNoteBaseFilePathName)

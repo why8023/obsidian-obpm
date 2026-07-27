@@ -1,3 +1,6 @@
+export type ProjectListSortBy = 'created' | 'modified' | 'name';
+export type ProjectListSortDirection = 'asc' | 'desc';
+
 export interface ConfiguredFolderNoteCreationPlan {
 	basename: string;
 	filePath: string;
@@ -20,13 +23,21 @@ export interface BaseConfigLike {
 	views?: unknown;
 }
 
+export interface ProjectListSortableCandidate {
+	file: {
+		path: string;
+		stat: {
+			ctime: number;
+			mtime: number;
+		};
+	};
+	name: string;
+}
+
 export type BaseFrontmatterTemplateResult =
 	| {
 		frontmatter: Record<string, unknown>;
 		kind: 'success';
-	}
-	| {
-		kind: 'folder-not-matched';
 	}
 	| {
 		kind: 'view-not-found';
@@ -34,7 +45,6 @@ export type BaseFrontmatterTemplateResult =
 
 export interface BuildBaseFrontmatterTemplateOptions {
 	includeFilterDefaults: boolean;
-	targetFolderPath: string;
 	viewName: string;
 }
 
@@ -62,6 +72,23 @@ export function buildConfiguredFolderNoteCreationPlan(
 	};
 }
 
+export function sortProjectCandidates<T extends ProjectListSortableCandidate>(
+	candidates: readonly T[],
+	sortBy: ProjectListSortBy,
+	sortDirection: ProjectListSortDirection,
+): T[] {
+	return [...candidates].sort((left, right) => {
+		const primaryComparison = sortBy === 'created'
+			? left.file.stat.ctime - right.file.stat.ctime
+			: sortBy === 'modified'
+				? left.file.stat.mtime - right.file.stat.mtime
+				: left.name.localeCompare(right.name);
+		const tieBreaker = left.name.localeCompare(right.name) || left.file.path.localeCompare(right.file.path);
+		const comparison = primaryComparison || tieBreaker;
+		return sortDirection === 'desc' ? -comparison : comparison;
+	});
+}
+
 export function buildBaseFrontmatterTemplate(
 	config: BaseConfigLike,
 	options: BuildBaseFrontmatterTemplateOptions,
@@ -69,12 +96,6 @@ export function buildBaseFrontmatterTemplate(
 	const view = findBaseViewByName(config, options.viewName);
 	if (!view) {
 		return {kind: 'view-not-found'};
-	}
-
-	const targetFolderPath = normalizeConfiguredFolderPath(options.targetFolderPath);
-	if (!baseFilterIncludesFolder(config.filters, targetFolderPath)
-		&& !baseFilterIncludesFolder(view.filters, targetFolderPath)) {
-		return {kind: 'folder-not-matched'};
 	}
 
 	const frontmatter: Record<string, unknown> = {};
@@ -98,18 +119,6 @@ export function buildBaseFrontmatterTemplate(
 	};
 }
 
-export function buildMarkdownContentWithFrontmatter(
-	frontmatter: Record<string, unknown>,
-	stringifyYaml: (value: Record<string, unknown>) => string,
-): string {
-	if (Object.keys(frontmatter).length === 0) {
-		return '';
-	}
-
-	const yaml = stringifyYaml(frontmatter).trimEnd();
-	return yaml.length > 0 ? `---\n${yaml}\n---\n` : '';
-}
-
 export function normalizeBaseViewName(value: unknown): string {
 	return typeof value === 'string' ? value.trim() : '';
 }
@@ -127,33 +136,6 @@ export function normalizeConfiguredFolderPath(value: unknown): string {
 		.split('/')
 		.filter((segment) => segment !== '..')
 		.join('/');
-}
-
-function baseFilterIncludesFolder(filter: unknown, targetFolderPath: string): boolean {
-	return collectPositiveFilterExpressions(filter)
-		.some((expression) => filterExpressionIncludesFolder(expression, targetFolderPath));
-}
-
-function collectPositiveFilterExpressions(filter: unknown): string[] {
-	if (typeof filter === 'string') {
-		return [filter];
-	}
-
-	if (Array.isArray(filter)) {
-		return filter.flatMap((entry) => collectPositiveFilterExpressions(entry));
-	}
-
-	if (!isObjectRecord(filter)) {
-		return [];
-	}
-
-	return Object.entries(filter).flatMap(([key, value]) => {
-		if (key === 'not') {
-			return [];
-		}
-
-		return collectPositiveFilterExpressions(value);
-	});
 }
 
 function collectConjunctiveFilterExpressions(filter: unknown): string[] {
@@ -214,20 +196,6 @@ function extractBaseViewOrderProperties(view: BaseViewLike): string[] {
 	return properties;
 }
 
-function filterExpressionIncludesFolder(expression: string, targetFolderPath: string): boolean {
-	const inFolderMatch = /\bfile\.inFolder\(\s*(['"])(.*?)\1\s*\)/.exec(expression);
-	if (inFolderMatch?.[2] !== undefined) {
-		return isFolderEqualOrInside(targetFolderPath, inFolderMatch[2]);
-	}
-
-	const folderEqualsMatch = /\bfile\.folder\s*==\s*(['"])(.*?)\1/.exec(expression);
-	if (folderEqualsMatch?.[2] !== undefined) {
-		return normalizeConfiguredFolderPath(targetFolderPath) === normalizeConfiguredFolderPath(folderEqualsMatch[2]);
-	}
-
-	return false;
-}
-
 function findBaseViewByName(config: BaseConfigLike, viewName: string): BaseViewLike | null {
 	const normalizedViewName = normalizeBaseViewName(viewName);
 	if (!normalizedViewName || !Array.isArray(config.views)) {
@@ -249,16 +217,6 @@ function findBaseViewByName(config: BaseConfigLike, viewName: string): BaseViewL
 
 function hasOwn(record: Record<string, unknown>, key: string): boolean {
 	return Object.prototype.hasOwnProperty.call(record, key);
-}
-
-function isFolderEqualOrInside(targetFolderPath: string, baseFolderPath: string): boolean {
-	const normalizedTarget = normalizeConfiguredFolderPath(targetFolderPath);
-	const normalizedBase = normalizeConfiguredFolderPath(baseFolderPath);
-	if (!normalizedBase) {
-		return true;
-	}
-
-	return normalizedTarget === normalizedBase || normalizedTarget.startsWith(`${normalizedBase}/`);
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

@@ -8,10 +8,10 @@ import {
 import {
 	buildBaseFrontmatterTemplate,
 	buildConfiguredFolderNoteCreationPlan,
-	buildMarkdownContentWithFrontmatter,
 	normalizeBaseViewName,
 	normalizeConfiguredBaseFilePath,
 	normalizeConfiguredFolderPath,
+	sortProjectCandidates,
 } from './configured-folder-note-utils';
 
 describe('configured-folder note utilities', () => {
@@ -21,7 +21,9 @@ describe('configured-folder note utilities', () => {
 			baseViewName: '',
 			enabled: false,
 			includeFilterDefaults: false,
-			targetFolderPath: '',
+			projectInboxFolderPath: 'inbox',
+			projectListSortBy: 'name',
+			projectListSortDirection: 'asc',
 		});
 
 		assert.deepEqual(normalizeConfiguredFolderNoteSettings({
@@ -29,13 +31,17 @@ describe('configured-folder note utilities', () => {
 			baseViewName: ' Tasks ',
 			enabled: true,
 			includeFilterDefaults: true,
-			targetFolderPath: ' Inbox\\Tasks / ./ ',
+			projectInboxFolderPath: ' Inbox\\Tasks / ./ ',
+			projectListSortBy: 'modified',
+			projectListSortDirection: 'desc',
 		}), {
 			baseFilePath: 'Bases/Tasks.base',
 			baseViewName: 'Tasks',
 			enabled: true,
 			includeFilterDefaults: true,
-			targetFolderPath: 'Inbox/Tasks',
+			projectInboxFolderPath: 'Inbox/Tasks',
+			projectListSortBy: 'modified',
+			projectListSortDirection: 'desc',
 		});
 
 		assert.deepEqual(normalizeConfiguredFolderNoteSettings({
@@ -43,14 +49,28 @@ describe('configured-folder note utilities', () => {
 			baseViewName: false,
 			enabled: 'yes',
 			includeFilterDefaults: 'yes',
+			projectInboxFolderPath: '../outside',
+			projectListSortBy: 'time',
+			projectListSortDirection: 'down',
 			targetFolderPath: '../outside',
 		}), {
 			baseFilePath: '',
 			baseViewName: '',
 			enabled: false,
 			includeFilterDefaults: false,
-			targetFolderPath: 'outside',
+			projectInboxFolderPath: 'outside',
+			projectListSortBy: 'name',
+			projectListSortDirection: 'asc',
 		});
+
+		assert.equal(
+			normalizeConfiguredFolderNoteSettings({targetFolderPath: '0_inbox'}).projectInboxFolderPath,
+			'inbox',
+		);
+		assert.equal(
+			normalizeConfiguredFolderNoteSettings({projectInboxFolderPath: ''}).projectInboxFolderPath,
+			'inbox',
+		);
 	});
 
 	it('normalizes individual configured-folder note setting values', () => {
@@ -63,13 +83,14 @@ describe('configured-folder note utilities', () => {
 	it('builds a unique default markdown path in the configured folder', () => {
 		const plan = buildConfiguredFolderNoteCreationPlan({
 			defaultBasename: 'Untitled',
-			pathExists: (path) => path === 'Inbox/Untitled.md' || path === 'Inbox/Untitled 1.md',
-			targetFolderPath: 'Inbox',
+			pathExists: (path) =>
+				path === 'Projects/Alpha/inbox/Untitled.md' || path === 'Projects/Alpha/inbox/Untitled 1.md',
+			targetFolderPath: 'Projects/Alpha/inbox',
 		});
 
 		assert.deepEqual(plan, {
 			basename: 'Untitled 2',
-			filePath: 'Inbox/Untitled 2.md',
+			filePath: 'Projects/Alpha/inbox/Untitled 2.md',
 		});
 	});
 
@@ -103,7 +124,6 @@ describe('configured-folder note utilities', () => {
 			],
 		}, {
 			includeFilterDefaults: false,
-			targetFolderPath: 'Projects/Inbox',
 			viewName: 'Tasks',
 		});
 
@@ -141,7 +161,6 @@ describe('configured-folder note utilities', () => {
 			],
 		}, {
 			includeFilterDefaults: true,
-			targetFolderPath: 'Projects/Inbox',
 			viewName: 'Tasks',
 		});
 
@@ -175,7 +194,6 @@ describe('configured-folder note utilities', () => {
 			],
 		}, {
 			includeFilterDefaults: true,
-			targetFolderPath: 'Projects',
 			viewName: 'Tasks',
 		});
 
@@ -187,85 +205,86 @@ describe('configured-folder note utilities', () => {
 		});
 	});
 
-	it('matches exact file.folder filters only for the target folder', () => {
-		const matchingTemplate = buildBaseFrontmatterTemplate({
+	it('uses the selected Base view even when its filters point at a fixed folder', () => {
+		const template = buildBaseFrontmatterTemplate({
 			views: [
 				{
-					filters: 'file.folder == "Projects/Inbox"',
+					filters: 'file.inFolder("0_inbox")',
 					name: 'Inbox',
-					order: ['status'],
+					order: ['file.name', 'status', 'note.due', 'formula.age'],
 					type: 'table',
 				},
 			],
 		}, {
 			includeFilterDefaults: false,
-			targetFolderPath: 'Projects/Inbox',
 			viewName: 'Inbox',
 		});
 
-		const nonMatchingTemplate = buildBaseFrontmatterTemplate({
-			views: [
-				{
-					filters: 'file.folder == "Projects/Inbox"',
-					name: 'Inbox',
-					order: ['status'],
-					type: 'table',
-				},
-			],
-		}, {
-			includeFilterDefaults: false,
-			targetFolderPath: 'Projects/Inbox/Subfolder',
-			viewName: 'Inbox',
+		assert.deepEqual(template, {
+			frontmatter: {
+				status: null,
+				due: null,
+			},
+			kind: 'success',
 		});
-
-		assert.equal(matchingTemplate.kind, 'success');
-		assert.deepEqual(nonMatchingTemplate, {kind: 'folder-not-matched'});
 	});
 
-	it('reports missing views and folder mismatches', () => {
+	it('reports missing views', () => {
 		assert.deepEqual(buildBaseFrontmatterTemplate({
 			filters: 'file.inFolder("Projects")',
 			views: [{name: 'Tasks', order: ['status'], type: 'table'}],
 		}, {
 			includeFilterDefaults: false,
-			targetFolderPath: 'Projects',
 			viewName: 'Archive',
 		}), {kind: 'view-not-found'});
-
-		assert.deepEqual(buildBaseFrontmatterTemplate({
-			filters: {
-				not: ['file.inFolder("Archive")'],
-			},
-			views: [{name: 'Tasks', order: ['status'], type: 'table'}],
-		}, {
-			includeFilterDefaults: false,
-			targetFolderPath: 'Archive',
-			viewName: 'Tasks',
-		}), {kind: 'folder-not-matched'});
 	});
 
-	it('wraps frontmatter yaml in markdown delimiters', () => {
-		const content = buildMarkdownContentWithFrontmatter({
-			status: 'todo',
-			due: null,
-		}, (frontmatter) => Object.entries(frontmatter)
-			.map(([key, value]) => value === null ? `${key}:` : `${key}: ${formatTestYamlValue(value)}`)
-			.join('\n'));
+	it('sorts project candidates by the selected field and direction', () => {
+		const candidates = [
+			{
+				file: {path: 'Projects/Beta/Beta.md', stat: {ctime: 30, mtime: 10}},
+				name: 'Beta',
+			},
+			{
+				file: {path: 'Projects/Alpha/Alpha.md', stat: {ctime: 20, mtime: 30}},
+				name: 'Alpha',
+			},
+			{
+				file: {path: 'Projects/Gamma/Gamma.md', stat: {ctime: 20, mtime: 30}},
+				name: 'Gamma',
+			},
+		];
 
-		assert.equal(content, [
-			'---',
-			'status: todo',
-			'due:',
-			'---',
-			'',
-		].join('\n'));
+		assert.deepEqual(
+			sortProjectCandidates(candidates, 'name', 'asc').map((candidate) => candidate.name),
+			['Alpha', 'Beta', 'Gamma'],
+		);
+		assert.deepEqual(
+			sortProjectCandidates(candidates, 'name', 'desc').map((candidate) => candidate.name),
+			['Gamma', 'Beta', 'Alpha'],
+		);
+		assert.deepEqual(
+			sortProjectCandidates(candidates, 'created', 'asc').map((candidate) => candidate.name),
+			['Alpha', 'Gamma', 'Beta'],
+		);
+		assert.deepEqual(
+			sortProjectCandidates(candidates, 'modified', 'desc').map((candidate) => candidate.name),
+			['Gamma', 'Alpha', 'Beta'],
+		);
+
+		const sameNameCandidates = [
+			{
+				file: {path: 'Projects/Zeta/Alpha.md', stat: {ctime: 10, mtime: 10}},
+				name: 'Alpha',
+			},
+			{
+				file: {path: 'Projects/Alpha/Alpha.md', stat: {ctime: 10, mtime: 10}},
+				name: 'Alpha',
+			},
+		];
+		assert.deepEqual(
+			sortProjectCandidates(sameNameCandidates, 'created', 'asc').map((candidate) => candidate.file.path),
+			['Projects/Alpha/Alpha.md', 'Projects/Zeta/Alpha.md'],
+		);
 	});
 });
-
-function formatTestYamlValue(value: unknown): string {
-	if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-		return value.toString();
-	}
-
-	return '';
-}
