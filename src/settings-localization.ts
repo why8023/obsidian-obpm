@@ -292,6 +292,9 @@ export interface SettingsLocalization {
 	configuredFolderNoteProjectInboxFolderPathName: string;
 	configuredFolderNoteProjectInboxFolderPathDesc: string;
 	configuredFolderNoteProjectInboxFolderPathPlaceholder: string;
+	configuredFolderNoteProjectRelationPropertyName: string;
+	configuredFolderNoteProjectRelationPropertyDesc: string;
+	configuredFolderNoteProjectRelationPropertyPlaceholder: string;
 	configuredFolderNoteProjectListSortByName: string;
 	configuredFolderNoteProjectListSortByDesc: string;
 	configuredFolderNoteProjectListSortByNameLabel: string;
@@ -610,6 +613,9 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	configuredFolderNoteProjectInboxFolderPathName: 'Project child folder',
 	configuredFolderNoteProjectInboxFolderPathDesc: 'Create notes under this child path of the selected project. Missing folders are created automatically.',
 	configuredFolderNoteProjectInboxFolderPathPlaceholder: 'inbox',
+	configuredFolderNoteProjectRelationPropertyName: 'Project relation property',
+	configuredFolderNoteProjectRelationPropertyDesc: 'When this property is included in the selected Base view, write the selected project to it. Leave empty to skip.',
+	configuredFolderNoteProjectRelationPropertyPlaceholder: 'obpm_related',
 	configuredFolderNoteProjectListSortByName: 'Project list sort',
 	configuredFolderNoteProjectListSortByDesc: 'Choose how projects are ordered in the picker.',
 	configuredFolderNoteProjectListSortByNameLabel: 'Name',
@@ -928,6 +934,9 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	configuredFolderNoteProjectInboxFolderPathName: '项目子文件夹',
 	configuredFolderNoteProjectInboxFolderPathDesc: '在所选项目目录下的这个子路径中新建笔记。缺失的目录会自动创建。',
 	configuredFolderNoteProjectInboxFolderPathPlaceholder: 'inbox',
+	configuredFolderNoteProjectRelationPropertyName: '项目关联属性',
+	configuredFolderNoteProjectRelationPropertyDesc: '当该属性包含在所选 Base 视图中时，将所选项目写入该属性。留空则不写入。',
+	configuredFolderNoteProjectRelationPropertyPlaceholder: 'obpm_related',
 	configuredFolderNoteProjectListSortByName: '项目列表排序',
 	configuredFolderNoteProjectListSortByDesc: '选择项目选择器中的项目排序依据。',
 	configuredFolderNoteProjectListSortByNameLabel: '名称',

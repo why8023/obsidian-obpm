@@ -7,6 +7,7 @@ import {
 	normalizeProjectInboxFolderPath,
 	normalizeProjectListSortBy,
 	normalizeProjectListSortDirection,
+	normalizeProjectRelationProperty,
 } from './features/configured-folder-note/configured-folder-note-settings';
 import {
 	normalizeBaseViewName,
@@ -1361,6 +1362,20 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					normalize: normalizeProjectInboxFolderPath,
 					onCommit: (value) => {
 						this.plugin.settings.configuredFolderNote.projectInboxFolderPath = value;
+					},
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.configuredFolderNoteProjectRelationPropertyName)
+			.setDesc(strings.configuredFolderNoteProjectRelationPropertyDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.configuredFolderNoteProjectRelationPropertyPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.configuredFolderNote.projectRelationProperty,
+					normalize: normalizeProjectRelationProperty,
+					onCommit: (value) => {
+						this.plugin.settings.configuredFolderNote.projectRelationProperty = value;
 					},
 				});
 			});

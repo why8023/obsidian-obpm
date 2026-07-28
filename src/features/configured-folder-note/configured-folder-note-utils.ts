@@ -1,3 +1,8 @@
+import {
+	appendUniqueRelationLinkValue,
+	buildTargetWikilinkValue,
+} from '../pinned-project/frontmatter-relation';
+
 export type ProjectListSortBy = 'created' | 'modified' | 'name';
 export type ProjectListSortDirection = 'asc' | 'desc';
 
@@ -87,6 +92,26 @@ export function sortProjectCandidates<T extends ProjectListSortableCandidate>(
 		const comparison = primaryComparison || tieBreaker;
 		return sortDirection === 'desc' ? -comparison : comparison;
 	});
+}
+
+export function applyProjectRelationFrontmatter(
+	frontmatter: Record<string, unknown>,
+	relationProperty: string,
+	projectFilePath: string,
+): Record<string, unknown> {
+	const property = normalizeBaseFrontmatterPropertyId(relationProperty);
+	if (!property || !hasOwn(frontmatter, property)) {
+		return frontmatter;
+	}
+
+	const appendResult = appendUniqueRelationLinkValue(
+		frontmatter[property],
+		buildTargetWikilinkValue(projectFilePath),
+		projectFilePath,
+	);
+	return appendResult.changed
+		? {...frontmatter, [property]: appendResult.value}
+		: frontmatter;
 }
 
 export function buildBaseFrontmatterTemplate(

@@ -6,6 +6,7 @@ import {
 	normalizeConfiguredFolderNoteSettings,
 } from './configured-folder-note-settings';
 import {
+	applyProjectRelationFrontmatter,
 	buildBaseFrontmatterTemplate,
 	buildConfiguredFolderNoteCreationPlan,
 	normalizeBaseViewName,
@@ -24,6 +25,7 @@ describe('configured-folder note utilities', () => {
 			projectInboxFolderPath: 'inbox',
 			projectListSortBy: 'name',
 			projectListSortDirection: 'asc',
+			projectRelationProperty: 'obpm_related',
 		});
 
 		assert.deepEqual(normalizeConfiguredFolderNoteSettings({
@@ -34,6 +36,7 @@ describe('configured-folder note utilities', () => {
 			projectInboxFolderPath: ' Inbox\\Tasks / ./ ',
 			projectListSortBy: 'modified',
 			projectListSortDirection: 'desc',
+			projectRelationProperty: ' project ',
 		}), {
 			baseFilePath: 'Bases/Tasks.base',
 			baseViewName: 'Tasks',
@@ -42,6 +45,7 @@ describe('configured-folder note utilities', () => {
 			projectInboxFolderPath: 'Inbox/Tasks',
 			projectListSortBy: 'modified',
 			projectListSortDirection: 'desc',
+			projectRelationProperty: 'project',
 		});
 
 		assert.deepEqual(normalizeConfiguredFolderNoteSettings({
@@ -52,6 +56,7 @@ describe('configured-folder note utilities', () => {
 			projectInboxFolderPath: '../outside',
 			projectListSortBy: 'time',
 			projectListSortDirection: 'down',
+			projectRelationProperty: false,
 			targetFolderPath: '../outside',
 		}), {
 			baseFilePath: '',
@@ -61,6 +66,7 @@ describe('configured-folder note utilities', () => {
 			projectInboxFolderPath: 'outside',
 			projectListSortBy: 'name',
 			projectListSortDirection: 'asc',
+			projectRelationProperty: 'obpm_related',
 		});
 
 		assert.equal(
@@ -70,6 +76,10 @@ describe('configured-folder note utilities', () => {
 		assert.equal(
 			normalizeConfiguredFolderNoteSettings({projectInboxFolderPath: ''}).projectInboxFolderPath,
 			'inbox',
+		);
+		assert.equal(
+			normalizeConfiguredFolderNoteSettings({projectRelationProperty: ''}).projectRelationProperty,
+			'',
 		);
 	});
 
@@ -237,6 +247,28 @@ describe('configured-folder note utilities', () => {
 			includeFilterDefaults: false,
 			viewName: 'Archive',
 		}), {kind: 'view-not-found'});
+	});
+
+	it('fills the configured Base property with the selected project', () => {
+		assert.deepEqual(
+			applyProjectRelationFrontmatter(
+				{obpm_related: null, status: null},
+				'obpm_related',
+				'Projects/Alpha/Alpha.md',
+			),
+			{
+				obpm_related: ['[[Projects/Alpha/Alpha]]'],
+				status: null,
+			},
+		);
+		assert.deepEqual(
+			applyProjectRelationFrontmatter(
+				{status: null},
+				'obpm_related',
+				'Projects/Alpha/Alpha.md',
+			),
+			{status: null},
+		);
 	});
 
 	it('sorts project candidates by the selected field and direction', () => {

@@ -9,6 +9,7 @@ import {ProjectCandidate} from '../project-routing/types';
 import {getConfiguredFolderNoteLocalization} from './configured-folder-note-localization';
 import {
 	BaseConfigLike,
+	applyProjectRelationFrontmatter,
 	buildBaseFrontmatterTemplate,
 	buildConfiguredFolderNoteCreationPlan,
 	sortProjectCandidates,
@@ -40,7 +41,7 @@ export class ConfiguredFolderNoteFeature extends Component {
 		});
 	}
 
-	private async buildInitialFrontmatter(): Promise<Record<string, unknown> | null> {
+	private async buildInitialFrontmatter(project: ProjectCandidate): Promise<Record<string, unknown> | null> {
 		const settings = this.plugin.settings.configuredFolderNote;
 		if (!settings.baseFilePath && !settings.baseViewName) {
 			return {};
@@ -68,7 +69,11 @@ export class ConfiguredFolderNoteFeature extends Component {
 		});
 		switch (template.kind) {
 			case 'success':
-				return template.frontmatter;
+				return applyProjectRelationFrontmatter(
+					template.frontmatter,
+					settings.projectRelationProperty,
+					project.file.path,
+				);
 			case 'view-not-found':
 				new Notice(this.localization.baseViewMissingNotice(settings.baseViewName));
 				return null;
@@ -82,7 +87,7 @@ export class ConfiguredFolderNoteFeature extends Component {
 			return;
 		}
 
-		const initialFrontmatter = await this.buildInitialFrontmatter();
+		const initialFrontmatter = await this.buildInitialFrontmatter(project);
 		if (initialFrontmatter === null) {
 			return;
 		}

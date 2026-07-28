@@ -14,6 +14,7 @@ export interface ConfiguredFolderNoteSettings {
 	projectInboxFolderPath: string;
 	projectListSortBy: ProjectListSortBy;
 	projectListSortDirection: ProjectListSortDirection;
+	projectRelationProperty: string;
 }
 
 export interface ConfiguredFolderNoteSettingsInput {
@@ -24,6 +25,7 @@ export interface ConfiguredFolderNoteSettingsInput {
 	projectInboxFolderPath?: unknown;
 	projectListSortBy?: unknown;
 	projectListSortDirection?: unknown;
+	projectRelationProperty?: unknown;
 	/** Legacy fixed-folder setting retained so older saved data remains valid. */
 	targetFolderPath?: unknown;
 }
@@ -36,6 +38,7 @@ export const DEFAULT_CONFIGURED_FOLDER_NOTE_SETTINGS: ConfiguredFolderNoteSettin
 	projectInboxFolderPath: 'inbox',
 	projectListSortBy: 'name',
 	projectListSortDirection: 'asc',
+	projectRelationProperty: 'obpm_related',
 };
 
 export function normalizeConfiguredFolderNoteSettings(
@@ -53,6 +56,7 @@ export function normalizeConfiguredFolderNoteSettings(
 		projectInboxFolderPath: normalizeProjectInboxFolderPath(settings?.projectInboxFolderPath),
 		projectListSortBy: normalizeProjectListSortBy(settings?.projectListSortBy),
 		projectListSortDirection: normalizeProjectListSortDirection(settings?.projectListSortDirection),
+		projectRelationProperty: normalizeProjectRelationProperty(settings?.projectRelationProperty),
 	};
 }
 
@@ -66,4 +70,10 @@ export function normalizeProjectListSortBy(value: unknown): ProjectListSortBy {
 
 export function normalizeProjectListSortDirection(value: unknown): ProjectListSortDirection {
 	return value === 'desc' ? value : 'asc';
+}
+
+export function normalizeProjectRelationProperty(value: unknown): string {
+	return typeof value === 'string'
+		? value.trim()
+		: DEFAULT_CONFIGURED_FOLDER_NOTE_SETTINGS.projectRelationProperty;
 }
