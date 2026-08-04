@@ -15,9 +15,14 @@ export const DEFAULT_PROJECT_BASE_PROPERTIES = [
 	'file.mtime',
 ];
 
+export type ProjectBaseFileScope = 'inbox' | 'project';
+
+export const DEFAULT_PROJECT_BASE_FILE_SCOPE: ProjectBaseFileScope = 'inbox';
+
 export interface ProjectBaseSettings {
 	baseFilePath: string;
 	enabled: boolean;
+	fileScope: ProjectBaseFileScope;
 	projectViewProperties: string[];
 	totalViewProperties: string[];
 }
@@ -25,6 +30,7 @@ export interface ProjectBaseSettings {
 export const DEFAULT_PROJECT_BASE_SETTINGS: ProjectBaseSettings = {
 	baseFilePath: 'obpm.base',
 	enabled: false,
+	fileScope: DEFAULT_PROJECT_BASE_FILE_SCOPE,
 	projectViewProperties: [...DEFAULT_PROJECT_BASE_PROPERTIES],
 	totalViewProperties: [...DEFAULT_PROJECT_BASE_PROPERTIES],
 };
@@ -34,6 +40,7 @@ export function normalizeProjectBaseSettings(value: unknown): ProjectBaseSetting
 	return {
 		baseFilePath: normalizeConfiguredBaseFilePath(input.baseFilePath) || DEFAULT_PROJECT_BASE_SETTINGS.baseFilePath,
 		enabled: typeof input.enabled === 'boolean' ? input.enabled : DEFAULT_PROJECT_BASE_SETTINGS.enabled,
+		fileScope: normalizeProjectBaseFileScope(input.fileScope),
 		projectViewProperties: normalizeProjectBasePropertyList(
 			input.projectViewProperties,
 			DEFAULT_PROJECT_BASE_SETTINGS.projectViewProperties,
@@ -43,6 +50,12 @@ export function normalizeProjectBaseSettings(value: unknown): ProjectBaseSetting
 			DEFAULT_PROJECT_BASE_SETTINGS.totalViewProperties,
 		),
 	};
+}
+
+export function normalizeProjectBaseFileScope(value: unknown): ProjectBaseFileScope {
+	return value === 'project' || value === 'inbox'
+		? value
+		: DEFAULT_PROJECT_BASE_FILE_SCOPE;
 }
 
 export function normalizeProjectBasePropertyList(

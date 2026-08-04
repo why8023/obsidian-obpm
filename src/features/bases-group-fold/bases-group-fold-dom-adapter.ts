@@ -40,6 +40,13 @@ interface EnsureToggleButtonOptions {
 
 export class BasesGroupFoldDomAdapter {
 	private bodyIdSequence = 0;
+	private readonly buttonToggleHandlers = new WeakMap<HTMLButtonElement, {
+		click: (event: Event) => void;
+		mousedown: (event: Event) => void;
+		mouseup: (event: Event) => void;
+		pointerdown: (event: Event) => void;
+	}>();
+	private readonly headerToggleHandlers = new WeakMap<HTMLElement, (event: Event) => void>();
 
 	constructor(private readonly debugLog: (message: string, details?: unknown) => void) {}
 
@@ -203,7 +210,12 @@ export class BasesGroupFoldDomAdapter {
 		group.bodyEl.dataset.obpmBasesGroupFoldBody = 'true';
 		group.headerEl.classList.add('obpm-bases-group-fold-header');
 		group.bodyEl.classList.add('obpm-bases-group-fold-body');
-		group.headerEl.onclick = (event) => {
+		const previousHeaderHandler = this.headerToggleHandlers.get(group.headerEl);
+		if (previousHeaderHandler) {
+			group.headerEl.removeEventListener('click', previousHeaderHandler);
+		}
+
+		const headerHandler = (event: Event) => {
 			if (shouldIgnoreHeaderToggle(event, group.headerEl)) {
 				return;
 			}
@@ -211,6 +223,8 @@ export class BasesGroupFoldDomAdapter {
 			stopToggleEvent(event);
 			options.onToggle();
 		};
+		this.headerToggleHandlers.set(group.headerEl, headerHandler);
+		group.headerEl.addEventListener('click', headerHandler);
 		if (group.summaryEl) {
 			group.summaryEl.dataset.obpmBasesGroupFoldSummary = 'true';
 			group.summaryEl.classList.add('obpm-bases-group-fold-summary');
@@ -233,13 +247,28 @@ export class BasesGroupFoldDomAdapter {
 			buttonEl.title = options.label;
 		}
 
-		buttonEl.onpointerdown = stopToggleEvent;
-		buttonEl.onmousedown = stopToggleEvent;
-		buttonEl.onmouseup = stopToggleEvent;
-		buttonEl.onclick = (event) => {
-			stopToggleEvent(event);
-			options.onToggle();
+		const previousButtonHandlers = this.buttonToggleHandlers.get(buttonEl);
+		if (previousButtonHandlers) {
+			buttonEl.removeEventListener('pointerdown', previousButtonHandlers.pointerdown);
+			buttonEl.removeEventListener('mousedown', previousButtonHandlers.mousedown);
+			buttonEl.removeEventListener('mouseup', previousButtonHandlers.mouseup);
+			buttonEl.removeEventListener('click', previousButtonHandlers.click);
+		}
+
+		const buttonHandlers = {
+			click: (event: Event) => {
+				stopToggleEvent(event);
+				options.onToggle();
+			},
+			mousedown: stopToggleEvent,
+			mouseup: stopToggleEvent,
+			pointerdown: stopToggleEvent,
 		};
+		this.buttonToggleHandlers.set(buttonEl, buttonHandlers);
+		buttonEl.addEventListener('pointerdown', buttonHandlers.pointerdown);
+		buttonEl.addEventListener('mousedown', buttonHandlers.mousedown);
+		buttonEl.addEventListener('mouseup', buttonHandlers.mouseup);
+		buttonEl.addEventListener('click', buttonHandlers.click);
 	}
 
 	applyCollapsed(group: DetectedBaseGroup, collapsed: boolean): void {
@@ -272,6 +301,15 @@ export class BasesGroupFoldDomAdapter {
 		}
 
 		for (const buttonEl of Array.from(rootEl.querySelectorAll(TOGGLE_BUTTON_SELECTOR))) {
+			if (buttonEl instanceof HTMLButtonElement) {
+				const handlers = this.buttonToggleHandlers.get(buttonEl);
+				if (handlers) {
+					buttonEl.removeEventListener('pointerdown', handlers.pointerdown);
+					buttonEl.removeEventListener('mousedown', handlers.mousedown);
+					buttonEl.removeEventListener('mouseup', handlers.mouseup);
+					buttonEl.removeEventListener('click', handlers.click);
+				}
+			}
 			buttonEl.remove();
 		}
 
@@ -290,7 +328,10 @@ export class BasesGroupFoldDomAdapter {
 				continue;
 			}
 
-			headerEl.onclick = null;
+			const handler = this.headerToggleHandlers.get(headerEl);
+			if (handler) {
+				headerEl.removeEventListener('click', handler);
+			}
 			headerEl.classList.remove('obpm-bases-group-fold-header');
 			delete headerEl.dataset.obpmBasesGroupFoldHeader;
 		}

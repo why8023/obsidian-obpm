@@ -42,6 +42,7 @@ import {
 	DEFAULT_PROJECT_BASE_PROPERTIES,
 	DEFAULT_PROJECT_BASE_SETTINGS,
 	normalizeProjectBasePropertyList,
+	normalizeProjectBaseFileScope,
 	normalizeProjectBaseSettings,
 	ProjectBaseSettings,
 } from './features/project-base/project-base-settings';
@@ -60,7 +61,12 @@ import {getSettingsLocalization, SettingsLocalization} from './settings-localiza
 import {
 	renderFrontmatterAutomationSettingsSection as renderFrontmatterAutomationSection,
 } from './settings-ui/frontmatter-automation-section';
-import {isSidebarPlacement, normalizeBasesTopTabsPlacement} from './features/bases-top-tabs/bases-top-tabs-settings';
+import {
+	DEFAULT_BASES_TOP_TABS_PROJECT_FILE_CLICK_MODIFIER,
+	isSidebarPlacement,
+	normalizeBasesTopTabsPlacement,
+	normalizeBasesTopTabsProjectFileClickModifier,
+} from './features/bases-top-tabs/bases-top-tabs-settings';
 import {
 	BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH,
 	BASES_TABS_SIDEBAR_MAX_WIDTH,
@@ -186,6 +192,7 @@ export interface BasesTopTabsSettings {
 	hideWhenSingleView: boolean;
 	maxVisibleTabs: number;
 	placement: BasesTopTabsPlacement;
+	projectFileClickModifier: 'primary' | 'alt' | 'shift';
 	rememberLastView: boolean;
 	scrollable: boolean;
 	sidebarMinWidth: number;
@@ -259,6 +266,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		hideWhenSingleView: true,
 		maxVisibleTabs: DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS,
 		placement: 'above-toolbar',
+		projectFileClickModifier: DEFAULT_BASES_TOP_TABS_PROJECT_FILE_CLICK_MODIFIER,
 		rememberLastView: true,
 		scrollable: true,
 		sidebarMinWidth: DEFAULT_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH,
@@ -341,6 +349,10 @@ export function normalizePluginSettings(
 			placement: normalizeBasesTopTabsPlacement(
 				settings?.basesTopTabs?.placement,
 				DEFAULT_SETTINGS.basesTopTabs.placement,
+			),
+			projectFileClickModifier: normalizeBasesTopTabsProjectFileClickModifier(
+				settings?.basesTopTabs?.projectFileClickModifier,
+				DEFAULT_SETTINGS.basesTopTabs.projectFileClickModifier,
 			),
 			rememberLastView: normalizeBoolean(
 				settings?.basesTopTabs?.rememberLastView,
@@ -952,6 +964,22 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					);
 					updateModeSpecificSettings();
 					await saveBasesTopTabsSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.basesTopTabsProjectFileClickModifierName)
+			.setDesc(strings.basesTopTabsProjectFileClickModifierDesc)
+			.addDropdown((dropdown) => dropdown
+				.addOption('primary', strings.basesTopTabsProjectFileClickModifierPrimaryLabel)
+				.addOption('alt', strings.basesTopTabsProjectFileClickModifierAltLabel)
+				.addOption('shift', strings.basesTopTabsProjectFileClickModifierShiftLabel)
+				.setValue(this.plugin.settings.basesTopTabs.projectFileClickModifier)
+				.onChange(async (value) => {
+					this.plugin.settings.basesTopTabs.projectFileClickModifier = normalizeBasesTopTabsProjectFileClickModifier(
+						value,
+						DEFAULT_SETTINGS.basesTopTabs.projectFileClickModifier,
+					);
+					await saveWithoutRefresh();
 				}));
 
 		const sidebarMinWidthSetting = new Setting(containerEl)
@@ -2232,6 +2260,18 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					refreshFeatures: ['projectBase'],
 				});
 			});
+
+		new Setting(containerEl)
+			.setName(strings.projectBaseFileScopeName)
+			.setDesc(strings.projectBaseFileScopeDesc)
+			.addDropdown((dropdown) => dropdown
+				.addOption('inbox', strings.projectBaseFileScopeInboxLabel)
+				.addOption('project', strings.projectBaseFileScopeProjectLabel)
+				.setValue(this.plugin.settings.projectBase.fileScope)
+				.onChange(async (value) => {
+					this.plugin.settings.projectBase.fileScope = normalizeProjectBaseFileScope(value);
+					await this.saveSettingsFor('projectBase');
+				}));
 
 		new Setting(containerEl)
 			.setName(strings.projectBaseTotalPropertiesName)

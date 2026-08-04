@@ -11,6 +11,7 @@ import {
 	normalizeSidebarWidth,
 	orderViews,
 	resizeSidebarWidth,
+	resolveDragScrollDelta,
 	resolveDisplayedViews,
 } from './bases-top-tabs-layout';
 import {
@@ -61,6 +62,7 @@ describe('Bases top tabs layout', () => {
 	});
 
 	it('clamps dragged sidebar widths for both sides', () => {
+		assert.equal(BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH, 80);
 		assert.equal(resizeSidebarWidth(200, 40, false), 240);
 		assert.equal(resizeSidebarWidth(200, 40, true), 160);
 		assert.equal(resizeSidebarWidth(200, -200, false), BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH);
@@ -73,6 +75,15 @@ describe('Bases top tabs layout', () => {
 		assert.equal(normalizeSidebarWidth(80, 140), 140);
 		assert.equal(normalizeSidebarWidth(500), BASES_TABS_SIDEBAR_MAX_WIDTH);
 		assert.equal(normalizeSidebarWidth('invalid'), null);
+	});
+
+	it('calculates drag scrolling at each scrollable edge', () => {
+		assert.ok(resolveDragScrollDelta('vertical', 8, 0, 300, 120, 300, 1000) < 0);
+		assert.equal(resolveDragScrollDelta('vertical', 8, 0, 300, 0, 300, 1000), 0);
+		assert.ok(resolveDragScrollDelta('vertical', 292, 0, 300, 120, 300, 1000) > 0);
+		assert.equal(resolveDragScrollDelta('vertical', 292, 0, 300, 700, 300, 1000), 0);
+		assert.ok(resolveDragScrollDelta('horizontal', 292, 0, 300, 120, 300, 1000) > 0);
+		assert.equal(resolveDragScrollDelta('horizontal', 150, 0, 300, 120, 300, 1000), 0);
 	});
 });
 

@@ -1,4 +1,5 @@
 import {BasesGroupFoldFileState, BasesGroupFoldViewState} from '../../settings';
+import {getGroupKey, matchesGroupKey} from './bases-group-fold-key-utils';
 import {BasesGroupFoldPluginContext} from './types';
 
 export class BasesGroupFoldStateStore {
@@ -50,7 +51,9 @@ export class BasesGroupFoldStateStore {
 		}
 
 		const validKeySet = new Set(validGroupKeys);
-		const nextCollapsedGroupKeys = currentViewState.collapsedGroupKeys.filter((groupKey) => validKeySet.has(groupKey));
+		const nextCollapsedGroupKeys = currentViewState.collapsedGroupKeys.filter((groupKey) =>
+			[...validKeySet].some((validGroupKey) => matchesGroupKey(groupKey, validGroupKey)),
+		);
 		if (nextCollapsedGroupKeys.length === currentViewState.collapsedGroupKeys.length) {
 			return;
 		}
@@ -62,14 +65,19 @@ export class BasesGroupFoldStateStore {
 
 	async setGroupCollapsed(filePath: string, viewStateKey: string, groupKey: string, collapsed: boolean): Promise<void> {
 		const currentViewState = this.getViewState(filePath, viewStateKey);
-		const isCollapsed = currentViewState.collapsedGroupKeys.includes(groupKey);
+		const normalizedGroupKey = getGroupKey(groupKey);
+		const isCollapsed = currentViewState.collapsedGroupKeys.some((storedKey) =>
+			matchesGroupKey(storedKey, normalizedGroupKey),
+		);
 		if (isCollapsed === collapsed) {
 			return;
 		}
 
-		const nextCollapsedGroupKeys = collapsed
-			? [...currentViewState.collapsedGroupKeys, groupKey]
-			: currentViewState.collapsedGroupKeys.filter((entry) => entry !== groupKey);
+		const nextCollapsedGroupKeys = currentViewState.collapsedGroupKeys
+			.filter((entry) => !matchesGroupKey(entry, normalizedGroupKey));
+		if (collapsed) {
+			nextCollapsedGroupKeys.push(normalizedGroupKey);
+		}
 
 		await this.updateViewState(filePath, viewStateKey, {
 			collapsedGroupKeys: nextCollapsedGroupKeys,

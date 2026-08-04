@@ -6,7 +6,12 @@ import {
 	normalizeProjectBasePropertyList,
 	normalizeProjectBaseSettings,
 } from './project-base-settings';
-import {buildProjectBaseConfig, buildProjectBaseViews, ProjectBaseProjectLike} from './project-base-utils';
+import {
+	buildProjectBaseConfig,
+	buildProjectBaseViewTargets,
+	buildProjectBaseViews,
+	ProjectBaseProjectLike,
+} from './project-base-utils';
 
 const projects: ProjectBaseProjectLike[] = [
 	{folderPath: '1_project/Beta', name: 'Beta'},
@@ -29,18 +34,22 @@ describe('project base utilities', () => {
 	it('normalizes the root Base path and falls back to defaults', () => {
 		const settings = normalizeProjectBaseSettings({
 			baseFilePath: '/obpm.base',
+			fileScope: 'project',
 			projectViewProperties: '',
 			totalViewProperties: 'file.name, file.mtime',
 		});
 
 		assert.equal(settings.baseFilePath, 'obpm.base');
 		assert.equal(settings.enabled, false);
+		assert.equal(settings.fileScope, 'project');
 		assert.deepEqual(settings.projectViewProperties, DEFAULT_PROJECT_BASE_PROPERTIES);
 		assert.deepEqual(settings.totalViewProperties, ['file.name', 'file.mtime']);
+		assert.equal(normalizeProjectBaseSettings({fileScope: 'unsupported'}).fileScope, 'inbox');
 	});
 
 	it('builds the total view grouped by project inbox folders', () => {
 		const views = buildProjectBaseViews({
+			projectFileScope: 'inbox',
 			projectInboxFolderPath: 'inbox',
 			projectViewProperties: ['file.name'],
 			projects,
@@ -70,8 +79,53 @@ describe('project base utilities', () => {
 		});
 	});
 
+	it('shows whole project folders without duplicating nested project files', () => {
+		const nestedProjects = [
+			{folderPath: '1_project/Parent', name: 'Parent'},
+			{folderPath: '1_project/Parent/Child', name: 'Child'},
+		];
+		const views = buildProjectBaseViews({
+			projectFileScope: 'project',
+			projectInboxFolderPath: 'inbox',
+			projectViewProperties: ['file.name'],
+			projects: nestedProjects,
+			totalViewProperties: ['file.name'],
+		});
+
+		assert.deepEqual(views.find((view) => view.name === 'Parent')?.filters, {
+			and: [
+				'file.ext == "md"',
+				'file.inFolder("1_project/Parent")',
+				{not: ['file.inFolder("1_project/Parent/Child")']},
+			],
+		});
+		assert.deepEqual(views.find((view) => view.name === 'Child')?.filters, {
+			and: ['file.ext == "md"', 'file.inFolder("1_project/Parent/Child")'],
+		});
+
+		const config = buildProjectBaseConfig(undefined, {
+			projectFileScope: 'project',
+			projectInboxFolderPath: 'inbox',
+			projectViewProperties: ['file.name'],
+			projects: nestedProjects,
+			totalViewProperties: ['file.name'],
+		});
+		const formula = (config.formulas as Record<string, unknown>).obpm_project_name as string;
+		assert.ok(formula.indexOf('"Child"') < formula.indexOf('"Parent"'));
+	});
+
+	it('maps generated project view names back to their project data', () => {
+		const targets = buildProjectBaseViewTargets(projects, 'inbox');
+
+		assert.deepEqual(targets.map((target) => [target.viewName, target.project.folderPath]), [
+			['Alpha', '1_project/Alpha'],
+			['Beta', '1_project/Beta'],
+		]);
+	});
+
 	it('creates, removes, and renames project views from the project list', () => {
 		const options = {
+			projectFileScope: 'inbox' as const,
 			projectInboxFolderPath: 'inbox',
 			projectViewProperties: ['file.name'],
 			totalViewProperties: ['file.name'],
@@ -102,6 +156,7 @@ describe('project base utilities', () => {
 			properties: {'file.name': {displayName: '名称'}},
 			summaries: {custom: 'summary'},
 		}, {
+			projectFileScope: 'inbox',
 			projectInboxFolderPath: 'inbox',
 			projectViewProperties: ['file.name'],
 			projects: duplicateProjects,

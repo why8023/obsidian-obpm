@@ -429,6 +429,41 @@
 	white-space: nowrap;
 }
 
+.obpm-bases-project-file-scope-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	flex: 0 0 auto;
+	padding: 2px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.obpm-bases-project-file-scope-toggle[hidden] {
+	display: none;
+}
+
+.obpm-bases-project-file-scope-toggle:hover,
+.obpm-bases-project-file-scope-toggle:focus-visible {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.obpm-bases-project-file-scope-toggle:disabled {
+	opacity: 0.7;
+	cursor: wait;
+}
+
+.obpm-bases-project-file-scope-icon {
+	display: inline-flex;
+	align-items: center;
+}
+
 .obpm-bases-tabs-bar.mod-inside-toolbar .obpm-bases-tab {
 	padding: 2px 8px;
 }

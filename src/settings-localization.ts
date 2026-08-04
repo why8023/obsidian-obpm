@@ -43,6 +43,11 @@ export interface SettingsLocalization {
 	basesTopTabsPlacementSidebarLeftLabel: string;
 	basesTopTabsPlacementSidebarRightLabel: string;
 	basesTopTabsPlacementName: string;
+	basesTopTabsProjectFileClickModifierAltLabel: string;
+	basesTopTabsProjectFileClickModifierDesc: string;
+	basesTopTabsProjectFileClickModifierName: string;
+	basesTopTabsProjectFileClickModifierPrimaryLabel: string;
+	basesTopTabsProjectFileClickModifierShiftLabel: string;
 	basesTopTabsRememberLastViewDesc: string;
 	basesTopTabsRememberLastViewName: string;
 	basesTopTabsScrollableDesc: string;
@@ -293,6 +298,10 @@ export interface SettingsLocalization {
 	projectBaseFilePathName: string;
 	projectBaseFilePathDesc: string;
 	projectBaseFilePathPlaceholder: string;
+	projectBaseFileScopeName: string;
+	projectBaseFileScopeDesc: string;
+	projectBaseFileScopeInboxLabel: string;
+	projectBaseFileScopeProjectLabel: string;
 	projectBaseTotalPropertiesName: string;
 	projectBaseTotalPropertiesDesc: string;
 	projectBaseProjectPropertiesName: string;
@@ -378,6 +387,11 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsPlacementSidebarLeftLabel: 'Left sidebar',
 	basesTopTabsPlacementSidebarRightLabel: 'Right sidebar',
 	basesTopTabsPlacementName: 'Placement',
+	basesTopTabsProjectFileClickModifierAltLabel: 'Alt + click',
+	basesTopTabsProjectFileClickModifierDesc: 'Use the selected modifier plus a left click on a project view to open its project file in a new tab. Total and unmapped views do nothing.',
+	basesTopTabsProjectFileClickModifierName: 'Project file click shortcut',
+	basesTopTabsProjectFileClickModifierPrimaryLabel: 'Ctrl/Cmd + click',
+	basesTopTabsProjectFileClickModifierShiftLabel: 'Shift + click',
 	basesTopTabsRememberLastViewDesc: 'Reopen each .base file in the last view you selected there.',
 	basesTopTabsRememberLastViewName: 'Remember last view per Base',
 	basesTopTabsScrollableDesc: 'Allow scrolling in top layouts instead of wrapping. Sidebar layouts always scroll vertically.',
@@ -626,12 +640,16 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectFolderCreateProjectParentFolderPathDesc: 'Create new project folders under this vault path. Leave empty to use the vault root. Missing folders are created automatically.',
 	projectFolderCreateProjectParentFolderPathPlaceholder: '1_project',
 	projectBaseHeading: 'Project view',
-	projectBaseDesc: 'Maintain a Base summary of Markdown files in each project child folder, with one total view and one view per project.',
+	projectBaseDesc: 'Maintain a Base summary of Markdown files in each project child folder or the whole project folder, with one total view and one view per project.',
 	projectBaseEnableName: 'Enable project view',
 	projectBaseEnableDesc: 'Create or update the configured Base file when projects, project files, or project metadata change.',
 	projectBaseFilePathName: 'Project view Base path',
 	projectBaseFilePathDesc: 'Use a vault-relative .base path. The default /obpm.base points to the vault root.',
 	projectBaseFilePathPlaceholder: '/obpm.base',
+	projectBaseFileScopeName: 'Project file scope',
+	projectBaseFileScopeDesc: 'Choose the configured project child folder or the whole project folder. Nested recognized project folders are excluded from their parent view.',
+	projectBaseFileScopeInboxLabel: 'Project child folder',
+	projectBaseFileScopeProjectLabel: 'Whole project folder',
 	projectBaseTotalPropertiesName: 'Total view properties',
 	projectBaseTotalPropertiesDesc: 'Properties shown by 总视图. Enter one property per line or separate properties with commas.',
 	projectBaseProjectPropertiesName: 'Project view properties',
@@ -717,6 +735,11 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsPlacementSidebarLeftLabel: '左侧栏',
 	basesTopTabsPlacementSidebarRightLabel: '右侧栏',
 	basesTopTabsPlacementName: '位置',
+	basesTopTabsProjectFileClickModifierAltLabel: 'Alt + 点击',
+	basesTopTabsProjectFileClickModifierDesc: '在项目视图上使用所选快捷键加鼠标左键，可在新标签页打开对应项目文件；总视图和无法匹配的视图不会执行操作。',
+	basesTopTabsProjectFileClickModifierName: '项目文件打开快捷键',
+	basesTopTabsProjectFileClickModifierPrimaryLabel: 'Ctrl/Cmd + 点击',
+	basesTopTabsProjectFileClickModifierShiftLabel: 'Shift + 点击',
 	basesTopTabsRememberLastViewDesc: '为每个 .base 文件记住上次打开的视图，并在下次打开时自动恢复。',
 	basesTopTabsRememberLastViewName: '记住每个 Base 的上次视图',
 	basesTopTabsScrollableDesc: '顶部布局 Tabs 过多时允许滚动，而不是自动换行；侧边布局始终纵向滚动。',
@@ -965,12 +988,16 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectFolderCreateProjectParentFolderPathDesc: '新项目文件夹会创建在这个库内路径下。留空则使用库根目录；目录不存在时会自动创建。',
 	projectFolderCreateProjectParentFolderPathPlaceholder: '1_project',
 	projectBaseHeading: '项目视图',
-	projectBaseDesc: '维护一个汇总各项目子文件夹中 Markdown 文件的 Base，并生成一个总视图和每个项目的独立视图。',
+	projectBaseDesc: '维护一个汇总各项目子文件夹或整个项目目录中 Markdown 文件的 Base，并生成一个总视图和每个项目的独立视图。',
 	projectBaseEnableName: '启用项目视图',
 	projectBaseEnableDesc: '当项目、项目文件或项目属性变化时，自动创建或更新配置的 Base 文件。',
 	projectBaseFilePathName: '项目视图 Base 路径',
 	projectBaseFilePathDesc: '使用库内相对的 .base 路径。默认值 /obpm.base 表示库根目录下的文件。',
 	projectBaseFilePathPlaceholder: '/obpm.base',
+	projectBaseFileScopeName: '项目文件范围',
+	projectBaseFileScopeDesc: '选择只展示配置的项目子文件夹，还是展示整个项目目录。已识别的嵌套项目目录不会重复计入父项目。',
+	projectBaseFileScopeInboxLabel: '项目子文件夹',
+	projectBaseFileScopeProjectLabel: '整个项目目录',
 	projectBaseTotalPropertiesName: '总视图属性',
 	projectBaseTotalPropertiesDesc: '设置“总视图”展示的属性；每行一个，也可以使用逗号分隔。',
 	projectBaseProjectPropertiesName: '项目视图属性',

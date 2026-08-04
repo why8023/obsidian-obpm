@@ -1,4 +1,4 @@
-import {Menu, Notice, WorkspaceLeaf, debounce, setIcon} from 'obsidian';
+import {Menu, Notice, TFile, WorkspaceLeaf, debounce, setIcon} from 'obsidian';
 import {BaseConfigAdapter} from './base-config-adapter';
 import {BaseDomAdapter} from './base-dom-adapter';
 import {
@@ -8,10 +8,17 @@ import {
 import {BasesTopTabsStateStore} from './bases-top-tabs-state-store';
 import {getBasesTopTabsLocalization} from './bases-top-tabs-localization';
 import {BaseViewSwitcherAdapter} from './base-view-switcher-adapter';
+import {normalizeProjectInboxFolderPath} from '../configured-folder-note/configured-folder-note-settings';
+import {normalizeConfiguredBaseFilePath} from '../configured-folder-note/configured-folder-note-utils';
+import {buildProjectBaseViewTargets} from '../project-base/project-base-utils';
+import {normalizeProjectBaseSettings} from '../project-base/project-base-settings';
+import type {ProjectBaseFileScope} from '../project-base/project-base-settings';
+import {getVaultProjectCandidates} from '../project-routing/project-resolver';
 import {
 	canReorderViews,
 	BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH,
 	BASES_TABS_SIDEBAR_MAX_WIDTH,
+	DragScrollAxis,
 	DropPosition,
 	moveViewKey,
 	orderViews,
@@ -20,8 +27,12 @@ import {
 	resizeSidebarWidth,
 	resolveDisplayedViews,
 	resolveFallbackViewName,
+	resolveDragScrollDelta,
 } from './bases-top-tabs-layout';
-import {isSidebarPlacement} from './bases-top-tabs-settings';
+import {
+	isSidebarPlacement,
+	matchesProjectFileClickModifier,
+} from './bases-top-tabs-settings';
 import {BasesTopTabsPluginContext, ParsedBaseFile} from './types';
 import type {BasesTopTabsPlacement} from '../../settings';
 
@@ -39,12 +50,18 @@ export class BasesTabsController {
 	private dragSourceKey: string | null = null;
 	private dragTargetKey: string | null = null;
 	private dragTargetPosition: DropPosition | null = null;
+	private dragScrollAxis: DragScrollAxis | null = null;
+	private dragScrollClientX = 0;
+	private dragScrollClientY = 0;
+	private dragScrollFrameId: number | null = null;
 	private lastFilePath: string | null = null;
 	private lastStructureSignature = '';
 	private readonly localization = getBasesTopTabsLocalization();
 	private readonly moreButtonEl: HTMLButtonElement;
 	private readonly observers: MutationObserver[] = [];
 	private pendingRestoreFilePath: string | null = null;
+	private readonly projectFileScopeLabelEl: HTMLSpanElement;
+	private readonly projectFileScopeToggleEl: HTMLButtonElement;
 	private refreshToken = 0;
 	private readonly refreshView = debounce((reason: string) => {
 		void this.refresh(reason);
@@ -79,6 +96,9 @@ export class BasesTabsController {
 		this.tabsListEl = document.createElement('div');
 		this.tabsListEl.className = 'obpm-bases-tabs-list';
 		this.tabsListEl.setAttribute('role', 'tablist');
+		this.tabsListEl.addEventListener('dragover', (event) => {
+			this.handleTabListDragOver(event);
+		});
 		this.tabsListEl.addEventListener('scroll', () => {
 			this.updateScrollHints();
 		}, {passive: true});
@@ -98,6 +118,21 @@ export class BasesTabsController {
 
 		this.countEl = document.createElement('div');
 		this.countEl.className = 'obpm-bases-tabs-count';
+
+		this.projectFileScopeToggleEl = document.createElement('button');
+		this.projectFileScopeToggleEl.type = 'button';
+		this.projectFileScopeToggleEl.className = 'obpm-bases-project-file-scope-toggle';
+		this.projectFileScopeToggleEl.hidden = true;
+		this.projectFileScopeToggleEl.addEventListener('click', () => {
+			void this.toggleProjectFileScope();
+		});
+		const projectFileScopeIconEl = document.createElement('span');
+		projectFileScopeIconEl.className = 'obpm-bases-project-file-scope-icon';
+		projectFileScopeIconEl.setAttribute('aria-hidden', 'true');
+		setIcon(projectFileScopeIconEl, 'filter');
+		this.projectFileScopeLabelEl = document.createElement('span');
+		this.projectFileScopeLabelEl.className = 'obpm-bases-project-file-scope-label';
+		this.projectFileScopeToggleEl.append(projectFileScopeIconEl, this.projectFileScopeLabelEl);
 
 		this.sidebarScrollHintEl = document.createElement('button');
 		this.sidebarScrollHintEl.type = 'button';
@@ -174,6 +209,7 @@ export class BasesTabsController {
 
 		this.disposed = true;
 		this.refreshView.cancel();
+		this.stopDragAutoScroll();
 		for (const observer of this.observers) {
 			observer.disconnect();
 		}
@@ -182,6 +218,7 @@ export class BasesTabsController {
 		this.sidebarScrollResizeObserver?.disconnect();
 		this.buttonsByKey.clear();
 		this.clearSidebarResize();
+		this.domAdapter.unmountBaseToolbarControl(this.projectFileScopeToggleEl);
 		this.domAdapter.unmountBar(this.barEl);
 	}
 
@@ -239,6 +276,7 @@ export class BasesTabsController {
 	}
 
 	private clearDragState() {
+		this.stopDragAutoScroll();
 		this.dragSourceKey = null;
 		this.dragTargetKey = null;
 		this.dragTargetPosition = null;
@@ -326,7 +364,16 @@ export class BasesTabsController {
 		this.requestRefresh('duplicate-view');
 	}
 
-	private async handleTabClick(view: OrderedTabView) {
+	private async handleTabClick(view: OrderedTabView, event?: MouseEvent) {
+		if (event && matchesProjectFileClickModifier(event, this.plugin.settings.basesTopTabs.projectFileClickModifier)) {
+			event.preventDefault();
+			event.stopPropagation();
+			if (!this.busy) {
+				await this.openProjectFileForView(view);
+			}
+			return;
+		}
+
 		const leafState = this.viewSwitcherAdapter.getLeafState(this.leaf);
 		if (this.busy || !leafState || leafState.currentViewName === view.name) {
 			return;
@@ -379,8 +426,49 @@ export class BasesTabsController {
 		this.clearDragState();
 	}
 
+	private handleTabListDragOver(event: DragEvent) {
+		if (!this.dragSourceKey || this.busy || !this.barEl.classList.contains('is-scrollable')) {
+			this.stopDragAutoScroll();
+			return;
+		}
+
+		event.preventDefault();
+		const axis = this.getEffectiveOrientation();
+		const rect = this.tabsListEl.getBoundingClientRect();
+		const pointerPosition = axis === 'vertical' ? event.clientY : event.clientX;
+		const scrollOffset = axis === 'vertical' ? this.tabsListEl.scrollTop : this.tabsListEl.scrollLeft;
+		const viewportSize = axis === 'vertical' ? this.tabsListEl.clientHeight : this.tabsListEl.clientWidth;
+		const scrollSize = axis === 'vertical' ? this.tabsListEl.scrollHeight : this.tabsListEl.scrollWidth;
+		const scrollDelta = resolveDragScrollDelta(
+			axis,
+			pointerPosition,
+			axis === 'vertical' ? rect.top : rect.left,
+			axis === 'vertical' ? rect.bottom : rect.right,
+			scrollOffset,
+			viewportSize,
+			scrollSize,
+		);
+
+		if (scrollDelta === 0) {
+			this.stopDragAutoScroll();
+			return;
+		}
+
+		this.dragScrollAxis = axis;
+		this.dragScrollClientX = event.clientX;
+		this.dragScrollClientY = event.clientY;
+		this.startDragAutoScroll();
+	}
+
 	private handleTabDragOver(event: DragEvent, targetView: OrderedTabView, buttonEl: HTMLButtonElement) {
-		if (!this.dragSourceKey || this.dragSourceKey === targetView.key || this.busy) {
+		if (!this.dragSourceKey || this.busy) {
+			return;
+		}
+
+		if (this.dragSourceKey === targetView.key) {
+			this.dragTargetKey = null;
+			this.dragTargetPosition = null;
+			this.renderDropState();
 			return;
 		}
 
@@ -394,7 +482,12 @@ export class BasesTabsController {
 		}
 
 		event.preventDefault();
-		const dropPosition = resolveDropPosition(event, buttonEl, this.getEffectiveOrientation());
+		const dropPosition = resolveDropPosition(
+			event.clientX,
+			event.clientY,
+			buttonEl,
+			this.getEffectiveOrientation(),
+		);
 		this.dragTargetKey = targetView.key;
 		this.dragTargetPosition = dropPosition;
 		this.renderDropState();
@@ -407,6 +500,7 @@ export class BasesTabsController {
 		}
 
 		this.dragSourceKey = sourceView.key;
+		this.stopDragAutoScroll();
 		this.barEl.classList.add('is-dragging');
 		event.dataTransfer?.setData('text/plain', sourceView.key);
 		event.dataTransfer?.setDragImage(event.currentTarget as HTMLElement, 12, 12);
@@ -414,6 +508,91 @@ export class BasesTabsController {
 			event.dataTransfer.effectAllowed = 'move';
 		}
 
+		this.renderDropState();
+	}
+
+	private startDragAutoScroll() {
+		if (this.dragScrollFrameId !== null) {
+			return;
+		}
+
+		const scroll = () => {
+			this.dragScrollFrameId = null;
+			if (!this.dragSourceKey || !this.dragScrollAxis || this.disposed) {
+				return;
+			}
+
+			const axis = this.dragScrollAxis;
+			const rect = this.tabsListEl.getBoundingClientRect();
+			const pointerPosition = axis === 'vertical' ? this.dragScrollClientY : this.dragScrollClientX;
+			const scrollOffset = axis === 'vertical' ? this.tabsListEl.scrollTop : this.tabsListEl.scrollLeft;
+			const viewportSize = axis === 'vertical' ? this.tabsListEl.clientHeight : this.tabsListEl.clientWidth;
+			const scrollSize = axis === 'vertical' ? this.tabsListEl.scrollHeight : this.tabsListEl.scrollWidth;
+			const scrollDelta = resolveDragScrollDelta(
+				axis,
+				pointerPosition,
+				axis === 'vertical' ? rect.top : rect.left,
+				axis === 'vertical' ? rect.bottom : rect.right,
+				scrollOffset,
+				viewportSize,
+				scrollSize,
+			);
+
+			if (scrollDelta === 0) {
+				this.stopDragAutoScroll();
+				return;
+			}
+
+			if (axis === 'vertical') {
+				this.tabsListEl.scrollBy({top: scrollDelta, behavior: 'auto'});
+			} else {
+				this.tabsListEl.scrollBy({left: scrollDelta, behavior: 'auto'});
+			}
+
+			this.updateScrollHints();
+			this.refreshDragTargetFromPoint();
+			this.dragScrollFrameId = window.requestAnimationFrame(scroll);
+		};
+
+		this.dragScrollFrameId = window.requestAnimationFrame(scroll);
+	}
+
+	private stopDragAutoScroll() {
+		if (this.dragScrollFrameId !== null) {
+			window.cancelAnimationFrame(this.dragScrollFrameId);
+			this.dragScrollFrameId = null;
+		}
+
+		this.dragScrollAxis = null;
+	}
+
+	private refreshDragTargetFromPoint() {
+		const targetEl = document.elementFromPoint(this.dragScrollClientX, this.dragScrollClientY);
+		const buttonEl = targetEl?.closest<HTMLButtonElement>('.obpm-bases-tab');
+		if (!buttonEl || !this.tabsListEl.contains(buttonEl)) {
+			return;
+		}
+
+		const targetKey = buttonEl.dataset.viewKey;
+		const targetView = targetKey ? this.findOrderedViewByKey(targetKey) : null;
+		if (!targetView || targetView.key === this.dragSourceKey) {
+			return;
+		}
+
+		if (!this.canReorderWithTarget(targetView)) {
+			this.dragTargetKey = null;
+			this.dragTargetPosition = null;
+			this.renderDropState();
+			return;
+		}
+
+		this.dragTargetKey = targetView.key;
+		this.dragTargetPosition = resolveDropPosition(
+			this.dragScrollClientX,
+			this.dragScrollClientY,
+			buttonEl,
+			this.getEffectiveOrientation(),
+		);
 		this.renderDropState();
 	}
 
@@ -488,8 +667,8 @@ export class BasesTabsController {
 			buttonEl.setAttribute('data-view-key', view.key);
 			buttonEl.setAttribute('role', 'tab');
 			buttonEl.title = view.name;
-			buttonEl.addEventListener('click', () => {
-				void this.handleTabClick(view);
+			buttonEl.addEventListener('click', (event) => {
+				void this.handleTabClick(view, event);
 			});
 			buttonEl.addEventListener('contextmenu', (event) => {
 				this.handleTabContextMenu(event, view);
@@ -613,6 +792,7 @@ export class BasesTabsController {
 		this.renderMoreButton(hiddenViews);
 		this.applyBarState(parsedBaseFile.views.length, activeViewKey, mountContext.actualPlacement);
 		this.domAdapter.mountBar(this.barEl, mountContext);
+		this.renderProjectFileScopeControl(parsedBaseFile);
 		if (isSidebarPlacement(mountContext.actualPlacement)) {
 			mountContext.hostEl.style.setProperty(
 				'--obpm-bases-tabs-sidebar-min-width',
@@ -648,7 +828,58 @@ export class BasesTabsController {
 		this.barEl.classList.remove('has-scroll-hint', 'has-scroll-top-hint');
 		this.tabsViewportEl.classList.remove('has-scroll-left', 'has-scroll-right');
 		this.clearSidebarResize();
+		this.domAdapter.unmountBaseToolbarControl(this.projectFileScopeToggleEl);
 		this.domAdapter.unmountBar(this.barEl);
+	}
+
+	private async toggleProjectFileScope() {
+		const parsedBaseFile = this.currentParsedBaseFile;
+		if (this.busy || !parsedBaseFile || !this.isConfiguredProjectBase(parsedBaseFile)) {
+			return;
+		}
+
+		const currentScope = normalizeProjectBaseSettings(this.plugin.settings.projectBase).fileScope;
+		const nextScope: ProjectBaseFileScope = currentScope === 'project' ? 'inbox' : 'project';
+		this.projectFileScopeToggleEl.disabled = true;
+		this.projectFileScopeToggleEl.setAttribute('aria-busy', 'true');
+		this.plugin.settings.projectBase.fileScope = nextScope;
+		try {
+			await this.plugin.saveSettings({refreshFeatures: ['projectBase']});
+			this.configAdapter.forgetFile(parsedBaseFile.filePath);
+			this.requestRefresh('project-file-scope-toggle');
+		} catch (error) {
+			this.plugin.settings.projectBase.fileScope = currentScope;
+			this.renderProjectFileScopeControl(parsedBaseFile);
+			console.error('[OBPM:bases-top-tabs] Failed to update the project file scope.', {
+				error,
+				filePath: parsedBaseFile.filePath,
+			});
+			new Notice(this.localization.projectFileScopeUpdateErrorNotice);
+		} finally {
+			this.projectFileScopeToggleEl.disabled = false;
+			this.projectFileScopeToggleEl.removeAttribute('aria-busy');
+		}
+	}
+
+	private renderProjectFileScopeControl(parsedBaseFile: ParsedBaseFile): boolean {
+		if (!this.isConfiguredProjectBase(parsedBaseFile)) {
+			this.domAdapter.unmountBaseToolbarControl(this.projectFileScopeToggleEl);
+			return false;
+		}
+
+		const scope = normalizeProjectBaseSettings(this.plugin.settings.projectBase).fileScope;
+		this.projectFileScopeLabelEl.textContent = this.localization.projectFileScopeLabel(scope);
+		const toggleLabel = this.localization.projectFileScopeToggleLabel(scope);
+		this.projectFileScopeToggleEl.setAttribute('aria-label', toggleLabel);
+		this.projectFileScopeToggleEl.setAttribute('aria-pressed', String(scope === 'project'));
+		this.projectFileScopeToggleEl.hidden = false;
+		return this.domAdapter.mountBaseToolbarControl(this.projectFileScopeToggleEl, this.leaf);
+	}
+
+	private isConfiguredProjectBase(parsedBaseFile: ParsedBaseFile): boolean {
+		const projectBaseSettings = normalizeProjectBaseSettings(this.plugin.settings.projectBase);
+		return projectBaseSettings.enabled
+			&& parsedBaseFile.filePath === normalizeConfiguredBaseFilePath(projectBaseSettings.baseFilePath);
 	}
 
 	private async renameView(view: OrderedTabView) {
@@ -731,6 +962,48 @@ export class BasesTabsController {
 		this.requestRefresh('reorder');
 	}
 
+	private async openProjectFileForView(view: OrderedTabView) {
+		const projectFile = this.resolveProjectFileForView(view.name);
+		if (!projectFile) {
+			return;
+		}
+
+		try {
+			const leaf = this.plugin.app.workspace.getLeaf('tab');
+			await leaf.openFile(projectFile);
+		} catch (error) {
+			console.error('[OBPM:bases-top-tabs] Failed to open the project file.', {
+				error,
+				filePath: projectFile.path,
+				viewName: view.name,
+			});
+			new Notice(this.localization.openProjectFileErrorNotice);
+		}
+	}
+
+	private resolveProjectFileForView(viewName: string): TFile | null {
+		const parsedBaseFile = this.currentParsedBaseFile;
+		if (!parsedBaseFile) {
+			return null;
+		}
+
+		const projectBaseSettings = normalizeProjectBaseSettings(this.plugin.settings.projectBase);
+		if (parsedBaseFile.filePath !== normalizeConfiguredBaseFilePath(projectBaseSettings.baseFilePath)) {
+			return null;
+		}
+
+		const projects = getVaultProjectCandidates(this.plugin.app, {
+			projectFileRules: this.plugin.settings.projectRouting.projectFileRules,
+			recognizeFilenameMatchesFolderAsProject:
+				this.plugin.settings.projectRouting.recognizeFilenameMatchesFolderAsProject,
+		});
+		const targets = buildProjectBaseViewTargets(
+			projects,
+			normalizeProjectInboxFolderPath(this.plugin.settings.configuredFolderNote.projectInboxFolderPath),
+		);
+		return targets.find((target) => target.viewName === viewName)?.project.file ?? null;
+	}
+
 	private renderDropState() {
 		for (const [viewKey, buttonEl] of this.buttonsByKey) {
 			buttonEl.classList.toggle('is-drag-source', viewKey === this.dragSourceKey);
@@ -784,6 +1057,7 @@ export class BasesTabsController {
 		}
 
 		this.moreButtonEl.disabled = disabled;
+		this.projectFileScopeToggleEl.disabled = disabled;
 	}
 
 	private getEffectiveOrientation(): 'horizontal' | 'vertical' {
@@ -1023,14 +1297,15 @@ function resolveActiveViewKey(parsedBaseFile: ParsedBaseFile, activeViewName: st
 }
 
 function resolveDropPosition(
-	event: DragEvent,
+	clientX: number,
+	clientY: number,
 	buttonEl: HTMLButtonElement,
 	orientation: 'horizontal' | 'vertical',
 ): DropPosition {
 	const rect = buttonEl.getBoundingClientRect();
 	if (orientation === 'vertical') {
-		return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+		return clientY < rect.top + rect.height / 2 ? 'before' : 'after';
 	}
 
-	return event.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
+	return clientX < rect.left + rect.width / 2 ? 'before' : 'after';
 }

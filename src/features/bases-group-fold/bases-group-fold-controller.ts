@@ -1,6 +1,6 @@
 import {WorkspaceLeaf, debounce} from 'obsidian';
 import {BaseViewSwitcherAdapter} from '../bases-top-tabs/base-view-switcher-adapter';
-import {createViewContextKey, getViewStateKey} from './bases-group-fold-key-utils';
+import {createViewContextKey, getGroupKey, getViewStateKey, matchesGroupKey} from './bases-group-fold-key-utils';
 import {getBasesGroupFoldLocalization} from './bases-group-fold-localization';
 import {BasesGroupFoldDomAdapter, DetectedBaseGroup} from './bases-group-fold-dom-adapter';
 import {BasesGroupFoldStateStore} from './bases-group-fold-state-store';
@@ -47,6 +47,10 @@ export class BasesGroupFoldController {
 		this.tableAdapter.cleanup(this.leaf);
 		this.domAdapter.cleanup(this.leaf);
 		this.sessionCollapsedGroups.clear();
+	}
+
+	isDisposed(): boolean {
+		return this.disposed;
 	}
 
 	requestRefresh(reason: string): void {
@@ -119,7 +123,7 @@ export class BasesGroupFoldController {
 		}
 
 		for (const group of detectedGroups) {
-			const collapsed = collapsedGroupKeys.has(group.key);
+			const collapsed = isGroupCollapsed(collapsedGroupKeys, group.key);
 			this.renderGroup(viewContext, group, collapsed);
 		}
 
@@ -134,7 +138,7 @@ export class BasesGroupFoldController {
 	private needsCollapsedStateSync(detectedGroups: DetectedBaseGroup[], collapsedGroupKeys: ReadonlySet<string>): boolean {
 		return detectedGroups.some((group) => {
 			const domCollapsed = group.containerEl.dataset.obpmBasesGroupFoldCollapsed === 'true';
-			const expectedCollapsed = collapsedGroupKeys.has(group.key);
+			const expectedCollapsed = isGroupCollapsed(collapsedGroupKeys, group.key);
 			return domCollapsed !== expectedCollapsed;
 		});
 	}
@@ -151,7 +155,7 @@ export class BasesGroupFoldController {
 		}
 
 		for (const groupKey of [...collapsedGroupKeys]) {
-			if (!validGroupKeys.has(groupKey)) {
+			if (![...validGroupKeys].some((validGroupKey) => matchesGroupKey(groupKey, validGroupKey))) {
 				collapsedGroupKeys.delete(groupKey);
 			}
 		}
@@ -176,11 +180,14 @@ export class BasesGroupFoldController {
 
 	private async toggleGroup(viewContext: BasesGroupFoldViewContext, group: DetectedBaseGroup): Promise<void> {
 		const collapsedGroupKeys = this.getCollapsedGroupKeys(viewContext.filePath, viewContext.viewStateKey);
-		const nextCollapsed = !collapsedGroupKeys.has(group.key);
+		const nextCollapsed = !isGroupCollapsed(collapsedGroupKeys, group.key);
+		for (const existingGroupKey of [...collapsedGroupKeys]) {
+			if (matchesGroupKey(existingGroupKey, group.key)) {
+				collapsedGroupKeys.delete(existingGroupKey);
+			}
+		}
 		if (nextCollapsed) {
-			collapsedGroupKeys.add(group.key);
-		} else {
-			collapsedGroupKeys.delete(group.key);
+			collapsedGroupKeys.add(getGroupKey(group.key));
 		}
 
 		const contextKey = createViewContextKey(viewContext.filePath, viewContext.viewStateKey);
@@ -212,4 +219,8 @@ export class BasesGroupFoldController {
 			viewStateKey: viewContext.viewStateKey,
 		});
 	}
+}
+
+function isGroupCollapsed(collapsedGroupKeys: ReadonlySet<string>, groupKey: string): boolean {
+	return [...collapsedGroupKeys].some((storedKey) => matchesGroupKey(storedKey, groupKey));
 }

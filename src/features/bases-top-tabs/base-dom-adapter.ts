@@ -67,9 +67,27 @@ export class BaseDomAdapter {
 		}
 	}
 
+	mountBaseToolbarControl(controlEl: HTMLElement, leaf: WorkspaceLeaf): boolean {
+		const toolbarEl = leaf.view.containerEl.querySelector<HTMLElement>(BASES_TOOLBAR_SELECTOR);
+		if (!toolbarEl) {
+			controlEl.remove();
+			return false;
+		}
+
+		if (controlEl.parentElement !== toolbarEl) {
+			toolbarEl.append(controlEl);
+		}
+
+		return true;
+	}
+
 	unmountBar(barEl: HTMLElement) {
 		this.clearSideHost(barEl);
 		barEl.remove();
+	}
+
+	unmountBaseToolbarControl(controlEl: HTMLElement) {
+		controlEl.remove();
 	}
 
 	resolveMountContext(

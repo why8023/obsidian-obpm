@@ -113,7 +113,7 @@ export class BasesGroupFoldFeature extends Component {
 		const activeLeaves = new Set(basesLeaves);
 
 		for (const [leaf, controller] of [...this.controllers.entries()]) {
-			if (activeLeaves.has(leaf)) {
+			if (activeLeaves.has(leaf) && !controller.isDisposed()) {
 				controller.requestRefresh('reconcile');
 				continue;
 			}

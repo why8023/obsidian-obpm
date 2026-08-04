@@ -1,4 +1,5 @@
 import {getLanguage} from 'obsidian';
+import type {ProjectBaseFileScope} from '../project-base/project-base-settings';
 
 interface BasesTopTabsLocalization {
 	cancelButtonLabel: string;
@@ -14,6 +15,10 @@ interface BasesTopTabsLocalization {
 	duplicateViewSubmitLabel: string;
 	emptyViewNameNotice: string;
 	moreViewsButtonLabel: (hiddenCount: number) => string;
+	openProjectFileErrorNotice: string;
+	projectFileScopeLabel: (scope: ProjectBaseFileScope) => string;
+	projectFileScopeToggleLabel: (scope: ProjectBaseFileScope) => string;
+	projectFileScopeUpdateErrorNotice: string;
 	pinViewMenuItem: string;
 	renameViewDescription: (viewName: string) => string;
 	renameViewMenuItem: string;
@@ -44,6 +49,12 @@ const ENGLISH_LOCALIZATION: BasesTopTabsLocalization = {
 	duplicateViewSubmitLabel: 'Duplicate',
 	emptyViewNameNotice: 'View name cannot be empty.',
 	moreViewsButtonLabel: (hiddenCount) => hiddenCount > 0 ? `More (${hiddenCount})` : 'More',
+	openProjectFileErrorNotice: 'Failed to open the project file. Check the developer console for details.',
+	projectFileScopeLabel: (scope) => scope === 'project' ? 'Project folder' : 'Project child folder',
+	projectFileScopeToggleLabel: (scope) => scope === 'project'
+		? 'Current scope: whole project folder. Click to show only the project child folder.'
+		: 'Current scope: project child folder. Click to show the whole project folder.',
+	projectFileScopeUpdateErrorNotice: 'Failed to update the project file scope. Check the developer console for details.',
 	pinViewMenuItem: 'Pin tab',
 	renameViewDescription: (viewName) => `Rename the "${viewName}" view.`,
 	renameViewMenuItem: 'Rename view',
@@ -74,6 +85,12 @@ const CHINESE_LOCALIZATION: BasesTopTabsLocalization = {
 	duplicateViewSubmitLabel: '复制',
 	emptyViewNameNotice: '视图名称不能为空。',
 	moreViewsButtonLabel: (hiddenCount) => hiddenCount > 0 ? `更多 (${hiddenCount})` : '更多',
+	openProjectFileErrorNotice: '打开项目文件失败，请打开开发者控制台查看详情。',
+	projectFileScopeLabel: (scope) => scope === 'project' ? '项目目录' : '项目子文件夹',
+	projectFileScopeToggleLabel: (scope) => scope === 'project'
+		? '当前范围：整个项目目录。点击切换为项目子文件夹。'
+		: '当前范围：项目子文件夹。点击切换为整个项目目录。',
+	projectFileScopeUpdateErrorNotice: '更新项目文件范围失败，请打开开发者控制台查看详情。',
 	pinViewMenuItem: '固定 Tab',
 	renameViewDescription: (viewName) => `重命名视图“${viewName}”。`,
 	renameViewMenuItem: '重命名视图',

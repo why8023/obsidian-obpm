@@ -70,6 +70,7 @@ export class ProjectBaseFeature extends Component {
 			this.plugin.settings.configuredFolderNote.projectInboxFolderPath,
 		);
 		const buildOptions = {
+			projectFileScope: settings.fileScope,
 			projectInboxFolderPath,
 			projectViewProperties: settings.projectViewProperties,
 			projects,

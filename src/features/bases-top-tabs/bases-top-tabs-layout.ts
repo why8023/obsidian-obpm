@@ -2,8 +2,12 @@ import type {BasesTopTabsView} from './types';
 
 export type DropPosition = 'after' | 'before';
 export const BASES_TABS_SIDEBAR_MIN_WIDTH = 80;
-export const BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH = 120;
+export const BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH = 80;
 export const BASES_TABS_SIDEBAR_MAX_WIDTH = 360;
+export const BASES_TABS_DRAG_SCROLL_EDGE_SIZE = 48;
+export const BASES_TABS_DRAG_SCROLL_MAX_STEP = 18;
+
+export type DragScrollAxis = 'horizontal' | 'vertical';
 
 export interface OrderedTabView extends BasesTopTabsView {
 	pinned: boolean;
@@ -54,6 +58,47 @@ export function orderViews(views: BasesTopTabsView[], pinnedViewNames: string[])
 
 export function canReorderViews(sourceView: OrderedTabView, targetView: OrderedTabView): boolean {
 	return sourceView.pinned === targetView.pinned;
+}
+
+export function resolveDragScrollDelta(
+	axis: DragScrollAxis,
+	pointerPosition: number,
+	viewportStart: number,
+	viewportEnd: number,
+	scrollOffset: number,
+	viewportSize: number,
+	scrollSize: number,
+): number {
+	if (
+		(axis !== 'horizontal' && axis !== 'vertical')
+		||
+		viewportEnd <= viewportStart
+		|| viewportSize <= 0
+		|| scrollSize <= viewportSize + 1
+	) {
+		return 0;
+	}
+
+	const distanceFromStart = pointerPosition - viewportStart;
+	if (distanceFromStart >= 0 && distanceFromStart < BASES_TABS_DRAG_SCROLL_EDGE_SIZE && scrollOffset > 1) {
+		return -resolveDragScrollStep(distanceFromStart);
+	}
+
+	const distanceFromEnd = viewportEnd - pointerPosition;
+	if (
+		distanceFromEnd >= 0
+		&& distanceFromEnd < BASES_TABS_DRAG_SCROLL_EDGE_SIZE
+		&& scrollOffset + viewportSize < scrollSize - 1
+	) {
+		return resolveDragScrollStep(distanceFromEnd);
+	}
+
+	return 0;
+}
+
+function resolveDragScrollStep(distanceToEdge: number): number {
+	const intensity = 1 - distanceToEdge / BASES_TABS_DRAG_SCROLL_EDGE_SIZE;
+	return Math.max(2, Math.ceil(BASES_TABS_DRAG_SCROLL_MAX_STEP * intensity));
 }
 
 export function resizeSidebarWidth(

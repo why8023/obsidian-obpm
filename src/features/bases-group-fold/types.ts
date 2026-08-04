@@ -24,6 +24,7 @@ export interface BasesTableGroup {
 }
 
 export interface BasesTableData {
+	data?: unknown[];
 	groupedData?: BasesTableGroup[];
 	groupedDataCache?: BasesTableGroup[] | null;
 }
@@ -40,6 +41,10 @@ export interface BasesTableView {
 	scrollEl?: HTMLElement;
 	updateVirtualDisplay?: () => void;
 	__obpmBasesGroupFoldGroupCountMap?: Record<string, number>;
+	__obpmBasesGroupFoldOriginalSourceData?: unknown[];
+	__obpmBasesGroupFoldOriginalSourceDataLength?: number;
 	__obpmBasesGroupFoldOriginalGroupedData?: BasesTableGroup[];
 	__obpmBasesGroupFoldOriginalUpdateVirtualDisplay?: (() => void) | null;
+	__obpmBasesGroupFoldCollapsedGroupKeys?: ReadonlySet<string>;
+	__obpmBasesGroupFoldGroupKeyAliases?: Map<string, string>;
 }
