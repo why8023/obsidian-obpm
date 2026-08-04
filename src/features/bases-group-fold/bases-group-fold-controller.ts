@@ -1,6 +1,12 @@
 import {WorkspaceLeaf, debounce} from 'obsidian';
 import {BaseViewSwitcherAdapter} from '../bases-top-tabs/base-view-switcher-adapter';
-import {createViewContextKey, getGroupKey, getViewStateKey, matchesGroupKey} from './bases-group-fold-key-utils';
+import {
+	createViewContextKey,
+	getGroupFoldAllAction,
+	getGroupKey,
+	getViewStateKey,
+	matchesGroupKey,
+} from './bases-group-fold-key-utils';
 import {getBasesGroupFoldLocalization} from './bases-group-fold-localization';
 import {BasesGroupFoldDomAdapter, DetectedBaseGroup} from './bases-group-fold-dom-adapter';
 import {BasesGroupFoldStateStore} from './bases-group-fold-state-store';
@@ -113,6 +119,7 @@ export class BasesGroupFoldController {
 				return;
 			}
 		}
+		this.renderAllGroupsToggle(viewContext, detectedGroups, collapsedGroupKeys);
 
 		if (this.needsCollapsedStateSync(detectedGroups, collapsedGroupKeys)) {
 			const applied = this.tableAdapter.applyCollapsedState(this.leaf, collapsedGroupKeys);
@@ -216,6 +223,74 @@ export class BasesGroupFoldController {
 			collapsed: nextCollapsed,
 			filePath: viewContext.filePath,
 			groupKey: group.key,
+			viewStateKey: viewContext.viewStateKey,
+		});
+	}
+
+	private renderAllGroupsToggle(
+		viewContext: BasesGroupFoldViewContext,
+		groups: DetectedBaseGroup[],
+		collapsedGroupKeys: ReadonlySet<string>,
+	): void {
+		const action = getGroupFoldAllAction(
+			collapsedGroupKeys,
+			groups.map((group) => group.key),
+		);
+		this.domAdapter.ensureAllGroupsToggle(this.leaf, {
+			action,
+			label: action === 'collapse'
+				? this.localization.collapseAllGroupsLabel
+				: this.localization.expandAllGroupsLabel,
+			onToggle: () => {
+				void this.toggleAllGroups(viewContext);
+			},
+		});
+	}
+
+	private async toggleAllGroups(viewContext: BasesGroupFoldViewContext): Promise<void> {
+		const groups = this.domAdapter.detectGroups(this.leaf);
+		if (groups.length === 0) {
+			this.tableAdapter.cleanup(this.leaf);
+			this.domAdapter.cleanup(this.leaf);
+			return;
+		}
+
+		const collapsedGroupKeys = this.getCollapsedGroupKeys(viewContext.filePath, viewContext.viewStateKey);
+		const action = getGroupFoldAllAction(
+			collapsedGroupKeys,
+			groups.map((group) => group.key),
+		);
+		const nextCollapsedGroupKeys = action === 'collapse'
+			? new Set(groups.map((group) => getGroupKey(group.key)))
+			: new Set<string>();
+		const contextKey = createViewContextKey(viewContext.filePath, viewContext.viewStateKey);
+		if (nextCollapsedGroupKeys.size === 0) {
+			this.sessionCollapsedGroups.delete(contextKey);
+		} else {
+			this.sessionCollapsedGroups.set(contextKey, nextCollapsedGroupKeys);
+		}
+
+		this.renderAllGroupsToggle(viewContext, groups, nextCollapsedGroupKeys);
+		const applied = this.tableAdapter.applyCollapsedState(this.leaf, nextCollapsedGroupKeys);
+		if (applied) {
+			this.requestRefresh('toggle-all');
+		} else {
+			for (const group of groups) {
+				this.renderGroup(viewContext, group, action === 'collapse');
+			}
+		}
+		if (this.plugin.settings.basesGroupFold.rememberState) {
+			await this.stateStore.setCollapsedGroupKeys(
+				viewContext.filePath,
+				viewContext.viewStateKey,
+				nextCollapsedGroupKeys,
+			);
+		}
+
+		this.plugin.debugFeatureLog(FEATURE_ID, this.plugin.settings.basesGroupFold.debugMode, 'Toggled all Bases group fold states.', {
+			action,
+			filePath: viewContext.filePath,
+			groupCount: groups.length,
 			viewStateKey: viewContext.viewStateKey,
 		});
 	}

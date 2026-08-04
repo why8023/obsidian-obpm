@@ -18,6 +18,11 @@ export class BasesGroupFoldStateStore {
 		return [...this.getViewState(filePath, viewStateKey).collapsedGroupKeys];
 	}
 
+	async setCollapsedGroupKeys(filePath: string, viewStateKey: string, groupKeys: Iterable<string>): Promise<void> {
+		const collapsedGroupKeys = [...new Set([...groupKeys].map((groupKey) => getGroupKey(groupKey)))];
+		await this.updateViewState(filePath, viewStateKey, {collapsedGroupKeys});
+	}
+
 	isGroupCollapsed(filePath: string, viewStateKey: string, groupKey: string): boolean {
 		return this.getViewState(filePath, viewStateKey).collapsedGroupKeys.includes(groupKey);
 	}

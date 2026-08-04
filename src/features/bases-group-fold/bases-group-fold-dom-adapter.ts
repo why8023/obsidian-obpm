@@ -12,6 +12,7 @@ const BASES_TABLE_GROUP_SUMMARY_ROW_SELECTOR = '.bases-table-group-summary-row';
 const BASES_TABLE_BODY_SELECTOR = '.bases-tbody';
 const BASES_TABLE_CONTAINER_SELECTOR = '.bases-table-container';
 const BASES_TABLE_SELECTOR = '.bases-table';
+const BASES_TOOLBAR_SELECTOR = '.bases-toolbar';
 const BASES_VIEW_CONTENT_SIGNAL_SELECTOR =
 	'.bases-list-container, .bases-list-group, .bases-list-group-list, .bases-list-item, '
 	+ '.bases-table-container, .bases-table, .bases-tbody, .bases-tr, .bases-table-footer';
@@ -20,6 +21,7 @@ const GROUP_CONTAINER_SELECTOR = '.group-container';
 const GROUP_CONTENT_SELECTOR = '.group-content';
 const GROUP_HEADER_SELECTOR = '.group-header';
 const GROUP_HEADER_TEXT_SELECTOR = '.group-header-text';
+const ALL_GROUPS_TOGGLE_SELECTOR = '.obpm-bases-group-fold-all-toggle';
 const TOGGLE_BUTTON_SELECTOR = '.obpm-bases-group-fold-toggle';
 
 export interface DetectedBaseGroup {
@@ -38,6 +40,12 @@ interface EnsureToggleButtonOptions {
 	onToggle: () => void;
 }
 
+interface EnsureAllGroupsToggleOptions {
+	action: 'collapse' | 'expand';
+	label: string;
+	onToggle: () => void;
+}
+
 export class BasesGroupFoldDomAdapter {
 	private bodyIdSequence = 0;
 	private readonly buttonToggleHandlers = new WeakMap<HTMLButtonElement, {
@@ -47,6 +55,7 @@ export class BasesGroupFoldDomAdapter {
 		pointerdown: (event: Event) => void;
 	}>();
 	private readonly headerToggleHandlers = new WeakMap<HTMLElement, (event: Event) => void>();
+	private readonly allGroupsToggleHandlers = new WeakMap<HTMLButtonElement, (event: Event) => void>();
 
 	constructor(private readonly debugLog: (message: string, details?: unknown) => void) {}
 
@@ -271,6 +280,53 @@ export class BasesGroupFoldDomAdapter {
 		buttonEl.addEventListener('click', buttonHandlers.click);
 	}
 
+	ensureAllGroupsToggle(leaf: WorkspaceLeaf, options: EnsureAllGroupsToggleOptions): void {
+		const rootEl = leaf.view.containerEl;
+		if (!(rootEl instanceof HTMLElement)) {
+			return;
+		}
+
+		const toolbarEl = rootEl.querySelector<HTMLElement>(BASES_TOOLBAR_SELECTOR);
+		const controls = Array.from(rootEl.querySelectorAll(ALL_GROUPS_TOGGLE_SELECTOR))
+			.filter((element): element is HTMLButtonElement => element instanceof HTMLButtonElement);
+		if (!toolbarEl) {
+			for (const controlEl of controls) {
+				this.removeAllGroupsToggle(controlEl);
+			}
+			return;
+		}
+
+		const buttonEl = controls.shift() ?? document.createElement('button');
+		for (const duplicateEl of controls) {
+			this.removeAllGroupsToggle(duplicateEl);
+		}
+
+		buttonEl.type = 'button';
+		buttonEl.className = 'clickable-icon obpm-bases-group-fold-all-toggle';
+		buttonEl.dataset.obpmBasesGroupFoldAllToggle = 'true';
+		if (buttonEl.dataset.action !== options.action) {
+			setIcon(buttonEl, options.action === 'collapse' ? 'chevrons-down' : 'chevrons-up');
+			buttonEl.dataset.action = options.action;
+		}
+		buttonEl.setAttribute('aria-label', options.label);
+		buttonEl.title = options.label;
+		if (buttonEl.parentElement !== toolbarEl) {
+			toolbarEl.append(buttonEl);
+		}
+
+		const previousHandler = this.allGroupsToggleHandlers.get(buttonEl);
+		if (previousHandler) {
+			buttonEl.removeEventListener('click', previousHandler);
+		}
+
+		const handler = (event: Event) => {
+			stopToggleEvent(event);
+			options.onToggle();
+		};
+		this.allGroupsToggleHandlers.set(buttonEl, handler);
+		buttonEl.addEventListener('click', handler);
+	}
+
 	applyCollapsed(group: DetectedBaseGroup, collapsed: boolean): void {
 		group.containerEl.dataset.obpmBasesGroupFoldContainer = 'true';
 		group.containerEl.dataset.obpmBasesGroupFoldCollapsed = collapsed ? 'true' : 'false';
@@ -298,6 +354,12 @@ export class BasesGroupFoldDomAdapter {
 		const rootEl = leaf.view.containerEl;
 		if (!(rootEl instanceof HTMLElement)) {
 			return;
+		}
+
+		for (const buttonEl of Array.from(rootEl.querySelectorAll(ALL_GROUPS_TOGGLE_SELECTOR))) {
+			if (buttonEl instanceof HTMLButtonElement) {
+				this.removeAllGroupsToggle(buttonEl);
+			}
 		}
 
 		for (const buttonEl of Array.from(rootEl.querySelectorAll(TOGGLE_BUTTON_SELECTOR))) {
@@ -385,6 +447,14 @@ export class BasesGroupFoldDomAdapter {
 			: group.headerEl.firstElementChild;
 		group.headerEl.insertBefore(buttonEl, anchorEl);
 		return buttonEl;
+	}
+
+	private removeAllGroupsToggle(buttonEl: HTMLButtonElement): void {
+		const handler = this.allGroupsToggleHandlers.get(buttonEl);
+		if (handler) {
+			buttonEl.removeEventListener('click', handler);
+		}
+		buttonEl.remove();
 	}
 
 	private resolveGroupedTableViewRoot(leaf: WorkspaceLeaf): HTMLElement | null {
@@ -496,7 +566,9 @@ function mutationOnlyTouchesManagedToggle(record: MutationRecord): boolean {
 
 function nodeBelongsToManagedToggle(node: Node): boolean {
 	const element = node instanceof Element ? node : node.parentElement;
-	return element?.closest('[data-obpm-bases-group-fold-toggle="true"]') !== null;
+	return element?.closest(
+		'[data-obpm-bases-group-fold-toggle="true"], [data-obpm-bases-group-fold-all-toggle="true"]',
+	) !== null;
 }
 
 function collectChangedNodes(record: MutationRecord): Node[] {

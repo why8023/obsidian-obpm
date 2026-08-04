@@ -22,6 +22,17 @@ export function matchesGroupKey(storedKey: string, groupKey: string): boolean {
 		|| normalizedStoredKey.endsWith(` ${normalizedGroupKey}`);
 }
 
+export function getGroupFoldAllAction(
+	collapsedGroupKeys: ReadonlySet<string>,
+	groupKeys: readonly string[],
+): 'collapse' | 'expand' {
+	return groupKeys.length > 0 && groupKeys.every((groupKey) =>
+		[...collapsedGroupKeys].some((storedKey) => matchesGroupKey(storedKey, groupKey)),
+	)
+		? 'expand'
+		: 'collapse';
+}
+
 export function getViewStateKey(currentViewName: string | null): string {
 	const normalizedValue = normalizeWhitespace(currentViewName ?? '');
 	return normalizedValue.length > 0 ? normalizedValue : DEFAULT_VIEW_STATE_KEY;

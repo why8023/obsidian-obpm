@@ -514,6 +514,20 @@
 	background: var(--background-modifier-hover);
 }
 
+.obpm-bases-group-fold-all-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: var(--radius-m);
+	color: var(--text-muted);
+}
+
+.obpm-bases-group-fold-all-toggle:hover,
+.obpm-bases-group-fold-all-toggle:focus-visible {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
 .obpm-bases-group-fold-body {
 	min-width: 0;
 }

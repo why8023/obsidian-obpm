@@ -29,7 +29,33 @@ export class BasesGroupFoldTableAdapter {
 		}
 		this.managedTables.set(leaf, table);
 		table.__obpmBasesGroupFoldGroupKeyAliases = this.getGroupKeyAliases(leaf, table);
+		const previousCollapsedGroupKeys = table.__obpmBasesGroupFoldCollapsedGroupKeys;
+		const sourceDataChanged = this.hasSourceDataChanged(table);
+		const previousSourceGroups = table.__obpmBasesGroupFoldOriginalGroupedData;
 		const sourceGroups = this.getSourceGroups(table, collapsedGroupKeys);
+		const sourceShapeChanged = previousSourceGroups !== table.__obpmBasesGroupFoldOriginalGroupedData
+			&& previousCollapsedGroupKeys !== undefined
+			&& !sameGroupShape(
+				table.data.groupedData ?? [],
+				previousSourceGroups,
+				previousCollapsedGroupKeys,
+				table,
+			);
+		const canUpdateInPlace = previousTable === table
+			&& previousCollapsedGroupKeys !== undefined
+			&& !sourceDataChanged
+			&& !sourceShapeChanged
+			&& typeof table.__obpmBasesGroupFoldOriginalUpdateVirtualDisplay === 'function';
+		if (canUpdateInPlace) {
+			// Keep the native group DOM and only refresh virtual rows during a toggle.
+			this.clearExpandedDomLayout(leaf, table, previousCollapsedGroupKeys, collapsedGroupKeys);
+			table.__obpmBasesGroupFoldCollapsedGroupKeys = new Set(collapsedGroupKeys);
+			table.data.groupedDataCache = this.buildCollapsedGroups(table, collapsedGroupKeys);
+			table.updateVirtualDisplay?.();
+			this.syncDomState(leaf, table, collapsedGroupKeys);
+			return true;
+		}
+
 		this.restoreWrappedUpdateVirtualDisplay(table);
 		this.clearCollapsedDomLayout(leaf);
 		table.data.groupedDataCache = cloneGroups(sourceGroups);
@@ -96,7 +122,7 @@ export class BasesGroupFoldTableAdapter {
 	}
 
 	private wrapUpdateVirtualDisplay(table: BasesTableView, collapsedGroupKeys: ReadonlySet<string>): void {
-		table.__obpmBasesGroupFoldCollapsedGroupKeys = collapsedGroupKeys;
+		table.__obpmBasesGroupFoldCollapsedGroupKeys = new Set(collapsedGroupKeys);
 		const originalUpdate = table.__obpmBasesGroupFoldOriginalUpdateVirtualDisplay
 			?? table.updateVirtualDisplay?.bind(table)
 			?? null;
@@ -185,6 +211,12 @@ export class BasesGroupFoldTableAdapter {
 			...group,
 			entries: group.entries.slice(),
 		}));
+	}
+
+	private hasSourceDataChanged(table: BasesTableView): boolean {
+		return table.__obpmBasesGroupFoldOriginalGroupedData !== undefined
+			&& (table.__obpmBasesGroupFoldOriginalSourceData !== table.data?.data
+				|| table.__obpmBasesGroupFoldOriginalSourceDataLength !== table.data?.data?.length);
 	}
 
 	private syncDomState(leaf: WorkspaceLeaf, table: BasesTableView, collapsedGroupKeys: ReadonlySet<string>): void {
@@ -279,6 +311,56 @@ export class BasesGroupFoldTableAdapter {
 			}
 			tableEl.classList.remove('is-obpm-collapsed');
 			delete tableEl.dataset.obpmBasesGroupFoldCollapsed;
+		}
+	}
+
+	private clearExpandedDomLayout(
+		leaf: WorkspaceLeaf,
+		table: BasesTableView,
+		previousCollapsedGroupKeys: ReadonlySet<string>,
+		nextCollapsedGroupKeys: ReadonlySet<string>,
+	): void {
+		const rootEl = this.resolveBasesViewRoot(leaf);
+		if (!rootEl) {
+			return;
+		}
+
+		for (const tableEl of Array.from(rootEl.querySelectorAll<HTMLElement>(BASES_TABLE_SELECTOR))) {
+			const groupValueKey = getDomGroupValueKey(tableEl);
+			if (!isGroupExpanding(previousCollapsedGroupKeys, nextCollapsedGroupKeys, table, groupValueKey)) {
+				continue;
+			}
+
+			const bodyEl = findDirectChild(tableEl, BASES_TABLE_BODY_SELECTOR)
+				?? toHtmlElement(tableEl.querySelector(`:scope > ${BASES_TABLE_BODY_SELECTOR}`));
+			const summaryEl = findDirectChild(tableEl, BASES_TABLE_GROUP_SUMMARY_ROW_SELECTOR)
+				?? toHtmlElement(tableEl.querySelector(`:scope > ${BASES_TABLE_GROUP_SUMMARY_ROW_SELECTOR}`));
+			if (bodyEl) {
+				bodyEl.setCssProps({height: ''});
+				bodyEl.removeAttribute('aria-hidden');
+			}
+			if (summaryEl) {
+				summaryEl.hidden = false;
+				summaryEl.removeAttribute('aria-hidden');
+			}
+			tableEl.classList.remove('is-obpm-collapsed');
+			delete tableEl.dataset.obpmBasesGroupFoldCollapsed;
+		}
+
+		for (const groupEl of Array.from(rootEl.querySelectorAll<HTMLElement>(BASES_LIST_GROUP_SELECTOR))) {
+			const groupValueKey = getDomGroupValueKey(groupEl);
+			if (!isGroupExpanding(previousCollapsedGroupKeys, nextCollapsedGroupKeys, table, groupValueKey)) {
+				continue;
+			}
+
+			const bodyEl = findDirectChild(groupEl, BASES_LIST_GROUP_LIST_SELECTOR)
+				?? toHtmlElement(groupEl.querySelector(`:scope > ${BASES_LIST_GROUP_LIST_SELECTOR}`));
+			if (bodyEl) {
+				bodyEl.setCssProps({height: ''});
+				bodyEl.removeAttribute('aria-hidden');
+			}
+			groupEl.classList.remove('is-obpm-collapsed');
+			delete groupEl.dataset.obpmBasesGroupFoldCollapsed;
 		}
 	}
 
@@ -397,6 +479,24 @@ function isCollapsedGroupForTable(
 	const displayKey = table.__obpmBasesGroupFoldGroupKeyAliases?.get(groupKey);
 	return isCollapsedGroup(collapsedGroupKeys, groupKey)
 		|| (displayKey !== undefined && isCollapsedGroup(collapsedGroupKeys, displayKey));
+}
+
+function isGroupExpanding(
+	previousCollapsedGroupKeys: ReadonlySet<string>,
+	nextCollapsedGroupKeys: ReadonlySet<string>,
+	table: BasesTableView,
+	groupKey: string,
+): boolean {
+	return isCollapsedGroupForTable(previousCollapsedGroupKeys, table, groupKey)
+		&& !isCollapsedGroupForTable(nextCollapsedGroupKeys, table, groupKey);
+}
+
+function getDomGroupValueKey(containerEl: HTMLElement): string {
+	return getGroupKey(
+		toHtmlElement(containerEl.querySelector(BASES_GROUP_VALUE_SELECTOR))?.textContent
+			?? containerEl.querySelector(BASES_GROUP_HEADING_SELECTOR)?.textContent
+			?? '',
+	);
 }
 
 function cloneGroups(groups: BasesTableGroup[]): BasesTableGroup[] {
