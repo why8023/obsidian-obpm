@@ -44,10 +44,15 @@ export interface SettingsLocalization {
 	basesTopTabsPlacementSidebarRightLabel: string;
 	basesTopTabsPlacementName: string;
 	basesTopTabsProjectFileClickModifierAltLabel: string;
+	basesTopTabsProjectFileClickModifierDuplicateNotice: string;
 	basesTopTabsProjectFileClickModifierDesc: string;
 	basesTopTabsProjectFileClickModifierName: string;
 	basesTopTabsProjectFileClickModifierPrimaryLabel: string;
 	basesTopTabsProjectFileClickModifierShiftLabel: string;
+	basesTopTabsProjectFileRevealModifierDesc: string;
+	basesTopTabsProjectFileRevealModifierName: string;
+	basesTopTabsProjectFolderClickModifierDesc: string;
+	basesTopTabsProjectFolderClickModifierName: string;
 	basesTopTabsRememberLastViewDesc: string;
 	basesTopTabsRememberLastViewName: string;
 	basesTopTabsScrollableDesc: string;
@@ -388,10 +393,15 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsPlacementSidebarRightLabel: 'Right sidebar',
 	basesTopTabsPlacementName: 'Placement',
 	basesTopTabsProjectFileClickModifierAltLabel: 'Alt + click',
-	basesTopTabsProjectFileClickModifierDesc: 'Use the selected modifier plus a left click on a project view to open its project file in a new tab. Total and unmapped views do nothing.',
-	basesTopTabsProjectFileClickModifierName: 'Project file click shortcut',
+	basesTopTabsProjectFileClickModifierDuplicateNotice: 'This shortcut is already assigned to another project action.',
+	basesTopTabsProjectFileClickModifierDesc: 'Left-click a project view with this modifier to open its project file in a new tab.',
+	basesTopTabsProjectFileClickModifierName: 'Open project file shortcut',
 	basesTopTabsProjectFileClickModifierPrimaryLabel: 'Ctrl/Cmd + click',
 	basesTopTabsProjectFileClickModifierShiftLabel: 'Shift + click',
+	basesTopTabsProjectFileRevealModifierDesc: 'Left-click a project view with this modifier to reveal its project file in the Obsidian file tree.',
+	basesTopTabsProjectFileRevealModifierName: 'Reveal in file tree shortcut',
+	basesTopTabsProjectFolderClickModifierDesc: 'Left-click a project view with this modifier to open the project file folder in the system file manager.',
+	basesTopTabsProjectFolderClickModifierName: 'Open project folder shortcut',
 	basesTopTabsRememberLastViewDesc: 'Reopen each .base file in the last view you selected there.',
 	basesTopTabsRememberLastViewName: 'Remember last view per Base',
 	basesTopTabsScrollableDesc: 'Allow scrolling in top layouts instead of wrapping. Sidebar layouts always scroll vertically.',
@@ -736,10 +746,15 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsPlacementSidebarRightLabel: '右侧栏',
 	basesTopTabsPlacementName: '位置',
 	basesTopTabsProjectFileClickModifierAltLabel: 'Alt + 点击',
-	basesTopTabsProjectFileClickModifierDesc: '在项目视图上使用所选快捷键加鼠标左键，可在新标签页打开对应项目文件；总视图和无法匹配的视图不会执行操作。',
-	basesTopTabsProjectFileClickModifierName: '项目文件打开快捷键',
+	basesTopTabsProjectFileClickModifierDuplicateNotice: '这个快捷键已分配给其他项目操作，请选择其他快捷键。',
+	basesTopTabsProjectFileClickModifierDesc: '使用此快捷键加鼠标左键点击项目视图，在新标签页打开项目文件。',
+	basesTopTabsProjectFileClickModifierName: '打开项目文件快捷键',
 	basesTopTabsProjectFileClickModifierPrimaryLabel: 'Ctrl/Cmd + 点击',
 	basesTopTabsProjectFileClickModifierShiftLabel: 'Shift + 点击',
+	basesTopTabsProjectFileRevealModifierDesc: '使用此快捷键加鼠标左键点击项目视图，在 Obsidian 文件树中定位项目文件。',
+	basesTopTabsProjectFileRevealModifierName: '文件树定位快捷键',
+	basesTopTabsProjectFolderClickModifierDesc: '使用此快捷键加鼠标左键点击项目视图，打开项目文件所在的文件夹。',
+	basesTopTabsProjectFolderClickModifierName: '打开项目文件夹快捷键',
 	basesTopTabsRememberLastViewDesc: '为每个 .base 文件记住上次打开的视图，并在下次打开时自动恢复。',
 	basesTopTabsRememberLastViewName: '记住每个 Base 的上次视图',
 	basesTopTabsScrollableDesc: '顶部布局 Tabs 过多时允许滚动，而不是自动换行；侧边布局始终纵向滚动。',

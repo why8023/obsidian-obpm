@@ -16,6 +16,7 @@ interface BasesTopTabsLocalization {
 	emptyViewNameNotice: string;
 	moreViewsButtonLabel: (hiddenCount: number) => string;
 	openProjectFileErrorNotice: string;
+	openProjectFolderErrorNotice: string;
 	projectFileScopeLabel: (scope: ProjectBaseFileScope) => string;
 	projectFileScopeToggleLabel: (scope: ProjectBaseFileScope) => string;
 	projectFileScopeUpdateErrorNotice: string;
@@ -25,6 +26,7 @@ interface BasesTopTabsLocalization {
 	renameViewPromptTitle: (viewName: string) => string;
 	renameViewSubmitLabel: string;
 	resizeSidebarLabel: string;
+	revealProjectFileErrorNotice: string;
 	scrollSidebarLabel: string;
 	scrollSidebarTopLabel: string;
 	switchErrorNotice: string;
@@ -50,6 +52,7 @@ const ENGLISH_LOCALIZATION: BasesTopTabsLocalization = {
 	emptyViewNameNotice: 'View name cannot be empty.',
 	moreViewsButtonLabel: (hiddenCount) => hiddenCount > 0 ? `More (${hiddenCount})` : 'More',
 	openProjectFileErrorNotice: 'Failed to open the project file. Check the developer console for details.',
+	openProjectFolderErrorNotice: 'Failed to open the project folder. Check the developer console for details.',
 	projectFileScopeLabel: (scope) => scope === 'project' ? 'Project folder' : 'Project child folder',
 	projectFileScopeToggleLabel: (scope) => scope === 'project'
 		? 'Current scope: whole project folder. Click to show only the project child folder.'
@@ -61,6 +64,7 @@ const ENGLISH_LOCALIZATION: BasesTopTabsLocalization = {
 	renameViewPromptTitle: (viewName) => `Rename "${viewName}"`,
 	renameViewSubmitLabel: 'Rename',
 	resizeSidebarLabel: 'Resize tabs sidebar',
+	revealProjectFileErrorNotice: 'Failed to reveal the project file in the file tree. Check the developer console for details.',
 	scrollSidebarLabel: 'Scroll Base views down',
 	scrollSidebarTopLabel: 'Scroll Base views to top',
 	switchErrorNotice: 'Failed to switch Base view. Check the developer console for details.',
@@ -86,6 +90,7 @@ const CHINESE_LOCALIZATION: BasesTopTabsLocalization = {
 	emptyViewNameNotice: '视图名称不能为空。',
 	moreViewsButtonLabel: (hiddenCount) => hiddenCount > 0 ? `更多 (${hiddenCount})` : '更多',
 	openProjectFileErrorNotice: '打开项目文件失败，请打开开发者控制台查看详情。',
+	openProjectFolderErrorNotice: '打开项目文件夹失败，请打开开发者控制台查看详情。',
 	projectFileScopeLabel: (scope) => scope === 'project' ? '项目目录' : '项目子文件夹',
 	projectFileScopeToggleLabel: (scope) => scope === 'project'
 		? '当前范围：整个项目目录。点击切换为项目子文件夹。'
@@ -97,6 +102,7 @@ const CHINESE_LOCALIZATION: BasesTopTabsLocalization = {
 	renameViewPromptTitle: (viewName) => `重命名“${viewName}”`,
 	renameViewSubmitLabel: '重命名',
 	resizeSidebarLabel: '调整 Tabs 侧栏宽度',
+	revealProjectFileErrorNotice: '在文件树中定位项目文件失败，请打开开发者控制台查看详情。',
 	scrollSidebarLabel: '向下滚动 Base 视图',
 	scrollSidebarTopLabel: '回到 Base 视图顶部',
 	switchErrorNotice: '切换 Base 视图失败，请打开开发者控制台查看详情。',

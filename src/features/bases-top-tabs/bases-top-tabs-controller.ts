@@ -8,6 +8,7 @@ import {
 import {BasesTopTabsStateStore} from './bases-top-tabs-state-store';
 import {getBasesTopTabsLocalization} from './bases-top-tabs-localization';
 import {BaseViewSwitcherAdapter} from './base-view-switcher-adapter';
+import {revealFileInFileExplorer} from '../bases-file-reveal/bases-file-reveal-controller';
 import {normalizeProjectInboxFolderPath} from '../configured-folder-note/configured-folder-note-settings';
 import {normalizeConfiguredBaseFilePath} from '../configured-folder-note/configured-folder-note-utils';
 import {buildProjectBaseViewTargets} from '../project-base/project-base-utils';
@@ -31,12 +32,17 @@ import {
 } from './bases-top-tabs-layout';
 import {
 	isSidebarPlacement,
-	matchesProjectFileClickModifier,
+	resolveProjectFileClickAction,
 } from './bases-top-tabs-settings';
+import type {BasesTopTabsProjectFileClickAction} from './bases-top-tabs-settings';
 import {BasesTopTabsPluginContext, ParsedBaseFile} from './types';
 import type {BasesTopTabsPlacement} from '../../settings';
 
 const FEATURE_ID = 'bases-top-tabs';
+
+interface AppWithOpenWithDefaultApp {
+	openWithDefaultApp(path: string): Promise<void>;
+}
 
 export class BasesTabsController {
 	private readonly barEl: HTMLDivElement;
@@ -365,11 +371,18 @@ export class BasesTabsController {
 	}
 
 	private async handleTabClick(view: OrderedTabView, event?: MouseEvent) {
-		if (event && matchesProjectFileClickModifier(event, this.plugin.settings.basesTopTabs.projectFileClickModifier)) {
+		const projectFileClickAction = event
+			? resolveProjectFileClickAction(event, {
+				folder: this.plugin.settings.basesTopTabs.projectFileFolderClickModifier,
+				open: this.plugin.settings.basesTopTabs.projectFileClickModifier,
+				reveal: this.plugin.settings.basesTopTabs.projectFileRevealModifier,
+			})
+			: null;
+		if (event && projectFileClickAction) {
 			event.preventDefault();
 			event.stopPropagation();
 			if (!this.busy) {
-				await this.openProjectFileForView(view);
+				await this.handleProjectFileClickAction(view, projectFileClickAction);
 			}
 			return;
 		}
@@ -978,6 +991,62 @@ export class BasesTabsController {
 				viewName: view.name,
 			});
 			new Notice(this.localization.openProjectFileErrorNotice);
+		}
+	}
+
+	private async handleProjectFileClickAction(
+		view: OrderedTabView,
+		action: BasesTopTabsProjectFileClickAction,
+	): Promise<void> {
+		switch (action) {
+			case 'open-file':
+				await this.openProjectFileForView(view);
+				return;
+			case 'open-folder':
+				await this.openProjectFolderForView(view);
+				return;
+			case 'reveal-file':
+				await this.revealProjectFileForView(view);
+				return;
+		}
+	}
+
+	private async openProjectFolderForView(view: OrderedTabView): Promise<void> {
+		const projectFile = this.resolveProjectFileForView(view.name);
+		if (!projectFile) {
+			return;
+		}
+		const projectFolder = projectFile.parent;
+		if (!projectFolder) {
+			return;
+		}
+
+		try {
+			const app = this.plugin.app as typeof this.plugin.app & AppWithOpenWithDefaultApp;
+			if (typeof app.openWithDefaultApp !== 'function') {
+				throw new Error('Obsidian does not expose openWithDefaultApp.');
+			}
+			await app.openWithDefaultApp(projectFolder.path);
+		} catch (error) {
+			console.error('[OBPM:bases-top-tabs] Failed to open the project folder.', {
+				error,
+				filePath: projectFile.path,
+				folderPath: projectFolder.path,
+				viewName: view.name,
+			});
+			new Notice(this.localization.openProjectFolderErrorNotice);
+		}
+	}
+
+	private async revealProjectFileForView(view: OrderedTabView): Promise<void> {
+		const projectFile = this.resolveProjectFileForView(view.name);
+		if (!projectFile) {
+			return;
+		}
+
+		const revealed = await revealFileInFileExplorer(this.plugin.app, projectFile);
+		if (!revealed) {
+			new Notice(this.localization.revealProjectFileErrorNotice);
 		}
 	}
 

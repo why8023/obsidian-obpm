@@ -1,5 +1,5 @@
-import {TAbstractFile, ViewState, WorkspaceLeaf} from 'obsidian';
-import OBPMPlugin from '../../main';
+import type {App, TAbstractFile, ViewState, WorkspaceLeaf} from 'obsidian';
+import type OBPMPlugin from '../../main';
 
 const BASES_ROW_SELECTOR = '.bases-tr';
 const INTERNAL_LINK_SELECTOR = '.internal-link[data-href]';
@@ -7,6 +7,30 @@ const SOURCE_PATH_SELECTOR = '[data-source-path]';
 
 interface FileExplorerViewLike {
 	revealInFolder(file: TAbstractFile): void;
+}
+
+export async function revealFileInFileExplorer(app: App, file: TAbstractFile): Promise<boolean> {
+	const fileExplorerLeaf = await ensureFileExplorerLeaf(app);
+	if (!fileExplorerLeaf) {
+		return false;
+	}
+
+	const fileExplorerView = fileExplorerLeaf.view as Partial<FileExplorerViewLike>;
+	if (typeof fileExplorerView.revealInFolder !== 'function') {
+		return false;
+	}
+
+	try {
+		await app.workspace.revealLeaf(fileExplorerLeaf);
+		fileExplorerView.revealInFolder(file);
+		return true;
+	} catch (error) {
+		console.error('[OBPM:bases-file-reveal] Failed to reveal the file in the file explorer.', {
+			error,
+			filePath: file.path,
+		});
+		return false;
+	}
 }
 
 export class BasesFileRevealController {
@@ -119,62 +143,44 @@ export class BasesFileRevealController {
 	}
 
 	private async revealInFileExplorer(file: TAbstractFile): Promise<void> {
-		const fileExplorerLeaf = await this.ensureFileExplorerLeaf();
-		if (!fileExplorerLeaf) {
-			return;
-		}
+		await revealFileInFileExplorer(this.plugin.app, file);
+	}
+}
 
-		const fileExplorerView = fileExplorerLeaf.view as Partial<FileExplorerViewLike>;
-		if (typeof fileExplorerView.revealInFolder !== 'function') {
-			return;
-		}
+async function ensureFileExplorerLeaf(app: App): Promise<WorkspaceLeaf | null> {
+	const existingLeaf = app.workspace.getLeavesOfType('file-explorer')[0];
+	if (existingLeaf) {
+		return existingLeaf;
+	}
 
+	const workspace = app.workspace;
+	if (typeof workspace.ensureSideLeaf === 'function') {
 		try {
-			await this.plugin.app.workspace.revealLeaf(fileExplorerLeaf);
-			fileExplorerView.revealInFolder(file);
-		} catch (error) {
-			console.error('[OBPM:bases-file-reveal] Failed to reveal the file in the file explorer.', {
-				error,
-				filePath: file.path,
+			return await workspace.ensureSideLeaf('file-explorer', 'left', {
+				active: false,
+				reveal: true,
+				split: false,
 			});
+		} catch (error) {
+			console.error('[OBPM:bases-file-reveal] Failed to create a file explorer leaf with ensureSideLeaf.', error);
 		}
 	}
 
-	private async ensureFileExplorerLeaf(): Promise<WorkspaceLeaf | null> {
-		const existingLeaf = this.plugin.app.workspace.getLeavesOfType('file-explorer')[0];
-		if (existingLeaf) {
-			return existingLeaf;
-		}
+	const leftLeaf = workspace.getLeftLeaf(false);
+	if (!leftLeaf) {
+		return null;
+	}
 
-		const workspace = this.plugin.app.workspace;
-		if (typeof workspace.ensureSideLeaf === 'function') {
-			try {
-				return await workspace.ensureSideLeaf('file-explorer', 'left', {
-					active: false,
-					reveal: true,
-					split: false,
-				});
-			} catch (error) {
-				console.error('[OBPM:bases-file-reveal] Failed to create a file explorer leaf with ensureSideLeaf.', error);
-			}
-		}
-
-		const leftLeaf = workspace.getLeftLeaf(false);
-		if (!leftLeaf) {
-			return null;
-		}
-
-		try {
-			const fileExplorerViewState: ViewState = {
-				type: 'file-explorer',
-				active: false,
-			};
-			await leftLeaf.setViewState(fileExplorerViewState);
-			return leftLeaf;
-		} catch (error) {
-			console.error('[OBPM:bases-file-reveal] Failed to create a file explorer leaf.', error);
-			return null;
-		}
+	try {
+		const fileExplorerViewState: ViewState = {
+			type: 'file-explorer',
+			active: false,
+		};
+		await leftLeaf.setViewState(fileExplorerViewState);
+		return leftLeaf;
+	} catch (error) {
+		console.error('[OBPM:bases-file-reveal] Failed to create a file explorer leaf.', error);
+		return null;
 	}
 }
 
