@@ -145,6 +145,28 @@ describe('project base utilities', () => {
 		);
 	});
 
+	it('preserves an existing project view order when rebuilding the Base config', () => {
+		const options = {
+			projectFileScope: 'inbox' as const,
+			projectInboxFolderPath: 'inbox',
+			projectViewProperties: ['file.name'],
+			projects,
+			totalViewProperties: ['file.name'],
+		};
+		const initialConfig = buildProjectBaseConfig(undefined, options);
+		const initialViews = initialConfig.views as Array<Record<string, unknown>>;
+		const reorderedConfig = {
+			...initialConfig,
+			views: [initialViews[0], initialViews[2], initialViews[1]],
+		};
+
+		const nextConfig = buildProjectBaseConfig(reorderedConfig, options);
+		assert.deepEqual(
+			(nextConfig.views as Array<{name: string}>).map((view) => view.name),
+			['总视图', 'Beta', 'Alpha'],
+		);
+	});
+
 	it('keeps duplicate project views distinct and preserves root config fields', () => {
 		const duplicateProjects = [
 			{folderPath: '1_project/Alpha-one', name: 'Alpha'},

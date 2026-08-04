@@ -112,8 +112,48 @@ export function buildProjectBaseConfig(
 		properties[`formula.${PROJECT_GROUP_FORMULA}`] = {displayName: '项目分组'};
 	}
 	nextConfig.properties = properties;
-	nextConfig.views = buildProjectBaseViews(options);
+	nextConfig.views = preserveExistingViewOrder(
+		buildProjectBaseViews(options),
+		existingConfig?.views,
+	);
 	return nextConfig;
+}
+
+function preserveExistingViewOrder(
+	generatedViews: ProjectBaseView[],
+	existingViews: unknown,
+): ProjectBaseView[] {
+	if (!Array.isArray(existingViews)) {
+		return generatedViews;
+	}
+
+	const existingOrder = new Map<string, number>();
+	for (const [index, view] of existingViews.entries()) {
+		const identity = getViewIdentity(view);
+		if (identity && !existingOrder.has(identity)) {
+			existingOrder.set(identity, index);
+		}
+	}
+
+	return generatedViews
+		.map((view, index) => {
+			const identity = getViewIdentity(view);
+			return {
+				index,
+				view,
+				existingIndex: identity ? existingOrder.get(identity) ?? Number.POSITIVE_INFINITY : Number.POSITIVE_INFINITY,
+			};
+		})
+		.sort((left, right) => left.existingIndex - right.existingIndex || left.index - right.index)
+		.map((entry) => entry.view);
+}
+
+function getViewIdentity(view: unknown): string | null {
+	if (!isObjectRecord(view) || typeof view.type !== 'string' || typeof view.name !== 'string') {
+		return null;
+	}
+
+	return `${view.type}\u0000${view.name}`;
 }
 
 function buildTotalFilters(projectPaths: readonly string[]): Record<string, unknown> {
