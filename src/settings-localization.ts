@@ -285,6 +285,22 @@ export interface SettingsLocalization {
 	projectFolderCreateProjectParentFolderPathName: string;
 	projectFolderCreateProjectParentFolderPathDesc: string;
 	projectFolderCreateProjectParentFolderPathPlaceholder: string;
+	projectBaseHeading: string;
+	projectBaseDesc: string;
+	projectBaseEnableName: string;
+	projectBaseEnableDesc: string;
+	projectBaseFilePathName: string;
+	projectBaseFilePathDesc: string;
+	projectBaseFilePathPlaceholder: string;
+	projectBaseTotalPropertiesName: string;
+	projectBaseTotalPropertiesDesc: string;
+	projectBaseProjectPropertiesName: string;
+	projectBaseProjectPropertiesDesc: string;
+	projectBasePropertiesPlaceholder: string;
+	projectBaseInvalidPathNotice: string;
+	projectBaseFileConflictNotice: string;
+	projectBaseInvalidYamlNotice: string;
+	projectBaseWriteFailureNotice: string;
 	configuredFolderNoteHeading: string;
 	configuredFolderNoteDesc: string;
 	configuredFolderNoteEnableName: string;
@@ -606,6 +622,22 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectFolderCreateProjectParentFolderPathName: 'New project parent folder',
 	projectFolderCreateProjectParentFolderPathDesc: 'Create new project folders under this vault path. Leave empty to use the vault root. Missing folders are created automatically.',
 	projectFolderCreateProjectParentFolderPathPlaceholder: '1_project',
+	projectBaseHeading: 'Project view',
+	projectBaseDesc: 'Maintain a Base summary of Markdown files in each project child folder, with one total view and one view per project.',
+	projectBaseEnableName: 'Enable project view',
+	projectBaseEnableDesc: 'Create or update the configured Base file when projects, project files, or project metadata change.',
+	projectBaseFilePathName: 'Project view Base path',
+	projectBaseFilePathDesc: 'Use a vault-relative .base path. The default /obpm.base points to the vault root.',
+	projectBaseFilePathPlaceholder: '/obpm.base',
+	projectBaseTotalPropertiesName: 'Total view properties',
+	projectBaseTotalPropertiesDesc: 'Properties shown by 总视图. Enter one property per line or separate properties with commas.',
+	projectBaseProjectPropertiesName: 'Project view properties',
+	projectBaseProjectPropertiesDesc: 'Properties shown by each project view. Enter one property per line or separate properties with commas.',
+	projectBasePropertiesPlaceholder: 'file.name, obpm_status, file.mtime',
+	projectBaseInvalidPathNotice: 'The project view Base path is invalid; no file was changed.',
+	projectBaseFileConflictNotice: 'The project view path is occupied by a folder or a non-Base file; no file was changed.',
+	projectBaseInvalidYamlNotice: 'The project view Base contains invalid YAML; the original file was kept.',
+	projectBaseWriteFailureNotice: 'The project view Base could not be synchronized; the original file was kept.',
 	configuredFolderNoteHeading: 'Create note in project folder',
 	configuredFolderNoteDesc: 'Choose a project, then create a default-named note in its configured child folder using one Base view as the property template.',
 	configuredFolderNoteEnableName: 'Enable project note command',
@@ -927,6 +959,22 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectFolderCreateProjectParentFolderPathName: '新项目父文件夹',
 	projectFolderCreateProjectParentFolderPathDesc: '新项目文件夹会创建在这个库内路径下。留空则使用库根目录；目录不存在时会自动创建。',
 	projectFolderCreateProjectParentFolderPathPlaceholder: '1_project',
+	projectBaseHeading: '项目视图',
+	projectBaseDesc: '维护一个汇总各项目子文件夹中 Markdown 文件的 Base，并生成一个总视图和每个项目的独立视图。',
+	projectBaseEnableName: '启用项目视图',
+	projectBaseEnableDesc: '当项目、项目文件或项目属性变化时，自动创建或更新配置的 Base 文件。',
+	projectBaseFilePathName: '项目视图 Base 路径',
+	projectBaseFilePathDesc: '使用库内相对的 .base 路径。默认值 /obpm.base 表示库根目录下的文件。',
+	projectBaseFilePathPlaceholder: '/obpm.base',
+	projectBaseTotalPropertiesName: '总视图属性',
+	projectBaseTotalPropertiesDesc: '设置“总视图”展示的属性；每行一个，也可以使用逗号分隔。',
+	projectBaseProjectPropertiesName: '项目视图属性',
+	projectBaseProjectPropertiesDesc: '设置每个项目视图展示的属性；每行一个，也可以使用逗号分隔。',
+	projectBasePropertiesPlaceholder: 'file.name, obpm_status, file.mtime',
+	projectBaseInvalidPathNotice: '项目视图的 Base 路径无效，未修改文件。',
+	projectBaseFileConflictNotice: '项目视图路径已被文件夹或非 Base 文件占用，未修改文件。',
+	projectBaseInvalidYamlNotice: '项目视图 Base 的 YAML 无效，已保留原文件。',
+	projectBaseWriteFailureNotice: '项目视图 Base 同步失败，已保留原文件。',
 	configuredFolderNoteHeading: '在项目中新建笔记',
 	configuredFolderNoteDesc: '先选择项目，再在其配置的子文件夹中新建默认命名的笔记；属性由一个 Base 视图提供。',
 	configuredFolderNoteEnableName: '启用项目新建命令',

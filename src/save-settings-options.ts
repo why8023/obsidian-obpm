@@ -6,6 +6,7 @@ export type RefreshableFeatureId =
 	| 'relatedLinks'
 	| 'fileNameSync'
 	| 'projectFolder'
+	| 'projectBase'
 	| 'projectRouting'
 	| 'frontmatterAutomation'
 	| 'relatedDocumentWorkflow'

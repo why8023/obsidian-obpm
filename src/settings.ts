@@ -38,6 +38,13 @@ import {
 	ProjectFolderSettings,
 } from './features/project-folder/project-folder-settings';
 import {normalizeProjectParentFolderPath} from './features/project-folder/project-folder-utils';
+import {
+	DEFAULT_PROJECT_BASE_PROPERTIES,
+	DEFAULT_PROJECT_BASE_SETTINGS,
+	normalizeProjectBasePropertyList,
+	normalizeProjectBaseSettings,
+	ProjectBaseSettings,
+} from './features/project-base/project-base-settings';
 import {FrontmatterMatchRule, ProjectRoutingSettings} from './features/project-routing/types';
 import {
 	createDefaultPinnedRelationTargetRule,
@@ -69,7 +76,7 @@ const MAX_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 30;
 const MIN_RELATED_LINKS_MISSING_LINK_GRACE_PERIOD_SECONDS = 0;
 
 interface CommittedTextSettingControl {
-	inputEl: HTMLInputElement;
+	inputEl: HTMLInputElement | HTMLTextAreaElement;
 	setValue(value: string): unknown;
 }
 
@@ -78,6 +85,7 @@ interface CommittedTextSettingOptions {
 	normalize: (value: string) => string;
 	notice?: string;
 	onCommit: (value: string) => void;
+	commitOnEnter?: boolean;
 	refreshFeatures?: readonly RefreshableFeatureId[];
 }
 
@@ -208,6 +216,7 @@ export interface OBPMPluginSettings {
 	relatedLinks: RelatedLinksSettings;
 	fileNameSync: FileNameSyncSettings;
 	frontmatterAutomation: FrontmatterAutomationSettings;
+	projectBase: ProjectBaseSettings;
 	projectFolder: ProjectFolderSettings;
 	projectRouting: ProjectRoutingSettings;
 	relatedDocumentWorkflow: RelatedDocumentWorkflowSettings;
@@ -264,6 +273,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		maxFileNameLength: DEFAULT_FILE_NAME_MAX_LENGTH,
 	},
 	frontmatterAutomation: normalizeFrontmatterAutomationSettings(undefined),
+	projectBase: DEFAULT_PROJECT_BASE_SETTINGS,
 	projectFolder: DEFAULT_PROJECT_FOLDER_SETTINGS,
 	projectRouting: normalizeProjectRoutingSettings(undefined),
 	relatedDocumentWorkflow: {
@@ -378,6 +388,7 @@ export function normalizePluginSettings(
 			),
 		},
 		frontmatterAutomation: normalizeFrontmatterAutomationSettings(settings?.frontmatterAutomation),
+		projectBase: normalizeProjectBaseSettings(settings?.projectBase),
 		projectFolder: normalizeProjectFolderSettings(settings?.projectFolder),
 		projectRouting: normalizeProjectRoutingSettings(settings?.projectRouting),
 		relatedDocumentWorkflow: {
@@ -639,11 +650,12 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			void commitValue();
 		});
 		text.inputEl.addEventListener('keydown', (event) => {
-			if (event.key !== 'Enter') {
+			const keyboardEvent = event as KeyboardEvent;
+			if (keyboardEvent.key !== 'Enter' || options.commitOnEnter === false) {
 				return;
 			}
 
-			event.preventDefault();
+			keyboardEvent.preventDefault();
 			void commitValue();
 		});
 
@@ -752,6 +764,9 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				});
 				break;
 			case 'project':
+				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
+					this.renderProjectBaseSettingsSection(panelBodyEl);
+				});
 				this.renderSettingsPanel(containerEl, (panelBodyEl) => {
 					this.renderProjectFolderSettingsSection(panelBodyEl);
 				});
@@ -1363,6 +1378,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					onCommit: (value) => {
 						this.plugin.settings.configuredFolderNote.projectInboxFolderPath = value;
 					},
+					refreshFeatures: ['projectBase'],
 				});
 			});
 
@@ -2058,7 +2074,12 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 	private renderProjectRecognitionSettingsSection(containerEl: HTMLElement): void {
 		const strings = getSettingsLocalization();
-		const saveProjectRoutingSettings = async () => this.saveSettingsFor('projectRouting', 'projectFolder', 'relatedLinks');
+		const saveProjectRoutingSettings = async () => this.saveSettingsFor(
+			'projectRouting',
+			'projectFolder',
+			'relatedLinks',
+			'projectBase',
+		);
 
 		new Setting(containerEl)
 			.setName(strings.projectRoutingProjectRuleHeading)
@@ -2103,6 +2124,84 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 				this.plugin.settings.projectRouting.projectFileRules = rules;
 			},
 		});
+	}
+
+	private renderProjectBaseSettingsSection(containerEl: HTMLElement): void {
+		const strings = getSettingsLocalization();
+
+		new Setting(containerEl)
+			.setName(strings.projectBaseHeading)
+			.setDesc(strings.projectBaseDesc)
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName(strings.projectBaseEnableName)
+			.setDesc(strings.projectBaseEnableDesc)
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.projectBase.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.projectBase.enabled = value;
+					await this.saveSettingsFor('projectBase');
+				}));
+
+		new Setting(containerEl)
+			.setName(strings.projectBaseFilePathName)
+			.setDesc(strings.projectBaseFilePathDesc)
+			.addText((text) => {
+				text.setPlaceholder(strings.projectBaseFilePathPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					initialValue: this.plugin.settings.projectBase.baseFilePath,
+					normalize: (value) => normalizeConfiguredBaseFilePath(value) || DEFAULT_PROJECT_BASE_SETTINGS.baseFilePath,
+					onCommit: (value) => {
+						this.plugin.settings.projectBase.baseFilePath = value;
+					},
+					refreshFeatures: ['projectBase'],
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.projectBaseTotalPropertiesName)
+			.setDesc(strings.projectBaseTotalPropertiesDesc)
+			.addTextArea((text) => {
+				text.setPlaceholder(strings.projectBasePropertiesPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					commitOnEnter: false,
+					initialValue: this.plugin.settings.projectBase.totalViewProperties.join('\n'),
+					normalize: (value) => normalizeProjectBasePropertyList(
+						value,
+						DEFAULT_PROJECT_BASE_PROPERTIES,
+					).join('\n'),
+					onCommit: (value) => {
+						this.plugin.settings.projectBase.totalViewProperties = normalizeProjectBasePropertyList(
+							value,
+							DEFAULT_PROJECT_BASE_PROPERTIES,
+						);
+					},
+					refreshFeatures: ['projectBase'],
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.projectBaseProjectPropertiesName)
+			.setDesc(strings.projectBaseProjectPropertiesDesc)
+			.addTextArea((text) => {
+				text.setPlaceholder(strings.projectBasePropertiesPlaceholder);
+				return this.bindCommittedTextSetting(text, {
+					commitOnEnter: false,
+					initialValue: this.plugin.settings.projectBase.projectViewProperties.join('\n'),
+					normalize: (value) => normalizeProjectBasePropertyList(
+						value,
+						DEFAULT_PROJECT_BASE_PROPERTIES,
+					).join('\n'),
+					onCommit: (value) => {
+						this.plugin.settings.projectBase.projectViewProperties = normalizeProjectBasePropertyList(
+							value,
+							DEFAULT_PROJECT_BASE_PROPERTIES,
+						);
+					},
+					refreshFeatures: ['projectBase'],
+				});
+			});
 	}
 
 	private renderProjectFolderSettingsSection(containerEl: HTMLElement): void {
