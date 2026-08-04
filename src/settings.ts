@@ -60,13 +60,24 @@ import {getSettingsLocalization, SettingsLocalization} from './settings-localiza
 import {
 	renderFrontmatterAutomationSettingsSection as renderFrontmatterAutomationSection,
 } from './settings-ui/frontmatter-automation-section';
+import {isSidebarPlacement, normalizeBasesTopTabsPlacement} from './features/bases-top-tabs/bases-top-tabs-settings';
+import {
+	BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH,
+	BASES_TABS_SIDEBAR_MAX_WIDTH,
+	BASES_TABS_SIDEBAR_MIN_WIDTH,
+	normalizeSidebarMinWidth,
+	normalizeSidebarWidth,
+} from './features/bases-top-tabs/bases-top-tabs-layout';
+import type {BasesTopTabsPlacement} from './features/bases-top-tabs/bases-top-tabs-settings';
 
-export type BasesTopTabsPlacement = 'above-toolbar' | 'inside-toolbar';
-export type BasesTopTabsOrientation = 'horizontal' | 'vertical';
+export type {BasesTopTabsPlacement} from './features/bases-top-tabs/bases-top-tabs-settings';
 
 const DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS = 8;
 const MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS = 50;
 const MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS = 0;
+const DEFAULT_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH = BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH;
+const MAX_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH = BASES_TABS_SIDEBAR_MAX_WIDTH;
+const MIN_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH = BASES_TABS_SIDEBAR_MIN_WIDTH;
 const DEFAULT_RELATED_LINKS_SECTION_HEADING = 'Related';
 const DEFAULT_RELATED_LINKS_SECTION_HEADING_LEVEL = 2;
 const MAX_RELATED_LINKS_SECTION_HEADING_LEVEL = 6;
@@ -144,6 +155,12 @@ export interface BasesFileRevealSettings {
 export interface BasesTopTabsFileState {
 	lastViewName: string | null;
 	pinnedViewNames: string[];
+	sidebarWidths: BasesTopTabsSidebarWidths;
+}
+
+export interface BasesTopTabsSidebarWidths {
+	left: number | null;
+	right: number | null;
 }
 
 export interface BasesGroupFoldViewState {
@@ -168,10 +185,10 @@ export interface BasesTopTabsSettings {
 	filesState: Record<string, BasesTopTabsFileState>;
 	hideWhenSingleView: boolean;
 	maxVisibleTabs: number;
-	orientation: BasesTopTabsOrientation;
 	placement: BasesTopTabsPlacement;
 	rememberLastView: boolean;
 	scrollable: boolean;
+	sidebarMinWidth: number;
 	showIcons: boolean;
 	showViewCount: boolean;
 }
@@ -241,10 +258,10 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		filesState: {},
 		hideWhenSingleView: true,
 		maxVisibleTabs: DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS,
-		orientation: 'horizontal',
 		placement: 'above-toolbar',
 		rememberLastView: true,
 		scrollable: true,
+		sidebarMinWidth: DEFAULT_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH,
 		showIcons: true,
 		showViewCount: false,
 	},
@@ -290,6 +307,10 @@ export function normalizePluginSettings(
 	settings: (Partial<OBPMPluginSettings> & PinnedRelationTargetSettingsInput) | null | undefined,
 ): OBPMPluginSettings {
 	const relatedLinksInput = settings?.relatedLinks as RelatedLinksSettingsInput | undefined;
+	const sidebarMinWidth = normalizeSidebarMinWidth(
+		settings?.basesTopTabs?.sidebarMinWidth,
+		DEFAULT_SETTINGS.basesTopTabs.sidebarMinWidth,
+	);
 
 	return {
 		basesFileReveal: {
@@ -308,7 +329,7 @@ export function normalizePluginSettings(
 			autoRefresh: normalizeBoolean(settings?.basesTopTabs?.autoRefresh, DEFAULT_SETTINGS.basesTopTabs.autoRefresh),
 			debugMode: normalizeBoolean(settings?.basesTopTabs?.debugMode, DEFAULT_SETTINGS.basesTopTabs.debugMode),
 			enabled: normalizeBoolean(settings?.basesTopTabs?.enabled, DEFAULT_SETTINGS.basesTopTabs.enabled),
-			filesState: normalizeBasesTopTabsFileStateMap(settings?.basesTopTabs?.filesState),
+			filesState: normalizeBasesTopTabsFileStateMap(settings?.basesTopTabs?.filesState, sidebarMinWidth),
 			hideWhenSingleView: normalizeBoolean(
 				settings?.basesTopTabs?.hideWhenSingleView,
 				DEFAULT_SETTINGS.basesTopTabs.hideWhenSingleView,
@@ -316,10 +337,6 @@ export function normalizePluginSettings(
 			maxVisibleTabs: normalizeBasesTopTabsMaxVisibleTabs(
 				settings?.basesTopTabs?.maxVisibleTabs,
 				DEFAULT_SETTINGS.basesTopTabs.maxVisibleTabs,
-			),
-			orientation: normalizeBasesTopTabsOrientation(
-				settings?.basesTopTabs?.orientation,
-				DEFAULT_SETTINGS.basesTopTabs.orientation,
 			),
 			placement: normalizeBasesTopTabsPlacement(
 				settings?.basesTopTabs?.placement,
@@ -330,6 +347,7 @@ export function normalizePluginSettings(
 				DEFAULT_SETTINGS.basesTopTabs.rememberLastView,
 			),
 			scrollable: normalizeBoolean(settings?.basesTopTabs?.scrollable, DEFAULT_SETTINGS.basesTopTabs.scrollable),
+			sidebarMinWidth,
 			showIcons: normalizeBoolean(settings?.basesTopTabs?.showIcons, DEFAULT_SETTINGS.basesTopTabs.showIcons),
 			showViewCount: normalizeBoolean(settings?.basesTopTabs?.showViewCount, DEFAULT_SETTINGS.basesTopTabs.showViewCount),
 		},
@@ -421,14 +439,6 @@ function normalizeRequiredText(value: unknown, fallback: string): string {
 	return normalized.length > 0 ? normalized : fallback;
 }
 
-function normalizeBasesTopTabsPlacement(value: unknown, fallback: BasesTopTabsPlacement): BasesTopTabsPlacement {
-	return value === 'inside-toolbar' || value === 'above-toolbar' ? value : fallback;
-}
-
-function normalizeBasesTopTabsOrientation(value: unknown, fallback: BasesTopTabsOrientation): BasesTopTabsOrientation {
-	return value === 'vertical' || value === 'horizontal' ? value : fallback;
-}
-
 function normalizeBasesTopTabsMaxVisibleTabs(value: unknown, fallback: number): number {
 	if (typeof value === 'number' && Number.isInteger(value)) {
 		return clamp(value, MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS, MAX_BASES_TOP_TABS_MAX_VISIBLE_TABS);
@@ -482,7 +492,10 @@ function normalizeRelatedLinksMissingLinkGracePeriodSeconds(value: unknown, fall
 	return fallback;
 }
 
-function normalizeBasesTopTabsFileStateMap(value: unknown): Record<string, BasesTopTabsFileState> {
+function normalizeBasesTopTabsFileStateMap(
+	value: unknown,
+	sidebarMinWidth = DEFAULT_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH,
+): Record<string, BasesTopTabsFileState> {
 	if (!isObjectRecord(value)) {
 		return {};
 	}
@@ -498,16 +511,36 @@ function normalizeBasesTopTabsFileStateMap(value: unknown): Record<string, Bases
 				? fileState.lastViewName.trim()
 				: null;
 			const pinnedViewNames = normalizeStringArray(fileState.pinnedViewNames);
+			const sidebarWidths = normalizeBasesTopTabsSidebarWidths(fileState.sidebarWidths, sidebarMinWidth);
 
-			if (lastViewName === null && pinnedViewNames.length === 0) {
+			if (
+				lastViewName === null
+				&& pinnedViewNames.length === 0
+				&& sidebarWidths.left === null
+				&& sidebarWidths.right === null
+			) {
 				return null;
 			}
 
-			return [normalizedPath, {lastViewName, pinnedViewNames}] as const;
+			return [normalizedPath, {lastViewName, pinnedViewNames, sidebarWidths}] as const;
 		})
 		.filter((entry): entry is readonly [string, BasesTopTabsFileState] => entry !== null);
 
 	return Object.fromEntries(normalizedEntries);
+}
+
+function normalizeBasesTopTabsSidebarWidths(
+	value: unknown,
+	sidebarMinWidth: number,
+): BasesTopTabsSidebarWidths {
+	if (!isObjectRecord(value)) {
+		return {left: null, right: null};
+	}
+
+	return {
+		left: normalizeSidebarWidth(value.left, sidebarMinWidth),
+		right: normalizeSidebarWidth(value.right, sidebarMinWidth),
+	};
 }
 
 function normalizeBasesGroupFoldFileStateMap(value: unknown): Record<string, BasesGroupFoldFileState> {
@@ -857,6 +890,17 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 		const strings = getSettingsLocalization();
 		const saveBasesTopTabsSettings = async () => this.saveSettingsFor('basesTopTabs');
 		const saveWithoutRefresh = async () => this.saveSettingsFor();
+		const topLayoutSettings: Setting[] = [];
+		const sidebarLayoutSettings: Setting[] = [];
+		const updateModeSpecificSettings = () => {
+			const sidebarLayout = isSidebarPlacement(this.plugin.settings.basesTopTabs.placement);
+			for (const setting of topLayoutSettings) {
+				setting.setDisabled(sidebarLayout);
+			}
+			for (const setting of sidebarLayoutSettings) {
+				setting.setDisabled(!sidebarLayout);
+			}
+		};
 
 		new Setting(containerEl)
 			.setName(strings.basesTopTabsHeading)
@@ -898,31 +942,58 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			.addDropdown((dropdown) => dropdown
 				.addOption('above-toolbar', strings.basesTopTabsPlacementAboveToolbarLabel)
 				.addOption('inside-toolbar', strings.basesTopTabsPlacementInsideToolbarLabel)
+				.addOption('sidebar-left', strings.basesTopTabsPlacementSidebarLeftLabel)
+				.addOption('sidebar-right', strings.basesTopTabsPlacementSidebarRightLabel)
 				.setValue(this.plugin.settings.basesTopTabs.placement)
 				.onChange(async (value) => {
 					this.plugin.settings.basesTopTabs.placement = normalizeBasesTopTabsPlacement(
 						value,
 						DEFAULT_SETTINGS.basesTopTabs.placement,
 					);
+					updateModeSpecificSettings();
 					await saveBasesTopTabsSettings();
 				}));
 
-		new Setting(containerEl)
-			.setName(strings.basesTopTabsOrientationName)
-			.setDesc(strings.basesTopTabsOrientationDesc)
-			.addDropdown((dropdown) => dropdown
-				.addOption('horizontal', strings.basesTopTabsOrientationHorizontalLabel)
-				.addOption('vertical', strings.basesTopTabsOrientationVerticalLabel)
-				.setValue(this.plugin.settings.basesTopTabs.orientation)
-				.onChange(async (value) => {
-					this.plugin.settings.basesTopTabs.orientation = normalizeBasesTopTabsOrientation(
-						value,
-						DEFAULT_SETTINGS.basesTopTabs.orientation,
+		const sidebarMinWidthSetting = new Setting(containerEl)
+			.setName(strings.basesTopTabsSidebarMinWidthName)
+			.setDesc(strings.basesTopTabsSidebarMinWidthDesc(
+				MIN_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH,
+				MAX_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH,
+				DEFAULT_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH,
+			))
+			.addText((text) => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = String(MIN_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH);
+				text.inputEl.max = String(MAX_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH);
+				text.inputEl.step = '1';
+				text.setValue(this.plugin.settings.basesTopTabs.sidebarMinWidth.toString());
+
+				const applyValue = async () => {
+					const normalizedValue = normalizeSidebarMinWidth(
+						text.inputEl.value,
+						DEFAULT_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH,
 					);
+					this.plugin.settings.basesTopTabs.sidebarMinWidth = normalizedValue;
 					await saveBasesTopTabsSettings();
-				}));
 
-		new Setting(containerEl)
+					if (text.inputEl.value !== normalizedValue.toString()) {
+						text.setValue(normalizedValue.toString());
+						new Notice(strings.basesTopTabsSidebarMinWidthNotice(
+							MIN_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH,
+							MAX_BASES_TOP_TABS_SIDEBAR_MIN_WIDTH,
+						));
+					}
+				};
+
+				text.inputEl.addEventListener('change', () => {
+					void applyValue();
+				});
+
+				return text;
+			});
+		sidebarLayoutSettings.push(sidebarMinWidthSetting);
+
+		const scrollableSetting = new Setting(containerEl)
 			.setName(strings.basesTopTabsScrollableName)
 			.setDesc(strings.basesTopTabsScrollableDesc)
 			.addToggle((toggle) => toggle
@@ -931,6 +1002,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					this.plugin.settings.basesTopTabs.scrollable = value;
 					await saveBasesTopTabsSettings();
 				}));
+		topLayoutSettings.push(scrollableSetting);
 
 		new Setting(containerEl)
 			.setName(strings.basesTopTabsShowViewCountName)
@@ -942,7 +1014,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					await saveBasesTopTabsSettings();
 				}));
 
-		new Setting(containerEl)
+		const maxVisibleTabsSetting = new Setting(containerEl)
 			.setName(strings.basesTopTabsMaxVisibleTabsName)
 			.setDesc(strings.basesTopTabsMaxVisibleTabsDesc(
 				MIN_BASES_TOP_TABS_MAX_VISIBLE_TABS,
@@ -979,6 +1051,8 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 
 				return text;
 			});
+		topLayoutSettings.push(maxVisibleTabsSetting);
+		updateModeSpecificSettings();
 
 		new Setting(containerEl)
 			.setName(strings.basesTopTabsRememberLastViewName)

@@ -37,18 +37,19 @@ export interface SettingsLocalization {
 	basesTopTabsMaxVisibleTabsDesc: (min: number, max: number, defaultValue: number) => string;
 	basesTopTabsMaxVisibleTabsName: string;
 	basesTopTabsMaxVisibleTabsNotice: (min: number, max: number) => string;
-	basesTopTabsOrientationDesc: string;
-	basesTopTabsOrientationHorizontalLabel: string;
-	basesTopTabsOrientationName: string;
-	basesTopTabsOrientationVerticalLabel: string;
 	basesTopTabsPlacementAboveToolbarLabel: string;
 	basesTopTabsPlacementDesc: string;
 	basesTopTabsPlacementInsideToolbarLabel: string;
+	basesTopTabsPlacementSidebarLeftLabel: string;
+	basesTopTabsPlacementSidebarRightLabel: string;
 	basesTopTabsPlacementName: string;
 	basesTopTabsRememberLastViewDesc: string;
 	basesTopTabsRememberLastViewName: string;
 	basesTopTabsScrollableDesc: string;
 	basesTopTabsScrollableName: string;
+	basesTopTabsSidebarMinWidthDesc: (min: number, max: number, defaultValue: number) => string;
+	basesTopTabsSidebarMinWidthName: string;
+	basesTopTabsSidebarMinWidthNotice: (min: number, max: number) => string;
 	basesTopTabsShowIconsDesc: string;
 	basesTopTabsShowIconsName: string;
 	basesTopTabsShowViewCountDesc: string;
@@ -362,27 +363,29 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsAutoRefreshName: 'Auto refresh',
 	basesTopTabsDebugModeDesc: 'Write detailed Bases top tabs diagnostics to the developer console.',
 	basesTopTabsDebugModeName: 'Debug mode',
-	basesTopTabsEnableDesc: 'Show Base views as always-visible tabs on top of native .base pages.',
+	basesTopTabsEnableDesc: 'Show Base views as always-visible tabs on native .base pages.',
 	basesTopTabsEnableName: 'Enable Bases top tabs',
 	basesTopTabsHeading: 'Bases top tabs',
 	basesTopTabsHideWhenSingleViewDesc: 'Hide the tab bar when the current Base only has one view.',
 	basesTopTabsHideWhenSingleViewName: 'Hide when there is only one view',
 	basesTopTabsMaxVisibleTabsDesc: (min, max, defaultValue) =>
-		`Show a More menu after this many tabs. Use ${min} to disable overflow. Range: ${min}-${max}. Default: ${defaultValue}.`,
+		`Show a More menu in top layouts after this many tabs. Sidebar layouts always show all views. Use ${min} to disable overflow. Range: ${min}-${max}. Default: ${defaultValue}.`,
 	basesTopTabsMaxVisibleTabsName: 'Maximum visible tabs',
 	basesTopTabsMaxVisibleTabsNotice: (min, max) => `Maximum visible tabs must be between ${min} and ${max}.`,
-	basesTopTabsOrientationDesc: 'Choose whether the tabs are arranged horizontally or as a vertical stack.',
-	basesTopTabsOrientationHorizontalLabel: 'Horizontal',
-	basesTopTabsOrientationName: 'Orientation',
-	basesTopTabsOrientationVerticalLabel: 'Vertical',
 	basesTopTabsPlacementAboveToolbarLabel: 'Above the toolbar',
-	basesTopTabsPlacementDesc: 'Choose whether the tabs appear on their own row or inside the native Bases toolbar.',
+	basesTopTabsPlacementDesc: 'Choose whether the tabs appear above, inside, or beside the native Bases toolbar.',
 	basesTopTabsPlacementInsideToolbarLabel: 'Inside the toolbar',
+	basesTopTabsPlacementSidebarLeftLabel: 'Left sidebar',
+	basesTopTabsPlacementSidebarRightLabel: 'Right sidebar',
 	basesTopTabsPlacementName: 'Placement',
 	basesTopTabsRememberLastViewDesc: 'Reopen each .base file in the last view you selected there.',
 	basesTopTabsRememberLastViewName: 'Remember last view per Base',
-	basesTopTabsScrollableDesc: 'Allow horizontal scrolling instead of wrapping when there are many tabs.',
-	basesTopTabsScrollableName: 'Allow horizontal scrolling',
+	basesTopTabsScrollableDesc: 'Allow scrolling in top layouts instead of wrapping. Sidebar layouts always scroll vertically.',
+	basesTopTabsScrollableName: 'Allow tab scrolling',
+	basesTopTabsSidebarMinWidthDesc: (min, max, defaultValue) =>
+		`Set the minimum width of left and right tab sidebars. Range: ${min}-${max}px. Default: ${defaultValue}px.`,
+	basesTopTabsSidebarMinWidthName: 'Minimum sidebar width',
+	basesTopTabsSidebarMinWidthNotice: (min, max) => `Minimum sidebar width must be between ${min} and ${max}px.`,
 	basesTopTabsShowIconsDesc: 'Display a view icon next to each tab label when one is available.',
 	basesTopTabsShowIconsName: 'Show icons',
 	basesTopTabsShowViewCountDesc: 'Show the number of views in the current Base next to the tabs.',
@@ -699,27 +702,29 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsAutoRefreshName: '自动刷新',
 	basesTopTabsDebugModeDesc: '将 Bases 顶部 Tabs 的详细调试信息输出到开发者控制台。',
 	basesTopTabsDebugModeName: '调试模式',
-	basesTopTabsEnableDesc: '在原生 .base 页面顶部常驻显示视图 Tabs。',
+	basesTopTabsEnableDesc: '在原生 .base 页面显示常驻视图 Tabs。',
 	basesTopTabsEnableName: '启用 Bases 顶部 Tabs',
 	basesTopTabsHeading: 'Bases 顶部 Tabs',
 	basesTopTabsHideWhenSingleViewDesc: '当当前 Base 只有一个视图时隐藏 Tabs。',
 	basesTopTabsHideWhenSingleViewName: '单视图时隐藏',
 	basesTopTabsMaxVisibleTabsDesc: (min, max, defaultValue) =>
-		`超过这个数量后折叠到“更多”菜单。设为 ${min} 可禁用折叠。范围：${min}-${max}。默认值：${defaultValue}。`,
+		`顶部布局超过这个数量后折叠到“更多”菜单；侧边布局始终显示全部视图。设为 ${min} 可禁用折叠。范围：${min}-${max}。默认值：${defaultValue}。`,
 	basesTopTabsMaxVisibleTabsName: '最大可见 Tabs 数量',
 	basesTopTabsMaxVisibleTabsNotice: (min, max) => `最大可见 Tabs 数量必须在 ${min} 到 ${max} 之间。`,
-	basesTopTabsOrientationDesc: '选择 Tabs 横向排列，还是改为纵向堆叠显示。',
-	basesTopTabsOrientationHorizontalLabel: '横向',
-	basesTopTabsOrientationName: '排列方向',
-	basesTopTabsOrientationVerticalLabel: '纵向',
 	basesTopTabsPlacementAboveToolbarLabel: '工具栏上方',
-	basesTopTabsPlacementDesc: '选择 Tabs 是单独占一行，还是嵌入到原生 Bases 工具栏里。',
+	basesTopTabsPlacementDesc: '选择 Tabs 显示在工具栏上方、工具栏内，还是放在左右侧边。',
 	basesTopTabsPlacementInsideToolbarLabel: '工具栏内',
+	basesTopTabsPlacementSidebarLeftLabel: '左侧栏',
+	basesTopTabsPlacementSidebarRightLabel: '右侧栏',
 	basesTopTabsPlacementName: '位置',
 	basesTopTabsRememberLastViewDesc: '为每个 .base 文件记住上次打开的视图，并在下次打开时自动恢复。',
 	basesTopTabsRememberLastViewName: '记住每个 Base 的上次视图',
-	basesTopTabsScrollableDesc: '当 Tabs 过多时允许横向滚动，而不是自动换行。',
-	basesTopTabsScrollableName: '允许横向滚动',
+	basesTopTabsScrollableDesc: '顶部布局 Tabs 过多时允许滚动，而不是自动换行；侧边布局始终纵向滚动。',
+	basesTopTabsScrollableName: '允许 Tabs 滚动',
+	basesTopTabsSidebarMinWidthDesc: (min, max, defaultValue) =>
+		`设置左右侧栏的最小宽度。范围：${min}-${max}px。默认值：${defaultValue}px。`,
+	basesTopTabsSidebarMinWidthName: '侧栏最小宽度',
+	basesTopTabsSidebarMinWidthNotice: (min, max) => `侧栏最小宽度必须在 ${min} 到 ${max}px 之间。`,
 	basesTopTabsShowIconsDesc: '当视图存在图标时，在 Tab 名称旁显示图标。',
 	basesTopTabsShowIconsName: '显示图标',
 	basesTopTabsShowViewCountDesc: '在 Tabs 旁显示当前 Base 的视图数量。',

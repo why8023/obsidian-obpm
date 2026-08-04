@@ -19,8 +19,10 @@ interface BasesTopTabsLocalization {
 	renameViewMenuItem: string;
 	renameViewPromptTitle: (viewName: string) => string;
 	renameViewSubmitLabel: string;
+	resizeSidebarLabel: string;
+	scrollSidebarLabel: string;
+	scrollSidebarTopLabel: string;
 	switchErrorNotice: string;
-	tabListLabel: string;
 	unpinViewMenuItem: string;
 	updateViewsErrorNotice: string;
 	viewCountLabel: (count: number) => string;
@@ -47,8 +49,10 @@ const ENGLISH_LOCALIZATION: BasesTopTabsLocalization = {
 	renameViewMenuItem: 'Rename view',
 	renameViewPromptTitle: (viewName) => `Rename "${viewName}"`,
 	renameViewSubmitLabel: 'Rename',
+	resizeSidebarLabel: 'Resize tabs sidebar',
+	scrollSidebarLabel: 'Scroll Base views down',
+	scrollSidebarTopLabel: 'Scroll Base views to top',
 	switchErrorNotice: 'Failed to switch Base view. Check the developer console for details.',
-	tabListLabel: 'Base views',
 	unpinViewMenuItem: 'Unpin tab',
 	updateViewsErrorNotice: 'Failed to update the Base views. Check the developer console for details.',
 	viewCountLabel: (count) => count === 1 ? '1 view' : `${count} views`,
@@ -75,8 +79,10 @@ const CHINESE_LOCALIZATION: BasesTopTabsLocalization = {
 	renameViewMenuItem: '重命名视图',
 	renameViewPromptTitle: (viewName) => `重命名“${viewName}”`,
 	renameViewSubmitLabel: '重命名',
+	resizeSidebarLabel: '调整 Tabs 侧栏宽度',
+	scrollSidebarLabel: '向下滚动 Base 视图',
+	scrollSidebarTopLabel: '回到 Base 视图顶部',
 	switchErrorNotice: '切换 Base 视图失败，请打开开发者控制台查看详情。',
-	tabListLabel: 'Base 视图',
 	unpinViewMenuItem: '取消固定 Tab',
 	updateViewsErrorNotice: '更新 Base 视图失败，请打开开发者控制台查看详情。',
 	viewCountLabel: (count) => `${count} 个视图`,

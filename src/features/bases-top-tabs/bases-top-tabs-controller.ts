@@ -8,15 +8,24 @@ import {
 import {BasesTopTabsStateStore} from './bases-top-tabs-state-store';
 import {getBasesTopTabsLocalization} from './bases-top-tabs-localization';
 import {BaseViewSwitcherAdapter} from './base-view-switcher-adapter';
-import {BasesTopTabsPluginContext, BasesTopTabsView, ParsedBaseFile} from './types';
+import {
+	canReorderViews,
+	BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH,
+	BASES_TABS_SIDEBAR_MAX_WIDTH,
+	DropPosition,
+	moveViewKey,
+	orderViews,
+	OrderedTabView,
+	normalizeSidebarWidth,
+	resizeSidebarWidth,
+	resolveDisplayedViews,
+	resolveFallbackViewName,
+} from './bases-top-tabs-layout';
+import {isSidebarPlacement} from './bases-top-tabs-settings';
+import {BasesTopTabsPluginContext, ParsedBaseFile} from './types';
+import type {BasesTopTabsPlacement} from '../../settings';
 
 const FEATURE_ID = 'bases-top-tabs';
-
-type DropPosition = 'after' | 'before';
-
-interface OrderedTabView extends BasesTopTabsView {
-	pinned: boolean;
-}
 
 export class BasesTabsController {
 	private readonly barEl: HTMLDivElement;
@@ -40,7 +49,17 @@ export class BasesTabsController {
 	private readonly refreshView = debounce((reason: string) => {
 		void this.refresh(reason);
 	}, 100, true);
+	private sidebarResizeHostEl: HTMLElement | null = null;
+	private sidebarResizePointerId: number | null = null;
+	private sidebarResizeStartWidth = 0;
+	private sidebarResizeStartX = 0;
+	private sidebarWidth: number | null = null;
+	private readonly sidebarResizeHandleEl: HTMLDivElement;
+	private readonly sidebarScrollHintEl: HTMLButtonElement;
+	private readonly sidebarScrollTopHintEl: HTMLButtonElement;
+	private readonly sidebarScrollResizeObserver: ResizeObserver | null;
 	private readonly tabsListEl: HTMLDivElement;
+	private readonly tabsViewportEl: HTMLDivElement;
 
 	constructor(
 		private readonly plugin: BasesTopTabsPluginContext,
@@ -54,10 +73,20 @@ export class BasesTabsController {
 		this.barEl.className = 'obpm-bases-tabs-bar';
 		this.barEl.setAttribute('data-obpm-feature', FEATURE_ID);
 
+		this.tabsViewportEl = document.createElement('div');
+		this.tabsViewportEl.className = 'obpm-bases-tabs-viewport';
+
 		this.tabsListEl = document.createElement('div');
 		this.tabsListEl.className = 'obpm-bases-tabs-list';
-		this.tabsListEl.setAttribute('aria-label', this.localization.tabListLabel);
 		this.tabsListEl.setAttribute('role', 'tablist');
+		this.tabsListEl.addEventListener('scroll', () => {
+			this.updateScrollHints();
+		}, {passive: true});
+		this.sidebarScrollResizeObserver = typeof ResizeObserver === 'function'
+			? new ResizeObserver(() => this.updateScrollHints())
+			: null;
+		this.sidebarScrollResizeObserver?.observe(this.tabsListEl);
+		this.tabsViewportEl.append(this.tabsListEl);
 
 		this.moreButtonEl = document.createElement('button');
 		this.moreButtonEl.type = 'button';
@@ -70,7 +99,69 @@ export class BasesTabsController {
 		this.countEl = document.createElement('div');
 		this.countEl.className = 'obpm-bases-tabs-count';
 
-		this.barEl.append(this.tabsListEl, this.moreButtonEl, this.countEl);
+		this.sidebarScrollHintEl = document.createElement('button');
+		this.sidebarScrollHintEl.type = 'button';
+		this.sidebarScrollHintEl.className = 'obpm-bases-tabs-scroll-hint';
+		this.sidebarScrollHintEl.hidden = true;
+		this.sidebarScrollHintEl.setAttribute('aria-label', this.localization.scrollSidebarLabel);
+		setIcon(this.sidebarScrollHintEl, 'chevron-down');
+		this.sidebarScrollHintEl.addEventListener('click', (event) => {
+			event.preventDefault();
+			this.tabsListEl.scrollBy({
+				top: this.tabsListEl.clientHeight * 0.8,
+				behavior: 'auto',
+			});
+			this.updateScrollHints();
+		});
+
+		this.sidebarScrollTopHintEl = document.createElement('button');
+		this.sidebarScrollTopHintEl.type = 'button';
+		this.sidebarScrollTopHintEl.className = 'obpm-bases-tabs-scroll-hint is-top';
+		this.sidebarScrollTopHintEl.hidden = true;
+		this.sidebarScrollTopHintEl.setAttribute('aria-label', this.localization.scrollSidebarTopLabel);
+		setIcon(this.sidebarScrollTopHintEl, 'chevron-up');
+		this.sidebarScrollTopHintEl.addEventListener('click', (event) => {
+			event.preventDefault();
+			this.tabsListEl.scrollTo({top: 0, behavior: 'auto'});
+			this.updateScrollHints();
+		});
+
+		this.sidebarResizeHandleEl = document.createElement('div');
+		this.sidebarResizeHandleEl.className = 'obpm-bases-tabs-sidebar-resize-handle';
+		this.sidebarResizeHandleEl.hidden = true;
+		this.sidebarResizeHandleEl.tabIndex = 0;
+		this.sidebarResizeHandleEl.setAttribute('aria-hidden', 'true');
+		this.sidebarResizeHandleEl.setAttribute('aria-label', this.localization.resizeSidebarLabel);
+		this.sidebarResizeHandleEl.setAttribute('aria-orientation', 'vertical');
+		this.sidebarResizeHandleEl.setAttribute('aria-valuemin', String(BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH));
+		this.sidebarResizeHandleEl.setAttribute('aria-valuemax', String(BASES_TABS_SIDEBAR_MAX_WIDTH));
+		this.sidebarResizeHandleEl.addEventListener('pointerdown', (event) => {
+			this.startSidebarResize(event);
+		});
+		this.sidebarResizeHandleEl.addEventListener('pointermove', (event) => {
+			this.updateSidebarResize(event);
+		});
+		this.sidebarResizeHandleEl.addEventListener('pointerup', (event) => {
+			this.finishSidebarResize(event, true);
+		});
+		this.sidebarResizeHandleEl.addEventListener('pointercancel', (event) => {
+			this.finishSidebarResize(event, false);
+		});
+		this.sidebarResizeHandleEl.addEventListener('lostpointercapture', () => {
+			this.clearSidebarResize();
+		});
+		this.sidebarResizeHandleEl.addEventListener('keydown', (event) => {
+			this.handleSidebarResizeKeydown(event);
+		});
+
+		this.barEl.append(
+			this.tabsViewportEl,
+			this.moreButtonEl,
+			this.countEl,
+			this.sidebarScrollTopHintEl,
+			this.sidebarScrollHintEl,
+			this.sidebarResizeHandleEl,
+		);
 		this.observers.push(...this.domAdapter.createObservers(this.leaf, () => {
 			this.requestRefresh('dom-change');
 		}));
@@ -88,8 +179,10 @@ export class BasesTabsController {
 		}
 
 		this.observers.length = 0;
+		this.sidebarScrollResizeObserver?.disconnect();
 		this.buttonsByKey.clear();
-		this.barEl.remove();
+		this.clearSidebarResize();
+		this.domAdapter.unmountBar(this.barEl);
 	}
 
 	requestRefresh(reason: string) {
@@ -106,14 +199,18 @@ export class BasesTabsController {
 	private applyBarState(
 		viewCount: number,
 		activeViewKey: string | null,
-		actualPlacement: 'above-toolbar' | 'inside-toolbar',
+		actualPlacement: BasesTopTabsPlacement,
 	) {
 		const settings = this.plugin.settings.basesTopTabs;
-		const isVertical = settings.orientation === 'vertical';
+		const isSidebar = isSidebarPlacement(actualPlacement);
 		this.barEl.classList.toggle('has-count', settings.showViewCount);
-		this.barEl.classList.toggle('is-scrollable', settings.scrollable);
+		this.barEl.classList.toggle('is-scrollable', isSidebar || settings.scrollable);
 		this.barEl.classList.toggle('mod-inside-toolbar', actualPlacement === 'inside-toolbar');
-		this.barEl.classList.toggle('mod-vertical', isVertical);
+		this.barEl.classList.toggle('mod-sidebar', isSidebar);
+		this.barEl.classList.toggle('mod-sidebar-right', actualPlacement === 'sidebar-right');
+		this.sidebarResizeHandleEl.hidden = !isSidebar;
+		this.sidebarResizeHandleEl.setAttribute('aria-hidden', String(!isSidebar));
+		this.sidebarResizeHandleEl.setAttribute('aria-valuemin', String(settings.sidebarMinWidth));
 		this.countEl.hidden = !settings.showViewCount;
 		this.countEl.textContent = settings.showViewCount ? this.localization.viewCountLabel(viewCount) : '';
 
@@ -129,13 +226,12 @@ export class BasesTabsController {
 		parsedBaseFile: ParsedBaseFile,
 		visibleViews: OrderedTabView[],
 		hiddenViews: OrderedTabView[],
-		actualPlacement: 'above-toolbar' | 'inside-toolbar',
+		actualPlacement: BasesTopTabsPlacement,
 	): string {
 		return JSON.stringify({
 			actualPlacement,
 			filePath: parsedBaseFile.filePath,
 			maxVisibleTabs: this.plugin.settings.basesTopTabs.maxVisibleTabs,
-			orientation: this.plugin.settings.basesTopTabs.orientation,
 			showIcons: this.plugin.settings.basesTopTabs.showIcons,
 			visibleViews: visibleViews.map((view) => [view.key, view.name, view.type, view.icon, view.pinned]),
 			hiddenViews: hiddenViews.map((view) => [view.key, view.name, view.pinned]),
@@ -298,7 +394,7 @@ export class BasesTabsController {
 		}
 
 		event.preventDefault();
-		const dropPosition = resolveDropPosition(event, buttonEl, this.plugin.settings.basesTopTabs.orientation);
+		const dropPosition = resolveDropPosition(event, buttonEl, this.getEffectiveOrientation());
 		this.dragTargetKey = targetView.key;
 		this.dragTargetPosition = dropPosition;
 		this.renderDropState();
@@ -451,7 +547,6 @@ export class BasesTabsController {
 		const mountContext = this.domAdapter.resolveMountContext(
 			this.leaf,
 			this.plugin.settings.basesTopTabs.placement,
-			this.plugin.settings.basesTopTabs.orientation,
 		);
 		if (!mountContext) {
 			this.removeBar();
@@ -489,10 +584,14 @@ export class BasesTabsController {
 			parsedBaseFile.views.map((view) => view.name),
 		);
 		const orderedViews = orderViews(parsedBaseFile.views, pinnedViewNames);
-		const {hiddenViews, visibleViews} = splitViewsForOverflow(
+		this.sidebarWidth = isSidebarPlacement(mountContext.actualPlacement)
+			? this.stateStore.getSidebarWidth(parsedBaseFile.filePath, mountContext.actualPlacement)
+			: null;
+		const {hiddenViews, visibleViews} = resolveDisplayedViews(
 			orderedViews,
 			this.plugin.settings.basesTopTabs.maxVisibleTabs,
 			activeViewName,
+			isSidebarPlacement(mountContext.actualPlacement),
 		);
 
 		this.currentParsedBaseFile = parsedBaseFile;
@@ -514,6 +613,16 @@ export class BasesTabsController {
 		this.renderMoreButton(hiddenViews);
 		this.applyBarState(parsedBaseFile.views.length, activeViewKey, mountContext.actualPlacement);
 		this.domAdapter.mountBar(this.barEl, mountContext);
+		if (isSidebarPlacement(mountContext.actualPlacement)) {
+			mountContext.hostEl.style.setProperty(
+				'--obpm-bases-tabs-sidebar-min-width',
+				`${this.plugin.settings.basesTopTabs.sidebarMinWidth}px`,
+			);
+			if (this.sidebarWidth !== null) {
+				this.setSidebarWidth(mountContext.hostEl, this.sidebarWidth);
+			}
+		}
+		this.updateScrollHints();
 		this.persistLastView(parsedBaseFile, activeViewName);
 		this.renderDropState();
 
@@ -534,7 +643,12 @@ export class BasesTabsController {
 		this.currentOrderedViews = [];
 		this.currentParsedBaseFile = null;
 		this.clearDragState();
-		this.barEl.remove();
+		this.sidebarScrollTopHintEl.hidden = true;
+		this.sidebarScrollHintEl.hidden = true;
+		this.barEl.classList.remove('has-scroll-hint', 'has-scroll-top-hint');
+		this.tabsViewportEl.classList.remove('has-scroll-left', 'has-scroll-right');
+		this.clearSidebarResize();
+		this.domAdapter.unmountBar(this.barEl);
 	}
 
 	private async renameView(view: OrderedTabView) {
@@ -672,6 +786,149 @@ export class BasesTabsController {
 		this.moreButtonEl.disabled = disabled;
 	}
 
+	private getEffectiveOrientation(): 'horizontal' | 'vertical' {
+		return isSidebarPlacement(this.plugin.settings.basesTopTabs.placement)
+			? 'vertical'
+			: 'horizontal';
+	}
+
+	private startSidebarResize(event: PointerEvent) {
+		if (!this.barEl.classList.contains('mod-sidebar') || this.busy) {
+			return;
+		}
+
+		const hostEl = this.barEl.parentElement;
+		if (!hostEl) {
+			return;
+		}
+
+		event.preventDefault();
+		event.stopPropagation();
+		this.sidebarResizeHostEl = hostEl;
+		this.sidebarResizePointerId = event.pointerId;
+		this.sidebarResizeStartX = event.clientX;
+		this.sidebarResizeStartWidth = this.barEl.getBoundingClientRect().width;
+		this.barEl.classList.add('is-resizing');
+		this.sidebarResizeHandleEl.setPointerCapture(event.pointerId);
+	}
+
+	private updateSidebarResize(event: PointerEvent) {
+		if (this.sidebarResizePointerId !== event.pointerId || !this.sidebarResizeHostEl) {
+			return;
+		}
+
+		const pointerDelta = event.clientX - this.sidebarResizeStartX;
+		const isRightSidebar = this.barEl.classList.contains('mod-sidebar-right');
+		this.setSidebarWidth(
+			this.sidebarResizeHostEl,
+			resizeSidebarWidth(
+				this.sidebarResizeStartWidth,
+				pointerDelta,
+				isRightSidebar,
+				this.plugin.settings.basesTopTabs.sidebarMinWidth,
+			),
+		);
+	}
+
+	private finishSidebarResize(event: PointerEvent, persist: boolean) {
+		if (this.sidebarResizePointerId !== event.pointerId) {
+			return;
+		}
+
+		this.clearSidebarResize();
+		if (persist) {
+			this.persistSidebarWidth();
+		}
+	}
+
+	private handleSidebarResizeKeydown(event: KeyboardEvent) {
+		if (!this.barEl.classList.contains('mod-sidebar') || this.busy) {
+			return;
+		}
+
+		let pointerDelta: number;
+		if (event.key === 'ArrowRight') {
+			pointerDelta = 16;
+		} else if (event.key === 'ArrowLeft') {
+			pointerDelta = -16;
+		} else {
+			return;
+		}
+
+		const hostEl = this.barEl.parentElement;
+		if (!hostEl) {
+			return;
+		}
+
+		event.preventDefault();
+		const isRightSidebar = this.barEl.classList.contains('mod-sidebar-right');
+		this.setSidebarWidth(
+			hostEl,
+			resizeSidebarWidth(
+				this.barEl.getBoundingClientRect().width,
+				pointerDelta,
+				isRightSidebar,
+				this.plugin.settings.basesTopTabs.sidebarMinWidth,
+			),
+		);
+		this.persistSidebarWidth();
+	}
+
+	private setSidebarWidth(hostEl: HTMLElement, width: number) {
+		const normalizedWidth = normalizeSidebarWidth(width, this.plugin.settings.basesTopTabs.sidebarMinWidth);
+		if (normalizedWidth === null) {
+			return;
+		}
+
+		hostEl.style.setProperty('--obpm-bases-tabs-sidebar-width', `${normalizedWidth}px`);
+		this.sidebarWidth = normalizedWidth;
+		this.sidebarResizeHandleEl.setAttribute('aria-valuenow', String(normalizedWidth));
+	}
+
+	private updateScrollHints() {
+		const isSidebar = this.barEl.classList.contains('mod-sidebar');
+		const canScrollHorizontally = this.barEl.classList.contains('is-scrollable') && !isSidebar;
+		const canScrollLeft = this.tabsListEl.scrollLeft > 1;
+		const canScrollRight = this.tabsListEl.scrollLeft + this.tabsListEl.clientWidth
+			< this.tabsListEl.scrollWidth - 1;
+		this.tabsViewportEl.classList.toggle('has-scroll-left', canScrollHorizontally && canScrollLeft);
+		this.tabsViewportEl.classList.toggle('has-scroll-right', canScrollHorizontally && canScrollRight);
+
+		if (!isSidebar) {
+			this.sidebarScrollTopHintEl.hidden = true;
+			this.sidebarScrollHintEl.hidden = true;
+			this.barEl.classList.remove('has-scroll-hint', 'has-scroll-top-hint');
+			return;
+		}
+
+		const canScrollUp = this.tabsListEl.scrollTop > 1;
+		const canScrollDown = this.tabsListEl.scrollHeight > this.tabsListEl.clientHeight + 1;
+		const atBottom = this.tabsListEl.scrollTop + this.tabsListEl.clientHeight
+			>= this.tabsListEl.scrollHeight - 1;
+		const showHint = canScrollDown && !atBottom;
+		this.sidebarScrollTopHintEl.hidden = !canScrollUp;
+		this.barEl.classList.toggle('has-scroll-top-hint', canScrollUp);
+		this.sidebarScrollHintEl.hidden = !showHint;
+		this.barEl.classList.toggle('has-scroll-hint', showHint);
+	}
+
+	private persistSidebarWidth() {
+		if (this.sidebarWidth === null || !this.currentParsedBaseFile || !this.barEl.classList.contains('mod-sidebar')) {
+			return;
+		}
+
+		const placement: BasesTopTabsPlacement = this.barEl.classList.contains('mod-sidebar-right')
+			? 'sidebar-right'
+			: 'sidebar-left';
+		void this.stateStore.setSidebarWidth(this.currentParsedBaseFile.filePath, placement, this.sidebarWidth);
+	}
+
+	private clearSidebarResize() {
+		this.sidebarResizePointerId = null;
+		this.sidebarResizeHostEl = null;
+		this.barEl.classList.remove('is-resizing');
+	}
+
 	private async switchToViewByName(viewName: string, reason: string): Promise<boolean> {
 		const leafState = this.viewSwitcherAdapter.getLeafState(this.leaf);
 		if (!leafState || leafState.currentViewName === viewName) {
@@ -723,7 +980,7 @@ export class BasesTabsController {
 	private canReorderBetweenKeys(sourceKey: string, targetKey: string): boolean {
 		const sourceView = this.findOrderedViewByKey(sourceKey);
 		const targetView = this.findOrderedViewByKey(targetKey);
-		return Boolean(sourceView && targetView && sourceView.pinned === targetView.pinned);
+		return Boolean(sourceView && targetView && canReorderViews(sourceView, targetView));
 	}
 
 	private canReorderWithTarget(targetView: OrderedTabView): boolean {
@@ -732,7 +989,7 @@ export class BasesTabsController {
 		}
 
 		const sourceView = this.findOrderedViewByKey(this.dragSourceKey);
-		return Boolean(sourceView && sourceView.pinned === targetView.pinned);
+		return Boolean(sourceView && canReorderViews(sourceView, targetView));
 	}
 
 	private findOrderedViewByKey(viewKey: string): OrderedTabView | null {
@@ -752,49 +1009,6 @@ function createDuplicateViewNameSuggestion(existingNames: string[], sourceName: 
 	}
 
 	return `${candidateBaseName} ${counter}`;
-}
-
-function moveViewKey(
-	keys: string[],
-	dragSourceKey: string,
-	targetKey: string,
-	position: DropPosition,
-): string[] | null {
-	const sourceIndex = keys.indexOf(dragSourceKey);
-	const targetIndex = keys.indexOf(targetKey);
-	if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) {
-		return null;
-	}
-
-	const nextKeys = [...keys];
-	const [movedKey] = nextKeys.splice(sourceIndex, 1);
-	if (!movedKey) {
-		return null;
-	}
-
-	let insertionIndex = targetIndex + (position === 'after' ? 1 : 0);
-	if (sourceIndex < targetIndex) {
-		insertionIndex -= 1;
-	}
-
-	nextKeys.splice(insertionIndex, 0, movedKey);
-	return nextKeys.every((key, index) => key === keys[index]) ? null : nextKeys;
-}
-
-function orderViews(views: BasesTopTabsView[], pinnedViewNames: string[]): OrderedTabView[] {
-	const pinnedNameSet = new Set(pinnedViewNames);
-	return [...views]
-		.map((view) => ({
-			...view,
-			pinned: pinnedNameSet.has(view.name),
-		}))
-		.sort((left, right) => {
-			if (left.pinned !== right.pinned) {
-				return left.pinned ? -1 : 1;
-			}
-
-			return left.index - right.index;
-		});
 }
 
 function resolveActiveViewKey(parsedBaseFile: ParsedBaseFile, activeViewName: string | null): string | null {
@@ -819,51 +1033,4 @@ function resolveDropPosition(
 	}
 
 	return event.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
-}
-
-function resolveFallbackViewName(orderedViews: OrderedTabView[], removedViewKey: string): string | null {
-	const removedIndex = orderedViews.findIndex((view) => view.key === removedViewKey);
-	if (removedIndex === -1) {
-		return orderedViews[0]?.name ?? null;
-	}
-
-	return orderedViews[removedIndex + 1]?.name
-		?? orderedViews[removedIndex - 1]?.name
-		?? null;
-}
-
-function splitViewsForOverflow(
-	orderedViews: OrderedTabView[],
-	maxVisibleTabs: number,
-	activeViewName: string | null,
-): {hiddenViews: OrderedTabView[]; visibleViews: OrderedTabView[]} {
-	if (maxVisibleTabs <= 0 || orderedViews.length <= maxVisibleTabs) {
-		return {
-			hiddenViews: [],
-			visibleViews: orderedViews,
-		};
-	}
-
-	const pinnedCount = orderedViews.filter((view) => view.pinned).length;
-	const initialVisibleCount = Math.max(maxVisibleTabs, pinnedCount);
-	const visibleSet = new Set(orderedViews.slice(0, initialVisibleCount).map((view) => view.key));
-	const activeView = activeViewName
-		? orderedViews.find((view) => view.name === activeViewName)
-		: null;
-
-	if (activeView && !visibleSet.has(activeView.key)) {
-		const visibleViews = orderedViews.filter((view) => visibleSet.has(view.key));
-		const candidateToHide = [...visibleViews]
-			.reverse()
-			.find((view) => !view.pinned);
-		if (candidateToHide) {
-			visibleSet.delete(candidateToHide.key);
-		}
-
-		visibleSet.add(activeView.key);
-	}
-
-	const visibleViews = orderedViews.filter((view) => visibleSet.has(view.key));
-	const hiddenViews = orderedViews.filter((view) => !visibleSet.has(view.key));
-	return {hiddenViews, visibleViews};
 }
