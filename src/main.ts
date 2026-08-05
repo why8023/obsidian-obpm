@@ -11,6 +11,7 @@ import {PinnedProjectFeature} from './features/pinned-project/pinned-project-fea
 import {ProjectFolderFeature} from './features/project-folder/project-folder-feature';
 import {ProjectBaseFeature} from './features/project-base/project-base-feature';
 import {ProjectRoutingFeature} from './features/project-routing/project-routing-feature';
+import type {ProjectCandidate} from './features/project-routing/types';
 import {RelatedDocumentWorkflowFeature} from './features/related-document-workflow/related-document-workflow-feature';
 import {
 	normalizeRelatedDocumentWorkflowUndoBatch,
@@ -47,6 +48,7 @@ export default class OBPMPlugin extends Plugin {
 	private basesFileRevealFeature: BasesFileRevealFeature | null = null;
 	private basesGroupFoldFeature: BasesGroupFoldFeature | null = null;
 	private basesTopTabsFeature: BasesTopTabsFeature | null = null;
+	private configuredFolderNoteFeature: ConfiguredFolderNoteFeature | null = null;
 	private fileContentMoveFeature: FileContentMoveFeature | null = null;
 	private fileNameSyncFeature: FileNameSyncFeature | null = null;
 	private frontmatterAutomationFeature: FrontmatterAutomationFeature | null = null;
@@ -64,6 +66,8 @@ export default class OBPMPlugin extends Plugin {
 		this.addChild(this.basesFileRevealFeature);
 		this.basesGroupFoldFeature = new BasesGroupFoldFeature(this);
 		this.addChild(this.basesGroupFoldFeature);
+		this.configuredFolderNoteFeature = new ConfiguredFolderNoteFeature(this);
+		this.addChild(this.configuredFolderNoteFeature);
 		this.basesTopTabsFeature = new BasesTopTabsFeature(this);
 		this.addChild(this.basesTopTabsFeature);
 		this.fileContentMoveFeature = new FileContentMoveFeature(this);
@@ -84,7 +88,6 @@ export default class OBPMPlugin extends Plugin {
 		this.addChild(this.pinnedRelationTargetFeature);
 		this.relatedDocumentWorkflowFeature = new RelatedDocumentWorkflowFeature(this);
 		this.addChild(this.relatedDocumentWorkflowFeature);
-		this.addChild(new ConfiguredFolderNoteFeature(this));
 		this.addChild(new SameFolderNoteFeature(this));
 
 		this.addCommand({
@@ -138,6 +141,10 @@ export default class OBPMPlugin extends Plugin {
 
 	async moveFile(file: TFile, request: FileMoveRequest<TFile>): Promise<FileMoveResult> {
 		return await this.fileMoveCoordinator.moveFile(file, request);
+	}
+
+	async createConfiguredFolderNoteForProject(project: ProjectCandidate): Promise<void> {
+		await this.configuredFolderNoteFeature?.createNoteForProject(project);
 	}
 
 	getRelatedDocumentWorkflowUndoBatch(): RelatedDocumentWorkflowUndoBatch | null {

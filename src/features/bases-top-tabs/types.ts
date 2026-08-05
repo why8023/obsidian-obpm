@@ -1,9 +1,11 @@
 import type {App, IconName, TFile} from 'obsidian';
 import type {SaveSettingsOptions} from '../../save-settings-options';
+import type {ProjectCandidate} from '../project-routing/types';
 import type {OBPMPluginSettings} from '../../settings';
 
 export interface BasesTopTabsPluginContext {
 	app: App;
+	createConfiguredFolderNoteForProject(project: ProjectCandidate): Promise<void>;
 	settings: OBPMPluginSettings;
 	debugFeatureLog(feature: string, enabled: boolean, message: string, details?: unknown): void;
 	saveSettings(options?: SaveSettingsOptions): Promise<void>;

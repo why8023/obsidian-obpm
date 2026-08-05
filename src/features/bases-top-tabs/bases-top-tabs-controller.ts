@@ -15,6 +15,7 @@ import {buildProjectBaseViewTargets} from '../project-base/project-base-utils';
 import {normalizeProjectBaseSettings} from '../project-base/project-base-settings';
 import type {ProjectBaseFileScope} from '../project-base/project-base-settings';
 import {getVaultProjectCandidates} from '../project-routing/project-resolver';
+import type {ProjectCandidate} from '../project-routing/types';
 import {
 	canReorderViews,
 	BASES_TABS_SIDEBAR_DEFAULT_MIN_WIDTH,
@@ -373,12 +374,16 @@ export class BasesTabsController {
 	private async handleTabClick(view: OrderedTabView, event?: MouseEvent) {
 		const projectFileClickAction = event
 			? resolveProjectFileClickAction(event, {
+				createNote: this.plugin.settings.basesTopTabs.projectFileCreateNoteClickModifier,
 				folder: this.plugin.settings.basesTopTabs.projectFileFolderClickModifier,
 				open: this.plugin.settings.basesTopTabs.projectFileClickModifier,
 				reveal: this.plugin.settings.basesTopTabs.projectFileRevealModifier,
 			})
 			: null;
-		if (event && projectFileClickAction) {
+		if (event && projectFileClickAction && (
+			projectFileClickAction !== 'create-note'
+			|| this.plugin.settings.configuredFolderNote.enabled
+		)) {
 			event.preventDefault();
 			event.stopPropagation();
 			if (!this.busy) {
@@ -1005,10 +1010,22 @@ export class BasesTabsController {
 			case 'open-folder':
 				await this.openProjectFolderForView(view);
 				return;
+			case 'create-note':
+				await this.createNoteForView(view);
+				return;
 			case 'reveal-file':
 				await this.revealProjectFileForView(view);
 				return;
 		}
+	}
+
+	private async createNoteForView(view: OrderedTabView): Promise<void> {
+		const project = this.resolveProjectCandidateForView(view.name);
+		if (!project) {
+			return;
+		}
+
+		await this.plugin.createConfiguredFolderNoteForProject(project);
 	}
 
 	private async openProjectFolderForView(view: OrderedTabView): Promise<void> {
@@ -1051,6 +1068,10 @@ export class BasesTabsController {
 	}
 
 	private resolveProjectFileForView(viewName: string): TFile | null {
+		return this.resolveProjectCandidateForView(viewName)?.file ?? null;
+	}
+
+	private resolveProjectCandidateForView(viewName: string): ProjectCandidate | null {
 		const parsedBaseFile = this.currentParsedBaseFile;
 		if (!parsedBaseFile) {
 			return null;
@@ -1069,8 +1090,9 @@ export class BasesTabsController {
 		const targets = buildProjectBaseViewTargets(
 			projects,
 			normalizeProjectInboxFolderPath(this.plugin.settings.configuredFolderNote.projectInboxFolderPath),
+			projectBaseSettings.fileScope,
 		);
-		return targets.find((target) => target.viewName === viewName)?.project.file ?? null;
+		return targets.find((target) => target.viewName === viewName)?.project ?? null;
 	}
 
 	private renderDropState() {

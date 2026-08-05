@@ -44,11 +44,17 @@ export interface SettingsLocalization {
 	basesTopTabsPlacementSidebarRightLabel: string;
 	basesTopTabsPlacementName: string;
 	basesTopTabsProjectFileClickModifierAltLabel: string;
+	basesTopTabsProjectFileClickModifierAltShiftLabel: string;
 	basesTopTabsProjectFileClickModifierDuplicateNotice: string;
 	basesTopTabsProjectFileClickModifierDesc: string;
 	basesTopTabsProjectFileClickModifierName: string;
+	basesTopTabsProjectFileClickModifierPrimaryAltLabel: string;
+	basesTopTabsProjectFileClickModifierPrimaryAltShiftLabel: string;
 	basesTopTabsProjectFileClickModifierPrimaryLabel: string;
+	basesTopTabsProjectFileClickModifierPrimaryShiftLabel: string;
 	basesTopTabsProjectFileClickModifierShiftLabel: string;
+	basesTopTabsProjectFileCreateNoteClickModifierDesc: string;
+	basesTopTabsProjectFileCreateNoteClickModifierName: string;
 	basesTopTabsProjectFileRevealModifierDesc: string;
 	basesTopTabsProjectFileRevealModifierName: string;
 	basesTopTabsProjectFolderClickModifierDesc: string;
@@ -393,11 +399,17 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsPlacementSidebarRightLabel: 'Right sidebar',
 	basesTopTabsPlacementName: 'Placement',
 	basesTopTabsProjectFileClickModifierAltLabel: 'Alt + click',
+	basesTopTabsProjectFileClickModifierAltShiftLabel: 'Alt + Shift + click',
 	basesTopTabsProjectFileClickModifierDuplicateNotice: 'This shortcut is already assigned to another project action.',
 	basesTopTabsProjectFileClickModifierDesc: 'Left-click a project view with this modifier to open its project file in a new tab.',
 	basesTopTabsProjectFileClickModifierName: 'Open project file shortcut',
+	basesTopTabsProjectFileClickModifierPrimaryAltLabel: 'Ctrl/Cmd + Alt + click',
+	basesTopTabsProjectFileClickModifierPrimaryAltShiftLabel: 'Ctrl/Cmd + Alt + Shift + click',
 	basesTopTabsProjectFileClickModifierPrimaryLabel: 'Ctrl/Cmd + click',
+	basesTopTabsProjectFileClickModifierPrimaryShiftLabel: 'Ctrl/Cmd + Shift + click',
 	basesTopTabsProjectFileClickModifierShiftLabel: 'Shift + click',
+	basesTopTabsProjectFileCreateNoteClickModifierDesc: 'Left-click a project view with this modifier to create a note in its configured project folder.',
+	basesTopTabsProjectFileCreateNoteClickModifierName: 'Create project note shortcut',
 	basesTopTabsProjectFileRevealModifierDesc: 'Left-click a project view with this modifier to reveal its project file in the Obsidian file tree.',
 	basesTopTabsProjectFileRevealModifierName: 'Reveal in file tree shortcut',
 	basesTopTabsProjectFolderClickModifierDesc: 'Left-click a project view with this modifier to open the project file folder in the system file manager.',
@@ -670,9 +682,9 @@ const ENGLISH_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectBaseInvalidYamlNotice: 'The project view Base contains invalid YAML; the original file was kept.',
 	projectBaseWriteFailureNotice: 'The project view Base could not be synchronized; the original file was kept.',
 	configuredFolderNoteHeading: 'Create note in project folder',
-	configuredFolderNoteDesc: 'Choose a project, then create a default-named note in its configured child folder using one Base view as the property template.',
-	configuredFolderNoteEnableName: 'Enable project note command',
-	configuredFolderNoteEnableDesc: 'Add a command that asks for a project before creating a markdown note.',
+	configuredFolderNoteDesc: 'Choose a project or use a project Tab, then create a default-named note in its configured child folder using one Base view as the property template.',
+	configuredFolderNoteEnableName: 'Enable project note creation',
+	configuredFolderNoteEnableDesc: 'Allow the command and project Tab shortcut to create a markdown note.',
 	configuredFolderNoteProjectInboxFolderPathName: 'Project child folder',
 	configuredFolderNoteProjectInboxFolderPathDesc: 'Create notes under this child path of the selected project. Missing folders are created automatically.',
 	configuredFolderNoteProjectInboxFolderPathPlaceholder: 'inbox',
@@ -746,11 +758,17 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	basesTopTabsPlacementSidebarRightLabel: '右侧栏',
 	basesTopTabsPlacementName: '位置',
 	basesTopTabsProjectFileClickModifierAltLabel: 'Alt + 点击',
+	basesTopTabsProjectFileClickModifierAltShiftLabel: 'Alt + Shift + 点击',
 	basesTopTabsProjectFileClickModifierDuplicateNotice: '这个快捷键已分配给其他项目操作，请选择其他快捷键。',
 	basesTopTabsProjectFileClickModifierDesc: '使用此快捷键加鼠标左键点击项目视图，在新标签页打开项目文件。',
 	basesTopTabsProjectFileClickModifierName: '打开项目文件快捷键',
+	basesTopTabsProjectFileClickModifierPrimaryAltLabel: 'Ctrl/Cmd + Alt + 点击',
+	basesTopTabsProjectFileClickModifierPrimaryAltShiftLabel: 'Ctrl/Cmd + Alt + Shift + 点击',
 	basesTopTabsProjectFileClickModifierPrimaryLabel: 'Ctrl/Cmd + 点击',
+	basesTopTabsProjectFileClickModifierPrimaryShiftLabel: 'Ctrl/Cmd + Shift + 点击',
 	basesTopTabsProjectFileClickModifierShiftLabel: 'Shift + 点击',
+	basesTopTabsProjectFileCreateNoteClickModifierDesc: '使用此快捷键加鼠标左键点击项目视图，在项目子文件夹中新建笔记。',
+	basesTopTabsProjectFileCreateNoteClickModifierName: '项目中新建笔记快捷键',
 	basesTopTabsProjectFileRevealModifierDesc: '使用此快捷键加鼠标左键点击项目视图，在 Obsidian 文件树中定位项目文件。',
 	basesTopTabsProjectFileRevealModifierName: '文件树定位快捷键',
 	basesTopTabsProjectFolderClickModifierDesc: '使用此快捷键加鼠标左键点击项目视图，打开项目文件所在的文件夹。',
@@ -1023,9 +1041,9 @@ const CHINESE_SETTINGS_LOCALIZATION: SettingsLocalization = {
 	projectBaseInvalidYamlNotice: '项目视图 Base 的 YAML 无效，已保留原文件。',
 	projectBaseWriteFailureNotice: '项目视图 Base 同步失败，已保留原文件。',
 	configuredFolderNoteHeading: '在项目中新建笔记',
-	configuredFolderNoteDesc: '先选择项目，再在其配置的子文件夹中新建默认命名的笔记；属性由一个 Base 视图提供。',
-	configuredFolderNoteEnableName: '启用项目新建命令',
-	configuredFolderNoteEnableDesc: '添加一个命令，在新建 Markdown 笔记前先选择项目。',
+	configuredFolderNoteDesc: '选择项目或使用项目 Tab，在其配置的子文件夹中新建默认命名的笔记；属性由一个 Base 视图提供。',
+	configuredFolderNoteEnableName: '启用项目中新建笔记',
+	configuredFolderNoteEnableDesc: '允许通过命令或项目 Tab 快捷键新建 Markdown 笔记。',
 	configuredFolderNoteProjectInboxFolderPathName: '项目子文件夹',
 	configuredFolderNoteProjectInboxFolderPathDesc: '在所选项目目录下的这个子路径中新建笔记。缺失的目录会自动创建。',
 	configuredFolderNoteProjectInboxFolderPathPlaceholder: 'inbox',

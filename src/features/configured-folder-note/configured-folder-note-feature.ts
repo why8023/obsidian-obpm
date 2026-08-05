@@ -81,11 +81,20 @@ export class ConfiguredFolderNoteFeature extends Component {
 	}
 
 	private async createNoteInProjectInbox(): Promise<void> {
-		const settings = this.plugin.settings.configuredFolderNote;
 		const project = await this.pickProject();
 		if (!project) {
 			return;
 		}
+
+		await this.createNoteForProject(project);
+	}
+
+	public async createNoteForProject(project: ProjectCandidate): Promise<void> {
+		if (!this.plugin.settings.configuredFolderNote.enabled) {
+			return;
+		}
+
+		const settings = this.plugin.settings.configuredFolderNote;
 
 		const initialFrontmatter = await this.buildInitialFrontmatter(project);
 		if (initialFrontmatter === null) {

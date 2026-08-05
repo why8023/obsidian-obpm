@@ -63,6 +63,7 @@ import {
 } from './settings-ui/frontmatter-automation-section';
 import {
 	DEFAULT_BASES_TOP_TABS_PROJECT_FILE_CLICK_MODIFIER,
+	DEFAULT_BASES_TOP_TABS_PROJECT_CREATE_NOTE_CLICK_MODIFIER,
 	DEFAULT_BASES_TOP_TABS_PROJECT_FILE_REVEAL_MODIFIER,
 	DEFAULT_BASES_TOP_TABS_PROJECT_FOLDER_CLICK_MODIFIER,
 	isSidebarPlacement,
@@ -76,7 +77,10 @@ import {
 	normalizeSidebarMinWidth,
 	normalizeSidebarWidth,
 } from './features/bases-top-tabs/bases-top-tabs-layout';
-import type {BasesTopTabsPlacement} from './features/bases-top-tabs/bases-top-tabs-settings';
+import type {
+	BasesTopTabsPlacement,
+	BasesTopTabsProjectFileClickModifier,
+} from './features/bases-top-tabs/bases-top-tabs-settings';
 
 export type {BasesTopTabsPlacement} from './features/bases-top-tabs/bases-top-tabs-settings';
 
@@ -194,9 +198,10 @@ export interface BasesTopTabsSettings {
 	hideWhenSingleView: boolean;
 	maxVisibleTabs: number;
 	placement: BasesTopTabsPlacement;
-	projectFileClickModifier: 'primary' | 'alt' | 'shift';
-	projectFileFolderClickModifier: 'primary' | 'alt' | 'shift';
-	projectFileRevealModifier: 'primary' | 'alt' | 'shift';
+	projectFileClickModifier: BasesTopTabsProjectFileClickModifier;
+	projectFileCreateNoteClickModifier: BasesTopTabsProjectFileClickModifier;
+	projectFileFolderClickModifier: BasesTopTabsProjectFileClickModifier;
+	projectFileRevealModifier: BasesTopTabsProjectFileClickModifier;
 	rememberLastView: boolean;
 	scrollable: boolean;
 	sidebarMinWidth: number;
@@ -271,6 +276,7 @@ export const DEFAULT_SETTINGS: OBPMPluginSettings = {
 		maxVisibleTabs: DEFAULT_BASES_TOP_TABS_MAX_VISIBLE_TABS,
 		placement: 'above-toolbar',
 		projectFileClickModifier: DEFAULT_BASES_TOP_TABS_PROJECT_FILE_CLICK_MODIFIER,
+		projectFileCreateNoteClickModifier: DEFAULT_BASES_TOP_TABS_PROJECT_CREATE_NOTE_CLICK_MODIFIER,
 		projectFileFolderClickModifier: DEFAULT_BASES_TOP_TABS_PROJECT_FOLDER_CLICK_MODIFIER,
 		projectFileRevealModifier: DEFAULT_BASES_TOP_TABS_PROJECT_FILE_REVEAL_MODIFIER,
 		rememberLastView: true,
@@ -326,6 +332,7 @@ export function normalizePluginSettings(
 		DEFAULT_SETTINGS.basesTopTabs.sidebarMinWidth,
 	);
 	const projectFileClickModifiers = normalizeBasesTopTabsProjectFileClickModifiers({
+		createNote: settings?.basesTopTabs?.projectFileCreateNoteClickModifier,
 		folder: settings?.basesTopTabs?.projectFileFolderClickModifier,
 		open: settings?.basesTopTabs?.projectFileClickModifier,
 		reveal: settings?.basesTopTabs?.projectFileRevealModifier,
@@ -362,6 +369,7 @@ export function normalizePluginSettings(
 				DEFAULT_SETTINGS.basesTopTabs.placement,
 			),
 			projectFileClickModifier: projectFileClickModifiers.open,
+			projectFileCreateNoteClickModifier: projectFileClickModifiers.createNote,
 			projectFileFolderClickModifier: projectFileClickModifiers.folder,
 			projectFileRevealModifier: projectFileClickModifiers.reveal,
 			rememberLastView: normalizeBoolean(
@@ -976,14 +984,16 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 					await saveBasesTopTabsSettings();
 				}));
 
-		type ProjectFileClickModifierSetting = 'folder' | 'open' | 'reveal';
+		type ProjectFileClickModifierSetting = 'createNote' | 'folder' | 'open' | 'reveal';
 		const getProjectFileClickModifiers = () => ({
+			createNote: this.plugin.settings.basesTopTabs.projectFileCreateNoteClickModifier,
 			folder: this.plugin.settings.basesTopTabs.projectFileFolderClickModifier,
 			open: this.plugin.settings.basesTopTabs.projectFileClickModifier,
 			reveal: this.plugin.settings.basesTopTabs.projectFileRevealModifier,
 		});
 		const setProjectFileClickModifiers = (modifiers: ReturnType<typeof getProjectFileClickModifiers>) => {
 			this.plugin.settings.basesTopTabs.projectFileClickModifier = modifiers.open;
+			this.plugin.settings.basesTopTabs.projectFileCreateNoteClickModifier = modifiers.createNote;
 			this.plugin.settings.basesTopTabs.projectFileFolderClickModifier = modifiers.folder;
 			this.plugin.settings.basesTopTabs.projectFileRevealModifier = modifiers.reveal;
 		};
@@ -1000,15 +1010,20 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 						.addOption('primary', strings.basesTopTabsProjectFileClickModifierPrimaryLabel)
 						.addOption('alt', strings.basesTopTabsProjectFileClickModifierAltLabel)
 						.addOption('shift', strings.basesTopTabsProjectFileClickModifierShiftLabel)
+						.addOption('primary-alt', strings.basesTopTabsProjectFileClickModifierPrimaryAltLabel)
+						.addOption('primary-shift', strings.basesTopTabsProjectFileClickModifierPrimaryShiftLabel)
+						.addOption('alt-shift', strings.basesTopTabsProjectFileClickModifierAltShiftLabel)
+						.addOption('primary-alt-shift', strings.basesTopTabsProjectFileClickModifierPrimaryAltShiftLabel)
 						.setValue(getProjectFileClickModifiers()[action])
 						.onChange(async (value) => {
 							const current = getProjectFileClickModifiers();
 							const candidate = {
+								createNote: action === 'createNote' ? value : current.createNote,
 								folder: action === 'folder' ? value : current.folder,
 								open: action === 'open' ? value : current.open,
 								reveal: action === 'reveal' ? value : current.reveal,
 							};
-							if (new Set(Object.values(candidate)).size !== 3) {
+							if (new Set(Object.values(candidate)).size !== 4) {
 								dropdown.setValue(current[action]);
 								new Notice(strings.basesTopTabsProjectFileClickModifierDuplicateNotice);
 								return;
@@ -1019,7 +1034,7 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 							setProjectFileClickModifiers(modifiers);
 							await saveWithoutRefresh();
 						});
-				});
+			});
 		};
 
 		addProjectFileClickModifierSetting(
@@ -1031,6 +1046,11 @@ export class OBPMPluginSettingTab extends PluginSettingTab {
 			'folder',
 			strings.basesTopTabsProjectFolderClickModifierName,
 			strings.basesTopTabsProjectFolderClickModifierDesc,
+		);
+		addProjectFileClickModifierSetting(
+			'createNote',
+			strings.basesTopTabsProjectFileCreateNoteClickModifierName,
+			strings.basesTopTabsProjectFileCreateNoteClickModifierDesc,
 		);
 		addProjectFileClickModifierSetting(
 			'reveal',
